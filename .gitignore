@@ -1,0 +1,10 @@
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+Files_from_Jupyterhub/*
+!Files_from_Jupyterhub/Big_excel_table
+Files_from_Jupyterhub/Big_excel_table/*
+!Files_from_Jupyterhub/Big_excel_table/Data_xl_TEMPLATE.xlsm
+
+
