@@ -1,0 +1,636 @@
+---
+title: "79_Check_Vannmiljo_importfile_2015data."
+author: "DHJ"
+date: "2 9 2019"
+output: 
+  html_document:
+    keep_md: true
+---
+
+
+Check and fix 2019 data before importing data to Vannmiljø.
+
+- Deal with fixes done in Milkys2 script 101 (in Jupyterhub) **after** getting Nivabasen data:
+    1. Station 26A2 with year 2020 instead of 2019   
+    2. Records with PARAM = CA should be changed to PARAM = CD  
+    3. st. 80B: One AG lacking (SAMPLE_NO2 = 3), values shoud be <0.05 MG_P_KG    
+    4. st. 98B1: Zn in liver is 1000x to high for 2 samples (12000 and 11000 intead of 12 and 11 MG_P_KG)   
+
+
+## 0a. Libraries and functions
+```{r}
+library(dplyr)
+library(purrr)
+library(lubridate)
+library(stringr)
+# library(ggplot2)
+library(niRvana)
+library(ggplot2)
+library(readxl)
+
+library(safejoin) # https://github.com/moodymudskipper/safejoin
+
+source("71_Import_til_NIVAbasen_functions.R")
+
+# "Restart" for lazy people that don't want to write the 
+#  password again (deletes all objects except database password/username)
+if (FALSE){
+  obj <- ls()
+  obj <- obj[!obj %in% c("db_privkey", "db_pubkey", "db_pwd", "db_username")]
+  rm(list = obj)
+  rm(obj)
+}
+
+```
+
+
+## 0b. Year
+```{r}
+
+selected_year <- 2019
+
+```
+
+## 0c. Lookup tables  
+
+### Tissue from medium lookup  
+```{r}
+lookup_tissue <- read.csv(textConnection("
+Medium_id,TISSUE_NAME
+BA,Galle
+BB,Whole soft body
+BE,Egg
+BL,Lever
+BM,Muskel
+BO,Blod
+VS,Saltvann
+"), header = TRUE)
+
+
+```
+
+### Unit from Enhet_id lookup  
+```{r}
+
+lookup_unit <- read.csv(textConnection("
+Enhet_id,Unit
+2,% v.v.
+3,None
+7,µg/kg v.v.
+30,g/kg
+42,mg/kg v.v.
+93,pmol/min/mg protein
+94,ng/min/mg protein
+"), header = TRUE, stringsAsFactors = FALSE)
+
+```
+
+
+
+
+## 1. Read data   
+
+### a. Read file made by NIVA, used by Miljødir 
+```{r}
+
+fn_read <-  "Eksport Vannmiljø/2019_data/NIVA Milkys 2019-data 2020-09-04 versjon 03.xlsx"
+fn_write <-  "Eksport Vannmiljø/2019_data/NIVA Milkys 2019-data 2020-09-04.xlsx"  # used in the end, 
+
+dat_stations_original <- read_excel(fn_read, sheet = "Vannlokaliteter")
+dat_export_original <- read_excel(fn_read, sheet = "Vannregistreringer")
+
+dat_stations <- dat_stations_original %>%
+  select(Kilde_id, Navn)
+
+dat_export <- dat_export_original %>%
+  mutate(Enhet_id = as.numeric(Enhet_id)) %>%
+  left_join(dat_stations, by = c("Vannlok_kode" = "Kilde_id")) %>%
+  left_join(lookup_tissue, by = "Medium_id") %>%
+  left_join(lookup_unit, by = "Enhet_id")
+
+cat("Number of observations per medium:\n")
+xtabs(~Medium_id, dat_export)
+
+cat("\n")
+cat("Number of observations per medium:\n")
+xtabs(~TISSUE_NAME, dat_export)
+
+cat("\n")
+cat("Number of parameters per medium:\n")
+tab <- xtabs(~TISSUE_NAME + Parameter_id, dat_export)
+apply(tab > 0, 1, sum)
+
+cat("\n")
+cat("Number of stations per medium:\n")
+tab <- xtabs(~TISSUE_NAME + Vannlok_kode, dat_export)
+apply(tab > 0, 1, sum)
+
+# xtabs(~Parameter_id, dat_export)
+
+# head(dat_export)
+
+if (FALSE){
+  # Should be number of samples per station
+  # Can read sheet "Vannlokaliteter" to get actual station names 
+  #   (couple using 'Vannlok_kode')  
+  dat_export %>%
+    count(Vannlok_kode, Medium_id, LatinskNavn_id)
+}
+
+
+```
+
+
+### b. Data used in Milkys  
+```{r}
+
+dat <- readRDS("Input_data_2019/101_data_updated_2020-08-05.rds") %>%
+  filter(MYEAR %in% 2019)
+
+cat("\nNumber of parameters per tissue:\n")
+tab <- xtabs(~TISSUE_NAME + PARAM, dat)
+apply(tab > 0, 1, sum)
+
+cat("\nNumber of stations per tissue:\n")
+tab <- xtabs(~TISSUE_NAME + STATION_CODE, dat)
+apply(tab > 0, 1, sum)
+
+```
+### c. Station data from Excel  
+```{r}
+
+data_stations <- readxl::read_excel("Input_data/Kartbase.xlsx")
+
+# Note that 
+#     the current station code is 'stasjonskode', not "STATION_CODE"
+#     `catch LAT__1` and `catch LONG__1` are currect (planned?) positions
+#     the current station name is 'stasjonsnavn', not "STATION_CODE"
+#     but station name for report is `Til Rapport`
+#         station name for maps are `Til Kart`
+
+# Check the two station code columns
+# data_stations %>%
+#   filter(STATION_CODE != stasjonskode)    # zero rows
+
+lookup_stations <- data_stations %>%
+  select(STATION_CODE, STATION_NAME) %>%
+  filter(!is.na(STATION_CODE) & !is.na(STATION_NAME))
+
+# Check
+check <- lookup_stations %>%
+  group_by(STATION_CODE) %>%
+  mutate(n = n()) %>%
+  filter(n > 1)
+
+if (nrow(check) > 0 )
+  stop("Duplicates!")
+
+
+```
+
+### for reference, previous year's data (2018 data)
+```{r}
+
+fn <-  "Eksport Vannmiljø/2018_data/NIVA Milkys 2018-data 2019-09-13_B.xlsx"
+
+dat_stations_2018 <- read_excel(fn, sheet = "Vannlokaliteter") %>%
+  select(VannlokalitetId, Navn)
+
+dat_export_2018 <- read_excel(fn, sheet = "Vannregistreringer") %>%
+  left_join(dat_stations_2018, by = c("Vannlok_kode" = "VannlokalitetId")) %>%
+  left_join(lookup_tissue, by = "Medium_id")
+
+
+```
+
+
+## 2. Some tables    
+
+### Check dates/years  
+```{r}
+
+dat_export %>% 
+  xtabs(~ + addNA(TISSUE_NAME), .)
+
+```
+
+### Units  
+```{r}
+
+#tab <- xtabs(~Enhet_id + Parameter_id, dat_export)
+tab <- xtabs(~addNA(Unit) + Parameter_id, dat_export)
+# tab
+tab2 <- apply(tab > 1, 2, sum)
+
+if (sum(tab2>1) > 0){
+  cat("Some parameters have > 1 unit: \n")
+  print(tab2[tab2 > 1])
+}
+
+
+cat("\n")
+cat("Number of parameters per unit: \n")
+tab3 <- apply(tab > 1, 1, sum)
+tab3
+
+
+```
+
+
+### All metals in cod sample station  
+```{r}
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file \n")
+dat_export %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(nchar(Parameter_id) == 2 & Parameter_id != "TS") %>%    # TS = % dry weight
+  xtabs(~TISSUE_NAME + Parameter_id, .)
+
+# All parameters in cod in Kristiansand harbour, actual
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, actual data \n")
+dat %>%
+  left_join(lookup_stations,  by = "STATION_CODE") %>%
+  filter(STATION_NAME %in% c("Kristiansand harbour")) %>%
+  filter(nchar(PARAM) == 2) %>%
+  xtabs(~TISSUE_NAME + PARAM, .)
+
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file in 2018 \n")
+dat_export_2018 %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(nchar(Parameter_id) == 2 & Parameter_id != "TS") %>%   # TS = % dry weight
+  xtabs(~TISSUE_NAME + Parameter_id, .) 
+
+if (FALSE){
+  dat_export %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(nchar(Parameter_id) == 2 & Parameter_id != "TS") %>%    # TS = % dry weight
+  xtabs(~Enhet_id + Parameter_id, .)
+  }
+
+```
+
+
+### All PCBs   
+```{r}
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file \n")
+dat_export %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(grepl("CB", Parameter_id)) %>%   
+  xtabs(~TISSUE_NAME + Parameter_id, .)
+
+# All parameters in cod in Kristiansand harbour, actual
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, actual data \n")
+dat %>%
+  left_join(lookup_stations,  by = "STATION_CODE") %>%
+  filter(STATION_NAME %in% c("Kristiansand harbour")) %>%
+  filter(grepl("CB", PARAM)) %>%   
+  xtabs(~TISSUE_NAME + PARAM, .)
+
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file in 2018 \n")
+dat_export_2018 %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(grepl("CB", Parameter_id)) %>%   
+  xtabs(~TISSUE_NAME + Parameter_id, .) 
+
+```
+### All BDEs   
+```{r}
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file \n")
+dat_export %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(grepl("BDE", Parameter_id)) %>%   
+  xtabs(~TISSUE_NAME + Parameter_id, .)
+
+# All parameters in cod in Kristiansand harbour, actual
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, actual data \n")
+dat %>%
+  left_join(lookup_stations,  by = "STATION_CODE") %>%
+  filter(STATION_NAME %in% c("Kristiansand harbour")) %>%
+  filter(grepl("BDE", PARAM)) %>%   
+  xtabs(~TISSUE_NAME + PARAM, .)
+
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file in 2018 \n")
+dat_export_2018 %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(grepl("BDE", Parameter_id)) %>%   
+  xtabs(~TISSUE_NAME + Parameter_id, .) 
+
+```
+### All HBCDs   
+```{r}
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file \n")
+dat_export %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(grepl("HBCD", Parameter_id)) %>%   
+  xtabs(~TISSUE_NAME + Parameter_id, .)
+
+# All parameters in cod in Kristiansand harbour, actual
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, actual data \n")
+dat %>%
+  left_join(lookup_stations,  by = "STATION_CODE") %>%
+  filter(STATION_NAME %in% c("Kristiansand harbour")) %>%
+  filter(grepl("HBCD", PARAM)) %>%   
+  xtabs(~TISSUE_NAME + PARAM, .)
+
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file in 2018 \n")
+dat_export_2018 %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(grepl("HBCD", Parameter_id)) %>%   
+  xtabs(~TISSUE_NAME + Parameter_id, .) 
+
+```
+### All PFAS   
+```{r}
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file \n")
+dat_export %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(substr(Parameter_id, 1, 2) == "PF") %>%   
+  xtabs(~TISSUE_NAME + Parameter_id, .)
+
+# All parameters in cod in Kristiansand harbour, actual
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, actual data \n")
+dat %>%
+  left_join(lookup_stations,  by = "STATION_CODE") %>%
+  filter(STATION_NAME %in% c("Kristiansand harbour")) %>%
+  filter(substr(PARAM, 1, 2) == "PF") %>%   
+  xtabs(~TISSUE_NAME + PARAM, .)
+
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file in 2018 \n")
+dat_export_2018 %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter(substr(Parameter_id, 1, 2) == "PF") %>%   
+  xtabs(~TISSUE_NAME + Parameter_id, .) 
+
+```
+
+
+### Everything else     
+```{r}
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file \n")
+dat_export %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter((!grepl("CB", Parameter_id) & 
+           !grepl("BDE", Parameter_id) &
+           !grepl("HBCD", Parameter_id) &
+           substr(Parameter_id, 1, 2) != "PF" &
+           nchar(Parameter_id) != 2) | 
+           Parameter_id == "TS") %>%      # need to add "or TS" as TS is dry weight and not a metal
+  xtabs(~TISSUE_NAME + Parameter_id, .)
+
+# All parameters in cod in Kristiansand harbour, actual
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, actual data \n")
+dat %>%
+  left_join(lookup_stations,  by = "STATION_CODE") %>%
+  filter(STATION_NAME %in% c("Kristiansand harbour")) %>%
+  filter(!grepl("CB", PARAM) & 
+           !grepl("BDE", PARAM) &
+           !grepl("HBCD", PARAM) &
+           substr(PARAM, 1, 2) != "PF" &
+           nchar(PARAM) != 2) %>%   
+  xtabs(~TISSUE_NAME + PARAM, .)
+
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+cat("\n")
+cat("All metals in cod in Kristiansand harbour, Vannmiljø file in 2018 \n")
+dat_export_2018 %>%
+  filter(Navn %in% c("Kristiansand harbour")) %>%
+  filter((!grepl("CB", Parameter_id) & 
+           !grepl("BDE", Parameter_id) &
+           !grepl("HBCD", Parameter_id) &
+           substr(Parameter_id, 1, 2) != "PF" &
+           nchar(Parameter_id) != 2) | 
+           Parameter_id == "TS") %>%   
+  xtabs(~TISSUE_NAME + Parameter_id, .)
+
+```
+
+## 3. Show some data  
+
+### All metals in liver  
+```{r}
+
+# All parameters in cod in Kristiansand harbour, Vannmiljø file
+dat_export %>%
+  filter(TISSUE_NAME == "Lever") %>%
+  filter(nchar(Parameter_id) == 2 & Parameter_id != "TS") %>%    # TS = % dry weight
+  mutate(
+    Parameter_id = paste0(Parameter_id, " (", Unit, ")"),
+    Navn = substr(Navn, 1, 20)
+    ) %>%
+  ggplot(aes(Navn, Verdi, color = Operator)) +
+  geom_point() + 
+  facet_wrap(vars(Parameter_id), scales = "free_y") +
+  theme(axis.text.x.bottom = element_text(angle = -45, hjust = 0)) +
+  labs(title = "Vannmiljø file")
+
+
+
+# All parameters in cod in Kristiansand harbour, actual
+dat %>%
+  filter(TISSUE_NAME == "Lever") %>%
+  left_join(lookup_stations,  by = "STATION_CODE") %>%
+  filter(nchar(PARAM) == 2 & !PARAM %in% c("D4","D5","D6")) %>%
+  mutate(
+    PARAM = paste0(PARAM, " (", UNIT, ")"),
+    STATION_NAME = substr(STATION_NAME, 1, 20)
+    ) %>%
+  ggplot(aes(STATION_NAME, VALUE_WW, color = is.na(FLAG1))) +
+  geom_point() + 
+  facet_wrap(vars(PARAM), scales = "free_y") +
+  theme(axis.text.x.bottom = element_text(angle = -45, hjust = 0)) +
+  labs(title = "Data file") 
+
+
+```
+
+
+## 4. Errors    
+
+### Error 1. Station 26A2 with year 2020 instead of 2019    
+NOTE! Check that date actualy are erronous. Cod may be sampled in January-February the year after  
+```{r}
+
+sel <- with(dat_export, grepl("2020", Tid_provetak))
+xtabs(~ Tid_provetak + Navn, dat_export[sel,])
+
+# Change year 2020 to 2019:
+dat_export$Tid_provetak[sel] <- sub("2020", "2019", dat_export$Tid_provetak[sel])
+
+
+```
+
+#### Check again  
+
+```{r}
+
+sel <- with(dat_export, grepl("2020", Tid_provetak))
+xtabs(~ Tid_provetak + Navn, dat_export[sel,])
+
+```
+
+
+### Error 2. Records with PARAM = CA should be changed to PARAM = CD   
+Was correctly labeled only for industry stations I965 and I969. But now this seems to have been corrected    
+
+```{r}
+dat_export %>%
+  filter(Parameter_id %in% c("CD", "CA")) %>%
+  xtabs(~TISSUE_NAME + Parameter_id, .)
+
+```
+
+
+### Error 3. Station 80B: One AG lacking (SAMPLE_NO2 = 3), values shoud be <0.05 MG_P_KG    
+NOT DONE NOW. SHOULD BE ADDED TO Labware   
+```{r}
+
+lookup_stations %>%
+  filter(STATION_CODE == "80B") %>%
+  pull(STATION_NAME)
+
+# Still lacking  
+dat_export %>%
+  filter(Navn %in% c("Munkholmen") & nchar(Parameter_id) == 2) %>%
+  xtabs(~TISSUE_NAME + Parameter_id, .) 
+
+dat_export %>%
+  filter(Navn %in% c("Munkholmen") & nchar(Parameter_id) == 2) %>%
+  xtabs(~TISSUE_NAME + Provenr, .) 
+
+# we must add one line with Provenr = 244015 and and AG measurement  
+
+
+# We must also add a new ID_lokal. As shown below they are unique  
+tab <- table(dat_export$ID_lokal)
+table(tab)
+i <- dat_export$ID_lokal %>% stringr::str_extract("[0-9]+") %>% as.numeric() %>%range()
+range(i)
+diff(range(i))
+
+# Pick another AG measurement and change it?
+data_to_add <- dat_export %>%
+  filter(Navn %in% c("Munkholmen") & Parameter_id == "AG")
+data_to_add <- data_to_add[1,]
+data_to_add
+
+
+```
+
+### Error 4. st. 98B1: Zn in liver is 1000x to high    
+For 2 samples (12000 and 11000 instead of 12 and 11 MG_P_KG)   
+```{r}
+
+lookup_stations %>%
+  filter(STATION_CODE == "98B1") %>%
+  pull(STATION_NAME)
+
+# Check
+dat_export %>%
+  filter(Navn %in% c("Lofoten, Skrova") & Parameter_id == "ZN") %>%
+  select(Provenr, Verdi) %>%
+  arrange(desc(Verdi))
+
+
+# MAke the correction
+sel <- with(dat_export,
+            Navn %in% c("Lofoten, Skrova") & Parameter_id == "ZN" & Verdi > 1000)
+sum(sel)
+dat_export$Verdi[sel] <- dat_export$Verdi[sel]/1000
+
+
+```
+
+#### Check again  
+```{r}
+
+dat_export %>%
+  filter(Navn %in% c("Lofoten, Skrova") & Parameter_id == "ZN") %>%
+  select(Provenr, Verdi) %>%
+  arrange(desc(Verdi))
+
+```
+
+## 5. Industry stations   
+NIVA@47181    Bjørnebærviken
+NIVA@47184    Moholmen
+NIVA@47186    Toraneskaien
+
+
+### Check  
+```{r}
+
+check <- dat_export %>%
+  filter(Vannlok_kode %in% c("NIVA@47181", "NIVA@47184", "NIVA@47186"))
+
+nrow(check)
+
+```
+
+### Remove from both data sheets
+```{r}
+
+sel <-  dat_export$Vannlok_kode %in% c("NIVA@47181", "NIVA@47184", "NIVA@47186")
+dat_export <- dat_export[!sel,]
+cat(sum(sel), "stations were removed from 'dat_export' \n")
+
+sel <-  dat_stations_original$Kilde_id %in% c("NIVA@47181", "NIVA@47184", "NIVA@47186")
+dat_stations_original <- dat_stations_original[!sel,]
+cat(sum(sel), "stations were removed from 'dat_stations_original' \n")
+
+
+
+```
+
+
+## 6. Write fixed file to excel  
+```{r}
+
+data_to_write_1 <- dat_stations_original
+data_to_write_2 <- dat_export[names(dat_export_original)]
+
+data_to_write <- list(
+  Vannlokaliteter = data_to_write_1,
+  Vannregistreringer = data_to_write_2
+)
+
+writexl::write_xlsx(data_to_write,fn_write)
+
+```
+
+
+## 5. Check resulting data    
+Called 'versjon 2'   
+All 'n' should be 1 - and they are  
+```{r}
+
+dat_export <- read_excel(
+  "Eksport Vannmiljø/2015_data/NIVA Milkys 2015-data MCCP unntatt Bergen havn 67807 versjon 2.xlsx",
+  sheet = "Vannregistreringer")
+
+dat_export %>%
+  count(Vannlok_kode, Medium_id, LatinskNavn_id, Provenr, Tid_provetak, Parameter_id) %>%
+  xtabs(~n, .)
+
+```
+
