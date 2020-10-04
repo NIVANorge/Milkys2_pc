@@ -1,0 +1,252 @@
+---
+title: "801 Download Labware sample data"
+author: "DHJ"
+date: "5 5 2020"
+output: html_document
+---
+
+This script reads sample data (including info on pooling of samples etc.) from Nivabasen     
+  
+NOTE:   
+* A sample is in principle defined by AQUAMONITOR_CODE, SAMPLED_DATE, SPECIES, TISSUE, BIOTA_SAMPLENO   
+    - However, BIOTA_SAMPLENO may be set to 0 for cod bile samples (for PAH matabolites- see 4b)  
+* X_BULK_BIO (machine readable) and DESCRIPTION (human-readable) both describes pooling or not  
+* SAMPLED_DATE is sometimes empty. Therefore, it is safe to collect data on the basis of PROSJEKT or ACCOUNT   
+* Data may be from to types of accounts: Milkys and 'lange tidsserier'. The same sample may be registered in one or both (see 4c)      
+    - However, X_BULK_BIO should be the same for both (see 4b-4c 4b below)    
+
+
+
+Produces the R data file **Labware_samples_2019_[date].rds**which is used by scripts  
+- 109_Adjust_for_fish_length.Rmd  
+- 201_Make_big_excel_file.Rmd                 
+
+- __NOTE: This script must be used on your personal PC, it doesn't work n Jupyterhub!__   
+Prerequsites for this script to work on your PC:  
+- Install 32-bit Oracle client    
+- Get password to Nivabasen from JVE (see the readme file for niRvana)   
+- Install package niRvana (https://github.com/NIVANorge/niRvana)  
+  
+  
+
+## 1. Libraries  
+```{r, message=FALSE}
+
+library(dplyr)
+library(niRvana)
+library(lubridate)
+library(knitr)       # kable()
+
+```
+
+```{r}
+
+oracle_fix_norw_letters <- function(string){
+  result = gsub("<f8>", "ø", string, fixed = TRUE)
+  result = gsub("<c5>", "Å", result, fixed = TRUE)
+  result = gsub("<e5>", "å", result, fixed = TRUE)
+  result = gsub("<c6>", "Æ", result, fixed = TRUE)
+  result = gsub("<e6>", "æ", result, fixed = TRUE)
+  result
+}
+
+# Test
+if (FALSE){
+  oracle_fix_norw_letters("O 15330 ANA14 MILKYS - Milj<f8>overv<e5>king i kystomr<e5>dene")
+  oracle_fix_norw_letters("23B B<f8>mlo north - Torsk lever 18 og 19")
+}
+
+```
+
+
+## 2. Set username and pasword for Nivabasen  
+```{r}
+
+set_credentials()
+
+```
+
+## 3. Check samples from all years  
+```{r}
+
+# Get projects, but doesn't really make sense since the projects names fiffer from those in PROJECT in table LABWARE_CHECK_SAMPLE
+if (FALSE){
+  df_proj <- get_projects()
+  grep("CEMP", df_proj$PROJECT_NAME, value = TRUE)
+}
+
+dat <- get_nivabase_data("select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where upper(PROSJEKT) like '%MILKYS%'") %>%
+  mutate(PROSJEKT = oracle_fix_norw_letters(PROSJEKT),
+         DESCRIPTION = oracle_fix_norw_letters(DESCRIPTION)
+  )
+nrow(dat) # 3568
+
+dat %>%
+  count(ACCOUNT_NUMBER, PROSJEKT)
+
+tail(dat$SAMPLED_DATE, 200)
+sel <- grepl("2019", dat$TEXT_ID)
+sum(sel)   # 656
+mean(sel)  # 0.18
+
+```
+
+## 4. 2018 data  
+
+### a. Get data  
+```{r}
+
+labware_2018_1 <- get_nivabase_data("select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where ACCOUNT_NUMBER in (823,824)") %>%
+  mutate(PROSJEKT = oracle_fix_norw_letters(PROSJEKT),
+         DESCRIPTION = oracle_fix_norw_letters(DESCRIPTION)
+         )
+
+labware_2018_1 %>%
+  count(ACCOUNT_NUMBER, PROSJEKT)
+
+
+```
+
+### b. Check X_BULK_BIO and DESCRIPTION   
+Check whether data whether data given oth the same BIOTA_SAMPLENO    
+* Small spelling difference in DESCRIPTION between the two ACCOUNTs for a blue mussel station  
+    - So they are actually the same sample  
+* Bile (NO: galle) samples are given with BIOTA_SAMPLENO = 0 (both are from MILKYS project)   
+    - So they are actually a bunch of different samples  
+```{r}
+
+check1 <- labware_2018_1 %>%
+  group_by(AQUAMONITOR_CODE, SAMPLED_DATE, SPECIES, TISSUE, BIOTA_SAMPLENO) %>%
+  summarise(
+    ACCOUNT_NUMBER_nunique = length(unique(ACCOUNT_NUMBER)),
+    ACCOUNT_NUMBER_unique = paste(unique(ACCOUNT_NUMBER), collapse = " | "),
+    X_BULK_BIO_nunique = length(unique(X_BULK_BIO)),
+    DESCRIPTION_nunique = length(unique(DESCRIPTION)),
+    X_BULK_BIO_unique = paste(unique(X_BULK_BIO), collapse = " | "),
+    DESCRIPTION_unique = paste(unique(DESCRIPTION), collapse = " | "),
+    .groups = "drop"
+    )
+
+cat("Number of unique X_BULK_BIO and ACCOUNT_NUMBER: \n")
+xtabs(~X_BULK_BIO_nunique + ACCOUNT_NUMBER_nunique, check1)
+
+cat("\n")
+cat("Number of unique X_BULK_BIO and DESCRIPTION: \n")
+xtabs(~X_BULK_BIO_nunique + DESCRIPTION_nunique, check1)
+
+# Check the ones with >1 DESCRIPTION for each 'apparent' sample
+check1 %>%
+  filter(DESCRIPTION_nunique > 1)
+  
+# Check the ones with BIOTA_SAMPLENO == 0
+# They are all bile samples  
+check1 %>%
+  filter(BIOTA_SAMPLENO == 0)
+
+```
+### c. Check 'lange tidsserier' account (824)     
+33F and 52A are only on the 'lange tidsserier' account   
+```{r}
+
+xtabs(~ACCOUNT_NUMBER_unique, check1)
+
+check1 %>%
+  filter(ACCOUNT_NUMBER_unique == 824)
+  
+```
+### d. Summarize data  
+So we get only one line per 
+We divide this in two parts:  
+1. The mussel samples with only small spelling differences in DESCRIPTION  
+2. The bile samples where BIOTA_SAMPLENO = 0, so actually only DESCRIPTION is telling us the sample number  
+```{r}
+
+# 1. The mussel samples with only small spelling differences in DESCRIPTION but same X_BULK_BIO  
+# - we just pick the first DESCRIPTION and X_BULK_BIO  
+labware_2018_1_part1 <- labware_2018_1 %>%
+  filter(BIOTA_SAMPLENO != 0) %>%
+  group_by(AQUAMONITOR_CODE, SAMPLED_DATE, SPECIES, TISSUE, BIOTA_SAMPLENO) %>%
+  summarise(DESCRIPTION = first(DESCRIPTION),
+            X_BULK_BIO= first(X_BULK_BIO),
+            .groups = "drop")
+
+
+# 2. The bile samples where BIOTA_SAMPLENO = 0, and therefore the samples can only be separated by
+#   different DESCRIPTION    
+labware_2018_1_part2 <- labware_2018_1 %>%
+  filter(BIOTA_SAMPLENO %in% 0) %>%
+  group_by(AQUAMONITOR_CODE, SAMPLED_DATE, SPECIES, TISSUE, BIOTA_SAMPLENO, DESCRIPTION) %>%
+  summarise(X_BULK_BIO= first(X_BULK_BIO),
+            .groups = "drop")
+
+labware_2018_2 <- bind_rows(labware_2018_1_part1, labware_2018_1_part2)
+  
+
+```
+
+
+## 5. 2019 data  
+
+### a. Checking values of PROSJEKT  
+* PROSJEKT including 'MILKYS': one found, 'MILKYS2019'   
+* PROSJEKT including 'tidsserier': none found     
+```{r}
+
+check1 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where upper(PROSJEKT) like '%MILKYS%'")
+check1 %>%
+  count(ACCOUNT_NUMBER, PROSJEKT)
+  
+
+check2 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where lower(PROSJEKT) like '%tidsserier%'")
+table(check2$PROSJEKT)
+check2 %>%
+  count(ACCOUNT_NUMBER, PROSJEKT)
+
+# None fitting (only "O 190142; BL_ID - Lange tidsserier i kystvann; Bl<f8>tbunnsidentifisering")
+```
+
+
+### b. Get data    
+```{r}
+
+labware_2019 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT like '%MILKYS2019%'") %>%
+  mutate(PROSJEKT = oracle_fix_norw_letters(PROSJEKT),
+         DESCRIPTION = oracle_fix_norw_letters(DESCRIPTION)
+         )
+
+labware_2019 %>%
+  count(ACCOUNT_NUMBER, PROSJEKT)
+#     ACCOUNT_NUMBER PROSJEKT                       n
+# <dbl> <chr>                      <int>
+#   1            925 O 19330;ANA19 - MILKYS2019   595
+
+# head(df1, 2)
+
+
+```
+
+
+
+## 6. Save  
+Data should then be uploaded to Jupyterhub Milkys2, folder 'Input_data', for use there       
+```{r}
+
+# Needs only be save if different from previously downloaded data
+
+file_date <- Sys.time() %>% substr(1, 10)
+# file_date
+
+filename <- paste0("Labware_samples_2018_", file_date, ".rds")
+saveRDS(labware_2018_2, paste0("Data_to_upload_to_Jupyterhub/", filename))
+cat("File", sQuote(filename), "saved for 2018 \n\n")
+
+filename <- paste0("Labware_samples_2019_", file_date, ".rds")
+saveRDS(labware_2019, paste0("Data_to_upload_to_Jupyterhub/", filename))
+cat("File", sQuote(filename), "saved for 2019 \n")
+
+```
+
+
