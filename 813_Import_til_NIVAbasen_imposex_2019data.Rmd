@@ -1,0 +1,489 @@
+---
+title: "74_Import_til_NIVAbasen_imposex_2019data"
+author: "DHJ"
+date: "2 9 2019"
+output: 
+  html_document:
+    keep_md: true
+---
+
+Make tables for inserting into NIVAbase   
+  
+For imposex (and intersex) in snails (Nucella + Littorina)  
+
+SKIPPING INTERSEX (71G) until later (cannot find code in METHODS)
+
+
+## 0. Libraries and functions
+```{r}
+
+library(dplyr)
+library(purrr)
+library(lubridate)
+library(stringr)
+# library(ggplot2)
+library(niRvana)
+
+library(safejoin) # https://github.com/moodymudskipper/safejoin
+
+source("71_Import_til_NIVAbasen_functions.R")
+
+# "Restart" for lazy people that don't want to write the 
+#    database password again (deletes all objects except database password/username)
+if (FALSE){
+  obj <- ls()
+  obj <- obj[!obj %in% c("db_privkey", "db_pubkey", "db_pwd", "db_username")]
+  rm(list = obj)
+  rm(obj)
+}
+
+```
+
+
+## 1. Read data
+
+### a. Year
+```{r}
+
+selected_year <- 2019
+
+```
+
+
+### b. Data to insert in NIVAbase
+1. Eider duck data are from specimens/samples NOT in the NIVAbase  
+2. NILU cod data are from specimens that ARE in the NIVAbase, 
+but new samples (liver) are numbered corresponding to the muscle samples
+3. Biological effects in cod - existing specimens, new samples
+4. VDSI (imposex) in snails - existing 'individuals' (pooled samples) and samples
+
+```{r}
+
+# Create medians from raw data  
+dat <- readRDS(file = "Input_data_2019/101_data_updated_2020-08-05.rds") %>%
+  filter(MYEAR == selected_year & PARAM %in% "VDSI" & !is.na(VALUE_WW)) %>%
+  group_by(MYEAR, STATION_CODE, LATIN_NAME, TISSUE_NAME, PARAM) %>%
+  summarise(VALUE = median(VALUE_WW)) %>%
+  mutate(STATION_CODE = case_when(
+    STATION_CODE == "227G" ~ "227G2",
+    TRUE ~ STATION_CODE)
+    )
+
+dat %>%
+  select(MYEAR, STATION_CODE, LATIN_NAME, PARAM, VALUE)
+      
+```
+
+
+### c. Get samples in Labware file     
+```{r}
+
+#
+# 2019 data  
+#
+
+# March-December data
+sql <- paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
+  "where extract(YEAR from SAMPLED_DATE) =", selected_year, 
+  "and extract(MONTH from SAMPLED_DATE) >= 3", 
+  "and UPPER(PROSJEKT) like '%MILKYS%';")
+sql
+df_labware_01 <- get_nivabase_data(sql)
+
+# January-February next year data
+sql <- paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
+  "where extract(YEAR from SAMPLED_DATE) =", selected_year + 1, 
+  "and extract(MONTH from SAMPLED_DATE) <= 2", 
+  "and UPPER(PROSJEKT) like '%MILKYS%';")
+df_labware_02 <- get_nivabase_data(sql)
+
+df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
+  filter(AQUAMONITOR_CODE %in% dat$STATION_CODE)
+
+```
+
+### d. Add dates to data    
+```{r}
+
+dat <- dat %>%
+  safe_left_join(df_samples, 
+                 na_matches = "never",
+                 by = c("STATION_CODE" = "AQUAMONITOR_CODE"),
+                 check = "BCMV") %>%
+  rename(SAMPLE_DATE = SAMPLED_DATE)
+
+```
+
+
+## 2.Connection to NIVAbasen  
+
+### Store your username and password to R (only once per R session):
+```{r}
+
+set_credentials()
+
+# Check these codes (press F2) for reminder about what comes from which tables:
+# niRvana::get_biota_chemistry
+# niRvana::get_samples_from_sampleid
+
+```
+### Get some generic lookup tables  
+```{r}
+
+df_tissue <- get_nivabase_data(
+  "select TISSUE_ID,TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
+
+df_species <- get_nivabase_data(
+  "select * from NIVADATABASE.SPECIES")
+
+df_taxoncodes <- 
+  get_nivabase_data(
+    "select NIVA_TAXON_ID, TAXONOMY_CODE_ID, CODE from NIVADATABASE.TAXONOMY_CODES")
+
+df_taxon <- get_nivabase_selection(
+  "NIVA_TAXON_ID, LATIN_NAME", 
+  "TAXONOMY", 
+  "LATIN_NAME",
+  unique(dat$LATIN_NAME), values_are_text = TRUE
+  )
+
+# Get a list of projects
+df_projects <- get_projects()   # we call it 'df_projects' (the default name)
+
+# Get a list of stations
+df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+
+```
+
+
+## 3. Check parameter   
+Mostly used: VDSI (METHOD_ID = 15631)  
+- exception: 2015 used VDSI with METHOD_ID = 28589  
+- has been submitted on an individual basis up to 2009, then as average values in 2015 and 2018    
+```{r}
+
+pars <- c("Imposex", "VDSI", "Intersex")
+
+# Check
+df <- get_nivabase_selection("*", 
+                       "METHOD_DEFINITIONS",
+                       "NAME", 
+                       pars, 
+                       values_are_text = TRUE)
+df
+
+# Tabulate species, years and methods
+par <- "VDSI"
+df_param <- df[grepl(par, df$NAME),]
+df1 <- get_nivabase_selection("*", "BIOTA_CHEMISTRY_VALUES", "METHOD_ID", df_param$METHOD_ID)
+nrow(df1)
+df2 <- get_nivabase_selection("*", "BIOTA_SAMPLES", "SAMPLE_ID", df1$SAMPLE_ID) %>%
+  left_join(df1 %>% select(SAMPLE_ID, METHOD_ID))  %>%
+  left_join(df %>% select(METHOD_ID, NAME, UNIT, METHOD_REF, MATRIX))  %>%
+  left_join(df_species) %>%
+  left_join(df_tissue) %>%
+  mutate(Year = year(SAMPLE_DATE))
+
+xtabs(~TISSUE_NAME, df2)   # "Hel organisme"
+# xtabs(~LATIN_NAME, df2)
+df2 %>% 
+  count(LATIN_NAME, Year, NAME, UNIT, METHOD_ID, MATRIX)  # 15361
+  
+# Pick methods
+df_methods <- df %>%
+  filter(METHOD_ID %in% c(15631))
+
+df_methods
+
+# Pick parameters for later
+pars <- df_methods$NAME
+
+```
+
+## 4. Check existing data, former years  
+THIS WHOLE THING CAN BE SKIPPED (I think)
+Starting from VDSI, via samples  
+```{r}
+# df2 <- get_nivabase_selection("*", "BIOTA_SAMPLES", "SAMPLE_ID", df1$SAMPLE_ID)
+
+df3 <- get_nivabase_selection("SAMPLE_ID, SPECIMEN_ID",
+                              "BIOTA_SAMPLES_SPECIMENS",
+                              "SAMPLE_ID",
+                              unique(df2$SAMPLE_ID))
+
+df4 <- get_nivabase_selection("STATION_ID, SPECIMEN_ID, SPECIMEN_NO, DATE_CAUGHT, TAXONOMY_CODE_ID",
+                              "BIOTA_SINGLE_SPECIMENS",
+                              "SPECIMEN_ID",
+                              unique(df3$SPECIMEN_ID))
+
+nrow(df1)
+nrow(df2)
+nrow(df3)
+nrow(df4)
+
+# Checl 11G 
+df4 %>%
+  filter(STATION_ID == 47219) %>%  # 47219 = 11G
+  arrange(SPECIMEN_NO)
+# 2010  - a bunch
+# 2015 - only 1
+```
+
+
+### Joining tables, starting from sample  
+```{r}
+
+df5 <- df1 %>%
+  select(SAMPLE_ID, METHOD_ID, VALUE, FLAG1, DETECTION_LIMIT, QUANTIFICATION_LIMIT) %>%
+  safe_left_join(df2, na_matches = "never", check = "v")
+
+df3 %>%
+  count(SAMPLE_ID, SPECIMEN_ID) %>%
+  filter(n > 1)  # zero
+
+# Most (491) samples have one specimen, but 8 samples have 20-30 specimens
+df3 %>%
+  count(SAMPLE_ID) %>%
+  count(n)
+
+# Pick one of those 8 samples
+spec_check <- df3 %>%
+  filter(SAMPLE_ID == 57374) %>% # View("df3")
+  pull(SPECIMEN_ID)
+
+# Checking specimens + stations - no station codes found
+df4 %>%
+  filter(SPECIMEN_ID %in% spec_check) %>%
+  safe_left_join(
+    get_nivabase_selection(
+      "STATION_ID, STATION_CODE, STATION_NAME", "PROJECTS_STATIONS",
+      "STATION_ID", .$SPECIMEN_ID), 
+    na_matches = "never"
+    ) # %>%  View("df4")
+
+
+```
+
+
+
+
+
+### Stations found  
+```{r}
+tab <- table(df4$STATION_ID)
+length(tab)
+tab[tab > 1]
+
+# QUery PROJECTS_STATIONS for stations
+vdsi_stations_all <- get_nivabase_selection(
+  "STATION_ID, STATION_CODE, STATION_NAME", "PROJECTS_STATIONS",
+  "STATION_ID", names(tab))
+# Includes a bunch of Scottish stations
+
+```
+
+
+### Add year, stations + species    
+```{r}
+vdsi_stations <- vdsi_stations_all %>%
+  filter(STATION_CODE %in% unique(dat$STATION_CODE)) %>%
+  group_by(STATION_ID, STATION_CODE) %>%
+  summarise(STATION_NAME = first(STATION_NAME))   # several 
+
+df4 <- df4 %>%
+  mutate(Year = year(DATE_CAUGHT)) %>%
+  safe_left_join(vdsi_stations , check = "V")
+
+# Add species
+df_species_tax <- df4$TAXONOMY_CODE_ID %>%
+  unique() %>%
+  map_df(taxid_to_latin)
+
+df4 <- df4 %>%
+  safe_left_join(df_species_tax, check = "V")
+
+# Check 11G 
+df4 %>%
+  filter(STATION_ID == 47219) %>%  # 47219 = 11G
+  arrange(SPECIMEN_NO)
+
+```
+
+### Present MILKYS stations 
+```{r}
+
+vdsi_stations %>%
+  arrange(STATION_ID)
+
+```
+
+### Tabulate year x stations
+```{r}
+df4 %>%
+  filter(STATION_CODE %in% unique(dat$STATION_CODE)) %>%  # only MILKYS
+  xtabs(~Year + STATION_CODE, .)
+
+```
+
+### Tabulate species x stations
+```{r}
+df4 %>%
+  filter(STATION_CODE %in% unique(dat$STATION_CODE)) %>%
+  xtabs(~LATIN_NAME + STATION_CODE, .)
+
+```
+
+### Example 2010      
+47219 = 11G in 2010  
+Many specimens per sample
+```{r}
+df4_sel <- df4 %>%
+  filter(Year %in% 2010 & STATION_CODE %in% "11G") %>% 
+  arrange(SPECIMEN_NO)
+df4_sel
+
+df3_sel <- df3 %>%
+  filter(SPECIMEN_ID %in% df4_sel$SPECIMEN_ID)
+df3_sel %>%
+  xtabs(~SAMPLE_ID, .)
+
+df2_sel <- df2 %>%
+  filter(SAMPLE_ID %in% unique(df3_sel$SAMPLE_ID))
+df2_sel  
+
+df1_sel <- get_nivabase_selection("SAMPLE_ID, METHOD_ID, VALUE, FLAG1",
+                                  "BIOTA_CHEMISTRY_VALUES",
+                                  "SAMPLE_ID", df2_sel$SAMPLE_ID)
+df1_sel
+
+df0_sel <- get_nivabase_selection("METHOD_ID, NAME, UNIT",
+                                  "METHOD_DEFINITIONS",
+                                  "METHOD_ID", df1_sel$METHOD_ID)
+df0_sel
+```
+
+
+## 6. Check TBT data for the selected year    
+
+### Get chemical data  
+```{r}
+
+df2_specimens_allyrs <- get_specimens_from_stationdata(
+  df_stations %>% filter(STATION_CODE %in% dat$STATION_CODE))
+
+# Get data frame of chemical results (30 seconds or so)
+df_snailchem <- get_biota_chemistry(
+  years = selected_year, 
+  specimendata = df2_specimens_allyrs, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+cat("\nDownloaded", nrow(df_snailchem), "records\n")
+
+xtabs(~NAME + STATION_CODE, df_snailchem)
+
+```
+
+### Get SAMPLE_ID used  
+```{r}
+
+station_sampleid <- df_snailchem %>%
+  count(SAMPLE_ID, STATION_CODE)
+station_sampleid
+
+```
+
+
+## 14. BIOTA_CHEMISTRY_VALUES
+
+### a. Read data, if necessary  
+Add METHOD_ID and FLAG1  
+```{r}
+
+xtabs(~PARAM, dat)
+
+dat_summ <- dat %>%
+  filter(PARAM %in% c("VDSI", "Intersex")) %>%
+  mutate(
+    METHOD_ID = df_methods$METHOD_ID[1],
+    FLAG1 = as.character(NA)
+  )
+
+```
+
+### b. Add SAMPLE_ID  
+Which is all we need (see code for 'make_sql_chemistry_values' in '71...functions')
+```{r}
+
+cn1 <- dat_summ %>% colnames()
+
+# Add SAMPLE_ID to chemistry_values data
+if (!("SAMPLE_ID" %in% cn1)){    # checks that SAMPLE_ID has not already been added
+  dat_summ <- dat_summ %>%
+    safe_left_join(station_sampleid,
+                   by = "STATION_CODE",
+                   na_matches = "never",
+                   check = "MV")
+}
+
+
+```
+
+
+### c. Make SQLs  
+PASTE INTO SQL DEVELOPER TO ADD THE RECORDS   
+Note to DHJ: use "SQL developer (latest version)" from desktop. Don't use the start menu.  
+- remember `commit;` after running the insert sentences  
+```{r}
+# make_sql_chemistry_values(1, data = dat_summ)
+
+sql_list <- 1:nrow(dat_summ) %>% 
+  map_chr(make_sql_chemistry_values, data = dat_summ)
+
+i <- 1:length(sql_list)
+sql <- paste(sql_list[i], collapse = ";\n")
+sql <- paste0(sql, ";\n")
+writeLines(sql, "clipboard-1024")   # copies SQLs to clipboard - go to SQL Developer and paste
+                                    # "clipboard-1024" instead of "clipboard": increases available
+                                    #    for the clipboard
+
+cat("Number of SQLs: \n")
+length(sql_list)  # 144
+
+cat("\nSample of SQLs: \n")
+sql_list[1:3]
+
+
+```
+
+## 15. Reread data  
+```{r}
+
+# Get data frame of chemical results (30 seconds or so)
+df_snailchem <- get_biota_chemistry(
+  years = selected_year, 
+  specimendata = df2_specimens_allyrs, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+cat("\nDownloaded", nrow(df_snailchem), "records\n")
+
+xtabs(~NAME + STATION_CODE, df_snailchem)
+
+```
+### Plot data   
+Very boring plot
+```{r, fig.width=5, fig.height=2}
+
+df_snailchem %>%
+  filter(NAME == "VDSI") %>%
+  ggplot(aes(STATION_CODE, VALUE)) + 
+  geom_point()
+
+```
+
+
+
+

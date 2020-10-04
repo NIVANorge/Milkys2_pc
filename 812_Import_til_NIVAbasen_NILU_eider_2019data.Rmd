@@ -1,0 +1,797 @@
+---
+title: "71_Import_til_NIVAbasen_NILU_eider_2019data"
+author: "DHJ"
+date: "2 9 2019"
+output: 
+  html_document:
+    keep_md: true
+---
+
+Make tables for inserting into NIVAbase   
+  
+For eider duck data from NILU (script 31)  
+
+
+## 0. Libraries and functions
+```{r}
+library(dplyr)
+library(purrr)
+library(lubridate)
+library(stringr)
+library(tidyr)
+# library(ggplot2)
+library(niRvana)
+library(safejoin)   # https://github.com/moodymudskipper/safejoin
+
+source("71_Import_til_NIVAbasen_functions.R")
+
+# "Restart" for lazy people that don't want to write the 
+#    database password again (deletes all objects except database password/username)
+if (FALSE){
+  obj <- ls()
+  obj <- obj[!obj %in% c("db_privkey", "db_pubkey", "db_pwd", "db_username")]
+  rm(list = obj)
+  rm(obj)
+}
+
+
+```
+
+### For connectng to Nivabasen    
+Store your username and password to R (only once per R session)  
+```{r}
+
+set_credentials()
+
+# Check these codes (press F2) for reminder about what comes from which tables:
+# niRvana::get_biota_chemistry
+# niRvana::get_samples_from_sampleid
+
+```
+
+## 1. Read data
+
+
+### a. Year
+```{r}
+
+selected_year <- 2019
+
+```
+
+
+### b. Get most recent data produced in Jupyterhub  
+We only keep the data for the curret year
+```{r}
+# dir("Data")
+# Data at sample level (chemical data, biological efect parameters and VDSI)
+data_all <- readRDS(file = "Input_data_2019/101_data_updated_2020-08-05.rds")
+
+dat_eider <- data_all %>%
+  filter(MYEAR %in% selected_year & LATIN_NAME %in% "Somateria mollissima")
+
+```
+
+
+### c. Get samples in Labware file     
+```{r}
+
+# March-December data
+sql <- paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
+  "where extract(YEAR from SAMPLED_DATE) =", selected_year, 
+  "and extract(MONTH from SAMPLED_DATE) >= 3", 
+  "and UPPER(PROSJEKT) like '%MILKYS%';")
+sql
+df_labware_01 <- get_nivabase_data(sql)
+
+# January-February next year data
+sql <- paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
+  "where extract(YEAR from SAMPLED_DATE) =", selected_year + 1, 
+  "and extract(MONTH from SAMPLED_DATE) <= 2", 
+  "and UPPER(PROSJEKT) like '%MILKYS%';")
+df_labware_02 <- get_nivabase_data(sql)
+
+df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
+  filter(AQUAMONITOR_CODE %in% dat$STATION_CODE) %>%
+  # Add 'Specimen_no'
+  mutate(DESCRIPTION = gsub("<f8>", "ø", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION = gsub("<c5>", "Å", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION = gsub("<e5>", "å", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION = gsub("<c6>", "Æ", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION = gsub("<e6>", "æ", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION2 = DESCRIPTION %>% stringr::str_sub(start = nchar(AQUAMONITOR_CODE) + 1),
+         Specimen_no = stringr::str_extract(DESCRIPTION2, "[0-9]+") %>% as.numeric())
+
+
+if (FALSE){
+  df_samples %>%
+    select(TEXT_ID, DESCRIPTION, SPECIES, TISSUE, Specimen_no, BIOTA_SAMPLENO, X_BULK_BIO) %>%
+    arrange(TISSUE, BIOTA_SAMPLENO) %>%
+    mutate()
+}
+
+
+```
+
+### d. Plot samples  
+```{r, fig.width=7, fig.height=3}
+
+ggplot(df_samples, aes(BIOTA_SAMPLENO, Specimen_no, color = is.na(X_BULK_BIO))) +
+  geom_point() +
+  facet_grid(vars(AQUAMONITOR_CODE), vars(TISSUE))
+
+```
+
+### e. Get some generic lookup tables  
+```{r}
+
+df_tissue <- get_nivabase_data(
+  "select TISSUE_ID,TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
+
+df_taxon <- get_nivabase_selection(
+  "NIVA_TAXON_ID, LATIN_NAME", 
+  "TAXONOMY", 
+  "LATIN_NAME",
+  unique(dat_eider$LATIN_NAME), values_are_text = TRUE
+  )
+
+# Get a list of projects
+df_projects <- get_projects()   # we call it 'df_projects' (the default name)
+
+# Get a list of stations
+df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+
+# Get df_methods (NILU methods only)
+df_methods <- get_nivabase_selection(
+  "*", 
+  "METHOD_DEFINITIONS", 
+  "LABORATORY", 
+  "NILU", values_are_text = TRUE)
+
+```
+
+### f. Read existing Nivabase data  
+- % C, % N    
+- Delta 13C, Delta 15N  
+- PFAS  
+```{r}
+
+df2_specimens_allyrs <- get_specimens_from_stationdata(
+  df_stations %>% filter(STATION_CODE %in% dat_eider$STATION_CODE))
+
+# Get data frame of chemical results (30 seconds or so)
+df_chem <- get_biota_chemistry(
+  years = selected_year, 
+  specimendata = df2_specimens_allyrs, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+cat("\nDownloaded", nrow(df_chem), "records\n")
+
+xtabs(~NAME + STATION_CODE, df_chem)
+
+```
+
+### g. Define parameters that we can drop   
+Baswd on table above  
+```{r}
+
+params_already_in_database <- c(
+  "Delta13C", "Delta15N", "% C", "% N", "C/N", "PFAS", "PFBS", 
+  "PFDcA", "PFHpA", "PFHxA", "PFHxS", "PFNA", "PFOA", "PFOS", "PFOSA", 
+  "PFUdA")
+
+# Sum parameters etc. that we fon't need to enter
+params_to_drop <- c("BDE6S", "BDESS", "HBCDD", "CB_S7", "Sample")
+
+```
+
+
+
+## 2. Data to insert in NIVAbase
+1. Eider duck data are from specimens/samples that ARE in the NIVAbase (for 2018 data, they were NOT)  
+    - New records in BIOTA_SAMPLES only (SAMPLE_NO taken from data, get SAMPLE_ID from database)
+    - Also note that although pairs of eggs and blood were unrelated (I think!),
+      the same SPECIMEN_ID was giben for pairs of blood/egg samples  
+
+2. NILU cod data (siloxans; D4,D5 and D6) are from specimens that ARE in the NIVAbase, 
+but new samples (liver) are numbered corresponding to the muscle samples
+   - Use existing record in BIOTA_SINGLE_SPECIMENS (existing SPECIMEN_ID)
+   - New records in BIOTA_SAMPLES_SPECIMENS - relationship between SAMPLE_NO and SPECIMEN_ID
+   should be the same as for muscle
+   - New records in BIOTA_SAMPLES (new SAMPLE_ID, SAMPLE_NO taken from data)
+
+3. Biological effects in cod - from specimens that ARE in the NIVAbase, with the 
+exception of a single cod individual (Fish_no = 15, station = 53B). New samples (bile, blood,
+liver fraction). Samples are numbered corresponding to the muscle samples (as NILU cod)
+    - Use existing records in BIOTA_SINGLE_SPECIMENS (existing SPECIMEN_ID)  
+    - New records in BIOTA_SAMPLES_SPECIMENS (new SAMPLE_ID, but existing SPECIMEN_ID)  
+    - New records in BIOTA_SAMPLES (new SAMPLE_ID, SAMPLE_NO taken from data)  
+
+
+### a. Check SAMPLE_NO2  
+- Each tissue should have SAMPLE_NO2 = 1-15 (corresponds to individuals)   
+- For 2017, this was a bit of a mess, with some SAMPLE_NO2 > 1000  
+    - See code for 2017 if that is the case  
+```{r}
+
+# SAMPLE_NO2 are only 1-15 and 9064-9093
+xtabs(~SAMPLE_NO2 + TISSUE_NAME, dat_eider)
+
+```
+
+
+### b. Make `df_lookup_sample_id`   
+`SAMPLE_ID` already exists for some of the data (as they are already in the database)
+- we use these existing records to find the correct `SAMPLE_ID`  
+- which is used when we insert records in `BIOTA_CHEMISTY_VALUES`  
+```{r}
+
+df_lookup_sample_id <- df_chem %>%
+  distinct(SAMPLE_NO, TISSUE_NAME, SAMPLE_ID) %>%
+  arrange(TISSUE_NAME, SAMPLE_NO)
+
+# Check 30 B (cod station) just to be sure this is the right thing  
+if (FALSE){
+
+    station_id_example <- subset(df_stations, STATION_CODE == "30B")$STATION_ID
+  
+  # Get 2017 data for check
+  dat_example <- get_biota_chemistry(
+    years = 2017, 
+    specimendata = df2_specimens_allyrs %>% filter(STATION_ID == station_id_example),  # 30B
+    stationdata = df_stations,
+    report_samples = TRUE)
+  
+  
+  xtabs(~SAMPLE_NO + TISSUE_NAME, dat_example)  
+  xtabs(~SAMPLE_ID + TISSUE_NAME, dat_example)  
+  
+}
+
+```
+
+
+### c. Make lookups for the other ID variabless   
+`BIOTA_SAMPLES_SPECIMENS_ID` and `SPECIMEN_ID` in table `BIOTA_SAMPLES_SPECIMENS`  
+`SPECIMEN_NO` in table `BIOTA_SINGLE_SPECIMENS`  
+NOT NEEDED! These tables don't have to be added to the database    
+```{r}
+
+
+if (FALSE){
+  
+  df_lookup_samples_specimens_id <- niRvana::get_nivabase_selection(
+    columns = "SAMPLE_ID, SPECIMEN_ID, BIOTA_SAMPLES_SPECIMENS_ID", 
+    table = "BIOTA_SAMPLES_SPECIMENS", 
+    selection_column = "SAMPLE_ID", 
+    selection_values = df_lookup_sample_id$SAMPLE_ID
+  )
+  
+  df_lookup_specimen_no <- niRvana::get_nivabase_selection(
+    columns = "STATION_ID, SPECIMEN_ID, SPECIMEN_NO, DATE_CAUGHT, TAXONOMY_CODE_ID", 
+    table = "BIOTA_SAMPLES_SPECIMENS", 
+    selection_column = "SAMPLE_ID", 
+    selection_values = df_lookup_sample_id$SAMPLE_ID
+  )
+  
+}
+
+
+```
+
+
+
+
+## 3. Eider duck data
+
+### a. Set STATION_ID
+```{r}
+
+data_for_input <- dat_eider %>%
+  safe_left_join(
+    df_stations %>% select(STATION_CODE, STATION_ID),
+    by = "STATION_CODE", na_matches = "never",
+    check = "BMV")
+
+```
+
+
+### Tissue, check  
+If 'Tissues are correct' we can just keep this column
+```{r}
+
+df_tissue <- get_nivabase_data("select TISSUE_ID,TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
+
+cat("Tissues:\n")
+unique(data_for_input$TISSUE_NAME)
+
+check <- unique(data_for_input$TISSUE_NAME) %in% df_tissue$TISSUE_NAME
+if (sum(!check) == 0){
+  cat("Tissue names exist in NIVAbasen\n")
+}
+
+```
+
+
+### Species, check  
+If 'Species are correct' we can just keep this column
+```{r}
+
+cat("Species:\n")
+unique(data_for_input$LATIN_NAME)
+
+df_species <- get_nivabase_selection("SPECIES_ID,LATIN_NAME", "SPECIES", 
+                                     "LATIN_NAME", unique(data_for_input$LATIN_NAME), values_are_text = TRUE)
+
+check <- unique(data_for_input$LATIN_NAME) %in% df_species$LATIN_NAME
+if (sum(!check) == 0){
+  cat("Species names exist in NIVAbasen\n")
+}
+
+```
+
+
+
+## 4. Eider data to insert, start  
+Date is from   
+`K:\Prosjekter\Sjøvann\JAMP\2017\opparbeiding biota\sjøfugl\Felttabell egg 2017 Ærfugl Kongsfjord MILKYS.xlsx`
+```{r}
+
+
+data_insert_1 <- data_for_input %>%
+  filter(!PARAM %in% c(params_already_in_database, params_to_drop)) %>% 
+  filter(!PARAM %in% params_to_drop) %>% 
+  select(STATION_CODE, STATION_ID, LATIN_NAME, TISSUE_NAME, SAMPLE_NO2,
+         PARAM, UNIT,
+         VALUE_WW, FLAG1) %>%
+  rename(SAMPLE_NO = SAMPLE_NO2,
+         UNIT_orig = UNIT) %>%
+  safe_left_join(
+    df_chem %>% distinct(STATION_CODE, TISSUE_NAME, SAMPLE_DATE),
+    by = c("STATION_CODE", "TISSUE_NAME"), na_matches = "never",
+    check = "BMV"
+  )
+
+```
+
+
+## 5. Make lookup table for parameter/unit  
+To add correct parameter (NAME and UNIT) to the data  
+  
+### Parameters (NAME) used in 2018 data      
+```{r}
+
+if (FALSE)
+
+  dat_eider_2018 %>%
+    pull(NAME) %>% unique()
+
+
+```
+
+### Start lookup table  
+Starting with NAME  
+```{r}
+
+df_paramnames1 <- data_insert_1 %>%
+  distinct(PARAM, UNIT_orig) %>% #  View()       # get one record per PARAM, UNIT combination
+  mutate(
+    NAME = case_when(
+      PARAM == "HCB"              ~ "Hexachlorobenzene (HCB)",
+      PARAM == "2,2-Bisf.-F"      ~ "2,2-bisphenol F",
+      PARAM == "4,4-Bisf.-F"      ~ "4,4-bisphenol F",
+      PARAM == "4-T-NP"           ~ "4-tert-Nonylphenol",
+      PARAM == "4-T-OP"           ~ "4-tert-Octylphenol",
+      PARAM == "4,2-Bisf.-F"      ~ "4,2-bisphenol F",
+      PARAM == "Dodekylphenol"    ~ "Dodecylphenol",
+      PARAM == ""      ~ "",
+      PARAM == ""      ~ "",
+      substr(PARAM,1,3) == "BDE"  ~ sub("BDE", "BDE-", PARAM),
+      substr(PARAM,1,2) == "CB"   ~ sub("CB", "PCB-", PARAM),
+      substr(PARAM,1,4) == "HBCD" ~ paste0(tolower(substr(PARAM,5,5)), "-HBCD"),
+      nchar(PARAM) == 2           ~ str_to_sentence(PARAM),
+      TRUE ~ PARAM
+    )
+    )
+
+# df_paramnames
+
+test <- df_paramnames1 %>%
+  left_join(df_methods, by = "NAME") %>%
+  group_by(NAME) %>%
+  summarise(n = sum(!is.na(UNIT)), .groups = "drop")
+# test 
+
+cat("No. of parameters not matching df_methods:", sum(test$n == 0), "\n")
+
+# test %>% filter(n == 0)
+
+
+
+```
+
+
+### Lookup table, add UNIT 
+```{r}
+
+df_paramnames2 <- df_paramnames1 %>%
+  mutate(
+    UNIT = case_when(
+      substr(PARAM,1,4) == "HBCD"               ~ "µg/kg",     # was "ng/g (w.w.)"
+      PARAM == "HG"                             ~ "ng/g w.w.",
+      PARAM %in% c("D4","D5","D6")              ~ "ng/g w.w.",
+      PARAM %in% c("BPA","TBBPA","TBA", "PeCB") ~ "µg/kg",
+      grepl("Sum.+CB$", PARAM)                  ~ "µg/kg",
+      nchar(PARAM) == 2                         ~ "µg/g w.w.",  # All metals
+      # PARAM %in% c("CO","SN")                   ~ "µg/g w.w.",  # Exceptions to the metals
+      PARAM == "Fett"                           ~ "%",
+      TRUE                                      ~ "ng/g w.w."
+      
+    )
+    )
+
+test <- df_paramnames2 %>%
+  left_join(df_methods, by = c("NAME", "UNIT")) %>%
+  group_by(NAME) %>%
+  summarise(n = sum(!is.na(LABORATORY)), .groups = "drop")
+
+cat("No. of parameters/units not matching df_methods:", sum(test$n == 0), "\n")
+
+# test %>% filter(n == 0)
+
+if (sum(test$n == 0) > 1){
+  
+  df_methods %>%
+    filter(NAME %in% subset(test, n == 0)$NAME & toupper(MATRIX) == "BIOTA")
+
+}
+
+
+```
+
+### For finding correct NAME and UNIT - if needed   
+Modify and run the lines you need  
+- Not needed in 2019, all 2017 parameters were found  
+```{r}
+
+
+if (FALSE) {
+  
+  get_nivabase_data("select * from NIVADATABASE.METHOD_DEFINITIONS where rownum < 4")
+  # get_nivabase_data("select * from NIVADATABASE.METHOD_DEFINITIONS where rownum < 4") %>% colnames()
+  
+  df_methods %>%
+    filter(grepl("bis", NAME, ignore.case = TRUE) & toupper(MATRIX) == "BIOTA")
+  
+}
+
+
+```
+
+
+
+### Lookup table, add multiplier  
+For those cases (only 1) where original and new unit are not equivalent  
+```{r}
+
+if (FALSE){
+  
+  # Check combinations of UNIT_orig, UNIT manually
+  df_paramnames2 %>%
+    count(UNIT_orig, UNIT)
+  
+}
+
+# Add multiplier
+df_paramnames2 <- df_paramnames2 %>%
+  mutate(Multiplier = 
+           case_when(
+             UNIT_orig == "MG_P_KG" & UNIT == "ng/g w.w." ~ 1000,
+             TRUE                                         ~ 1
+             )
+         )
+
+df_paramnames2 %>%
+  count(UNIT_orig, UNIT, Multiplier)
+
+```
+
+## 6. Finish eider data to insert  
+Check number of missing values  
+```{r}
+
+data_insert_2 <- data_insert_1 %>%
+  safe_left_join(df_paramnames2, 
+                 by = c("PARAM", "UNIT_orig"), na_matches = "never",
+                 check = "BCV"
+                 ) %>%
+  mutate(VALUE = VALUE_WW*Multiplier)
+
+# Check number of missing values
+apply(is.na(data_insert_2), 2, sum)
+
+# Check visually:
+# data_insert_2
+```
+
+## 7. METHOD_DEFINITIONS  
+
+### For reference - this year's Nivabasen data   
+For instance, shows that SPECIES_ID is not used but TAXONOMY_CODE_ID is  
+```{r}
+
+if (FALSE)
+  apply(!is.na(df_chem), 2, mean) %>% round(2)
+
+```
+
+
+
+### METHOD_DEFINITIONS   
+Not needed in 2019  
+```{r}
+
+if (FALSE){
+  n <- 2  
+  new_methods <- tibble(
+    NAME = c("Co", "Sn"),
+    UNIT = rep("µg/g w.w.", n),
+    LABORATORY = rep("NILU", n),
+    METHOD_REF = rep("ICP-MS", n),
+    MATRIX = rep("BIOTA", n),
+    CAS = c(NA, NA),
+    MATRIX_ID = rep(1, n),
+  )
+  
+  new_methods
+  
+  
+  ### METHOD_DEFINITIONS II: Make SQL for use in SQL developer  
+  # Copy-paste into SQL developer
+  # * Remember "commit;"!
+  
+  # make_sql_chemistry_values(1, data = dat_summ)
+  
+  sql_list <- 1:nrow(new_methods) %>% 
+    map_chr(make_sql_methods, data = new_methods)
+  cat("Number of records: \n")
+  length(sql_list)  
+  
+  i <- 1:length(sql_list)
+  sql <- paste(sql_list[i], collapse = ";\n")
+  sql <- paste0(sql, ";\n")
+  writeLines(sql, "clipboard-1024")   # copies SQLs to clipboard - go to SQL Developer and paste
+  # "clipboard-1024" instead of "clipboard": increases avaliable
+  #    for the clipboard
+  
+  cat("\nSQLs: \n")
+  sql_list[1:2]
+  
+  
+  
+  ### Retrieve METHOD_ID by re-reading data    
+  
+  # Get df_methods (NILU methods only)
+  df_methods <- get_nivabase_selection(
+    "*", 
+    "METHOD_DEFINITIONS", 
+    "LABORATORY", 
+    "NILU", values_are_text = TRUE)
+  
+  
+  
+}
+
+
+```
+
+
+## 8. BIOTA_CHEMISTRY_VALUES
+
+ 
+### a. Make lookup table for METHOD_ID   
+df_lookup_methodid   
+
+```{r}
+
+#
+# The following will be used - seems to be the common ones used in 2016 data:  
+#
+# Co, Sn                  mg/kg         -     	      BIOTA
+# Hg                      ng/g w.w.     ICP-MS 	      BIOTA
+# Cu + the other metals   Âµg/g w.w.	    ICP-MS	      BIOTA
+# PCB-118	                ng/g w.w.	    GC-MS         BIOTA
+# BDE-47	                ng/g w.w.	    GC-MS	        BIOTA
+# D4	                    ng/g w.w.	    CSR-LVI-GCMS	BIOTA
+# a-HBCD	                ng/g (w.w.)   -             -
+# Hexachlorobenzene (HCB)	ng/g w.w.	    GC-MS         -
+# SCCP	                  ng/g w.w.	    GC-MS	        BIOTA
+# Fett                    %             -             Biota 
+
+
+# Try simple left join of the data
+check1 <- data_insert_2 %>%
+  count(NAME, UNIT) %>%
+  left_join(df_methods %>%
+              filter(toupper(MATRIX) %in% "BIOTA") %>%
+              select(NAME, UNIT, METHOD_ID, METHOD_REF, MATRIX), 
+            by = c("NAME", "UNIT")) %>%
+  group_by(NAME, UNIT) %>%
+  mutate(n = n())
+
+# We may get a lot of duplicates
+cat("Number of duplicates in df_methods, first check: \n")
+sum(check1$n > 1)    # 130
+
+# Visual check:
+# check1
+
+# Pick one method per NAME,UNIT 
+df_lookup_methodid <- check1 %>%
+  filter(n == 1 | !is.na(MATRIX))  # We pick those methods which either have no alternatives,
+                                   #   or the ones with Biota/BIOTA in MATRIX
+# Visual check:
+# df_lookup_methodid
+
+# Check for duplicates
+check2 <- df_lookup_methodid %>%
+  count(NAME, UNIT, wt = 1)
+# We get no duplicates
+cat("Number of duplicates in df_methods, second check: \n")
+sum(check2$n > 1)      # should be zero
+
+# Visual check:
+# check1
+
+# Check the othRr way (that all NAME/UNIT are repesented)
+check3 <- data_insert_2 %>%
+  left_join(df_lookup_methodid %>% select(NAME, UNIT, METHOD_ID, METHOD_REF, MATRIX),
+            by = c("NAME", "UNIT"))
+
+cat("Number of parameter/unit combinations not found: \n")
+sum(is.na(check3$METHOD_ID))  # should be zero
+
+if (sum(is.na(check3$METHOD_ID)) > 0)  # should be zero
+  check3 %>% filter(is.na(check3$METHOD_ID)) %>% count(PARAM, NAME)
+
+```
+
+### b. Start `biota_chemistry_values_eider`   
+By selecting columns and adding `METHOD_ID`   
+```{r}
+# df <- get_nivabase_data("select * from NIVADATABASE.BIOTA_CHEMISTRY_VALUES where rownum < 4")
+# df
+# df %>% colnames() %>% dput()
+
+# "VALUE_ID"              - Let the database decide
+# "SAMPLE_ID"             - From the database, after BIOTA_SAMPLES have been inserted
+# "METHOD_ID"             - Lookup based on NAME and UNIT
+# "VALUE"                 - From data
+# "FLAG1"                 - From data
+# "FLAG2"                 - NA
+# "ENTERED_BY"            - DHJ
+# "ENTERED_DATE"          - date, see above
+# "REMARK"                - NA
+# "DETECTION_LIMIT"       - NA
+# "UNCERTAINTY"           - NA
+# "QUANTIFICATION_LIMIT"  - NA
+# "APPROVED"              - NA?
+
+biota_chemistry_values1 <- data_insert_2 %>%
+  safe_left_join(df_lookup_methodid, by = c("NAME", "UNIT"), 
+                 check = "VM", na_matches = "never")
+
+biota_chemistry_values1 %>%
+  select(STATION_CODE, TISSUE_NAME, SAMPLE_NO, METHOD_ID, VALUE, FLAG1)
+
+```
+
+### c. Add SAMPLE_ID  
+```{r}
+
+biota_chemistry_values2 <- biota_chemistry_values1 %>%
+  safe_left_join(df_lookup_sample_id, by = c("TISSUE_NAME", "SAMPLE_NO"), 
+                 check = "BCVMn", na_matches = "never")
+
+biota_chemistry_values2$SAMPLE_ID %>% unique() %>% sort()
+
+cat("\n")
+cat("Number of SAMPLE_ID lacking (must be zero): \n")
+sum(is.na(biota_chemistry_values2$SAMPLE_ID))
+
+```
+
+
+### d. Make SQLs  
+And copies them to clipboard  
+PASTE INTO SQL DEVELOPER TO ADD THE RECORDS  
+```{r}
+
+sql_list <- 1:nrow(biota_chemistry_values2) %>% 
+  map_chr(make_sql_chemistry_values, data = biota_chemistry_values2)
+cat("Number of sql sentences: \n") # 2340
+length(sql_list) # 2340
+
+i <- 1:length(sql_list)
+sql <- paste(sql_list[i], collapse = ";\n") # join sqls together, with "new line" character between
+sql <- paste0(sql, ";\n")                   # add final "new line" character at the end
+writeLines(sql, "clipboard-1024")   # copies SQLs to clipboard - go to SQL Developer and paste
+                                    # "clipboard-1024" instead of "clipboard": increases avaliable
+                                    #    for the clipboard
+
+cat("\n") # 2340
+cat("First sql sentences: \n") # 2340
+head(sql_list, 3)
+
+cat("\n") # 2340
+cat("Last sql sentence: \n") # 2340
+tail(sql_list, 1)
+
+
+```
+
+
+
+## 9. Save all
+```{r}
+if (FALSE){
+  saveRDS(data_insert_2, 
+          paste0("Data/71_data_insert_", selected_year, ".rds"))
+  saveRDS(biota_chemistry_values2, 
+          paste0("Data/71_biota_chemistry_values_eider_", selected_year, ".rds"))
+}
+
+# For reading from disk:
+if (FALSE){
+  data_insert_2 <- readRDS("Data/71_data_insert_2019.rds")
+  biota_chemistry_values2 <- readRDS("Data/71_biota_chemistry_values_eider_2019.rds")
+}
+
+
+```
+
+## 10. Check  
+
+### Reread data 
+```{r}
+
+# Get data frame of chemical results (30 seconds or so)
+df_chem <- get_biota_chemistry(
+  years = selected_year, 
+  specimendata = df2_specimens_allyrs, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+cat("\nDownloaded", nrow(df_chem), "records\n")
+
+xtabs(~NAME + STATION_CODE, df_chem)
+
+```
+
+### Test plot  
+```{r}
+
+df_chem %>%
+  filter(grepl("BDE", NAME)) %>%
+  ggplot(aes(NAME, VALUE, color = TISSUE_NAME)) + 
+  geom_jitter(width = 0.1) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+df_chem %>%
+  filter(grepl("PCB", NAME)) %>%
+  ggplot(aes(NAME, VALUE, color = TISSUE_NAME)) + 
+  geom_jitter(width = 0.1) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+# Metals + dechlorans  
+df_chem %>%
+  filter(nchar(NAME) == 2) %>%
+  ggplot(aes(NAME, VALUE, color = TISSUE_NAME)) + 
+  geom_jitter(width = 0.1) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+```
+
