@@ -1,0 +1,89 @@
+---
+title: "301_Check_bigexcel"
+author: "DHJ"
+date: "17 9 2020"
+output: html_document
+---
+
+## 1. Libraries
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(readxl)
+library(glue)
+library(readr)
+library(safejoin)
+
+
+```
+
+## 2. Read big excel files   
+```{r}
+
+folder <- "K:/Avdeling/Mar/NOG/JMG/2019/Tabeller"
+folder <- "Files_from_Jupyterhub/Big_excel_table"
+
+fn1 <- "Data_xl_2020-08-05_ver02.csv"
+fn2 <- "Data_xl_2020-08-05_ver05.csv"
+fn3 <- "Data_xl_2020-08-05_ver06.csv"
+
+readLines(glue('{folder}/{fn1}'), n = 1)
+
+df1 <- readr::read_csv2(glue('{folder}/{fn1}'), col_types = cols(.default = col_character()))
+df2 <- readr::read_csv2(glue('{folder}/{fn2}'), col_types = cols(.default = col_character()))
+df3 <- readr::read_csv2(glue('{folder}/{fn3}'), col_types = cols(.default = col_character()))
+
+
+# names(df1) %>% dput() %>% paste(collapse = ", ")
+# names(df3) %>% dput() %>% paste(collapse = ", ")
+
+
+```
+## 3. Checks  
+
+### a. Time series present  
+Which time series are in df3 and not in df1?  
+```{r}
+
+nrow(df1)
+nrow(df2)
+nrow(df3)
+
+check <- df3 %>%
+  select(`Parameter Code`, `Station Code`, Species, Tissue, Basis, `Trends this year`) %>%
+  anti_join(
+    df1 %>% select(`Parameter Code`, `Station Code`, Species, Tissue, Basis, `Trends 2019`),
+    na_matches = "never")
+
+nrow(check)
+check
+
+```
+### b. Trends  
+Does trends in df1 and df3 differ?   
+* Notes:   
+    - é = trend up
+    - ¢ = no change  
+```{r}
+
+
+check1 <- df1 %>%
+  select(`Parameter Code`, `Station Code`, Species, Tissue, Basis, `Trends 2019`) %>%
+  safe_left_join(
+    df3 %>% select(`Parameter Code`, `Station Code`, Species, Tissue, Basis, `Trends this year`),
+    na_matches = "never",
+    check = "CV")
+
+check2 <- check1 %>%
+  filter(`Trends 2019` != `Trends this year`)
+
+nrow(check1)
+nrow(check2)
+
+check2
+# sel <- df1   
+# df1[]
+
+
+```
