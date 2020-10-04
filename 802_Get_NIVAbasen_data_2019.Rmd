@@ -1,0 +1,77 @@
+---
+title: "802 Get chemical data from NIVAbasen"
+output: html_document
+---
+
+## Libraries
+```{r setup, include=FALSE}
+# install.packages("niRvana")
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# And then the niRvana package. If you need to install it, then run thee next line also:
+# devtools::install_github("NIVANorge/niRvana")
+library(niRvana)
+
+source("802_Get_NIVAbasen_data_functions.R")
+
+```
+
+
+## Get new(er) data
+
+### Give your username and password to R (only once per R session):
+```{r}
+set_credentials()
+```
+
+### Get the list of projects
+```{r}
+df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+```
+
+### Get a list of the stations in the CEMP_Biota project
+```{r}
+df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+```
+
+### Get all specimens collected at these stations (20 seconds or so)
+```{r}
+df_specimens <- get_specimens_from_stationdata(df_stations)
+```
+
+## Get the data itself  
+Get data frame of chemical data for all samples from the measurement year 2016 (30 seconds or so)
+```{r, results = FALSE}
+
+df_2019 <- get_biota_chemistry(
+  years = 2019:2020,              # because it turns out that some specimens wrongly  
+                                  #    have date_caught = 2020
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+```
+
+### Save 
+```{r}
+#
+# 2019 data
+#
+# Make timestamp (date stamp actually)
+t <- Sys.time()
+timestamp <- substr(t, 1, 10)
+filename <- paste0("Data/01_df_2019_notstandard_", timestamp, ".rds")
+
+# Set to TRUE/FALSE depending on whether file should be saved or not  
+if (FALSE){
+  saveRDS(df_2019, file = filename)
+  cat("2019 data saved as", sQuote(filename))
+}
+
+# df_2018 <- readRDS("Data/df_2018_notstandard_2019-06-26.RData")
+
+```
+
+
