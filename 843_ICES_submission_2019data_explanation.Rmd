@@ -1,0 +1,87 @@
+---
+title: "R Notebook"
+output: html_notebook
+---
+
+### One liver sample - pooled sample from 3 fish   
+```{r}
+
+station <- "02B"
+
+df_samples %>% 
+  filter(AQUAMONITOR_CODE == station & TISSUE == "LI-Lever") %>% 
+  select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) 
+
+sampleno_liver <- 11
+matrix <- "LI"
+param <- "CB118"
+
+example_df_samples <- df_samples %>% 
+  filter(AQUAMONITOR_CODE == station & TISSUE == "LI-Lever" & BIOTA_SAMPLENO == sampleno_liver) %>% 
+  select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) 
+
+example_df_samples
+
+```
+
+### 
+
+### df_ind  
+One line per specimen - columns Length, Weight and Gonad_weight  
+```{r}
+
+df_ind %>%
+  filter(STATION_CODE == station)
+
+```
+
+
+
+## Table 03  
+- SMPNO is defined to be 1 for cod  
+
+```{r}
+
+data_03 %>% 
+  filter(STNNO == station)
+
+```
+
+## Table 04  
+### data_04_fish
+
+- SMPNO is defined to be 1 for cod  
+- Pick individuals given by liver sample  
+- Note that they have been given a BULKID number    
+```{r}
+
+example_specimens <- strsplit(example_df_samples$X_BULK_BIO, split = ",")[[1]] %>% as.numeric()
+example_specimens
+
+example_data_04_fish <- data_04_fish %>%
+  filter(STATION_CODE == station & Fish_no %in% example_specimens) 
+
+example_data_04_fish
+
+
+```
+
+
+
+### data_04  
+
+```{r}
+
+data_04 %>%
+  filter(STNNO == station & SUBNO %in% example_data_04_fish$SUBNO) 
+
+```
+
+### data_10  
+```{r}
+
+data_10 %>%
+  filter(STNNO %in% station & MATRX %in% matrix & PARAM %in% param)
+
+```
+
