@@ -1,0 +1,118 @@
+---
+title: "802 Get chemical data from NIVAbasen"
+output: html_document
+---
+
+## Libraries
+```{r setup, include=FALSE}
+# install.packages("niRvana")
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# And then the niRvana package. If you need to install it, then run thee next line also:
+# devtools::install_github("NIVANorge/niRvana")
+library(niRvana)
+
+source("802_Get_NIVAbasen_data_functions.R")
+
+```
+
+
+## Get new(er) data
+
+### Give your username and password to R (only once per R session):
+```{r}
+set_credentials()
+```
+
+### Get the list of projects
+```{r}
+df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+```
+
+### Get a list of the stations in the CEMP_Biota project
+```{r}
+df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+```
+
+### Get all specimens collected at these stations (20 seconds or so)
+```{r}
+df_specimens <- get_specimens_from_stationdata(df_stations)
+```
+
+### Get species  
+```{r}
+
+taxoncode_id <- unique(df_specimens$TAXONOMY_CODE_ID)
+
+df1 <- get_nivabase_selection(
+  "TAXONOMY_CODE_ID, CODE, NIVA_TAXON_ID",
+  "TAXONOMY_CODES",
+  "TAXONOMY_CODE_ID",
+  taxoncode_id
+)
+
+df2 <- get_nivabase_selection(
+  "NIVA_TAXON_ID, LATIN_NAME",
+  "TAXONOMY",
+  "NIVA_TAXON_ID",
+  df1$NIVA_TAXON_ID
+)
+
+df_species <- left_join(df1, df2, by = "NIVA_TAXON_ID") %>% 
+  select(TAXONOMY_CODE_ID, LATIN_NAME)
+
+```
+
+## Get the data itself  
+Get data frame of chemical data for all samples from the measurement year 2016 (30 seconds or so)
+```{r, results = FALSE}
+
+df_2020_temp <- get_biota_chemistry(
+  years = 2020:2021,              # in case some specimens wrongly  
+                                  #    have date_caught = 2020
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE) %>%
+  select(-LATIN_NAME)             # we remove the 'LATIN_NAME', which comes from the BIOTA_SAMPES table
+                                  #   and is empty
+
+df_2020 <- df_2020_temp %>%
+  left_join(df_species, by = "TAXONOMY_CODE_ID")
+
+```
+### Check species  
+```{r}
+
+table(addNA(df_2020$LATIN_NAME))
+
+```
+
+
+### Save 
+```{r}
+#
+# 2020 data
+#
+# dir.create("Files_to_Jupyterhub_2020")
+
+# Make timestamp (date stamp actually)
+t <- Sys.time()
+timestamp <- substr(t, 1, 10)
+filename <- paste0("Files_to_Jupyterhub_2020/01_df_2020_notstandard_", timestamp, ".rds")
+
+# Set to TRUE/FALSE depending on whether file should be saved or not  
+if (FALSE){
+  saveRDS(df_2020, file = filename)
+  cat("2020 data saved as", sQuote(filename))
+}
+
+# Set to TRUE/FALSE depending on whether file should be read or not  
+if (FALSE){
+  df_2020 <- readRDS(filename)
+}
+
+```
+
+
