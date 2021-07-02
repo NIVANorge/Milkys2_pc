@@ -84,10 +84,6 @@ nrow(dat) # 3568
 dat %>%
   count(ACCOUNT_NUMBER, PROSJEKT)
 
-tail(dat$SAMPLED_DATE, 200)
-sel <- grepl("2019", dat$TEXT_ID)
-sum(sel)   # 656
-mean(sel)  # 0.18
 
 ```
 
@@ -229,6 +225,65 @@ labware_2019 %>%
 ```
 
 
+## 5. 2020 data  
+
+### a. Checking values of PROSJEKT  
+* PROSJEKT including 'MILKYS': one found, 'MILKYS2019'   
+* PROSJEKT including 'tidsserier': none found     
+```{r}
+
+check1 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where upper(PROSJEKT) like '%MILKYS%'")
+check1 %>%
+  count(ACCOUNT_NUMBER, PROSJEKT)
+  
+
+check2 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where lower(PROSJEKT) like '%tidsserier%'")
+table(check2$PROSJEKT)
+check2 %>%
+  count(ACCOUNT_NUMBER, PROSJEKT)
+
+# 2020 data
+dat_2020 <- dat %>%
+  filter(grepl("2020", TEXT_ID))
+
+dat_2020 %>% 
+  count(ACCOUNT_NUMBER, PROSJEKT)
+nrow(dat_2020)
+
+# tail(dat$SAMPLED_DATE, 200)
+sel <- grepl("2020", dat$TEXT_ID)
+sum(sel)   # 656
+mean(sel)  # 0.18
+
+
+# None fitting (only "O 190142; BL_ID - Lange tidsserier i kystvann; Bl<f8>tbunnsidentifisering")
+```
+
+
+### b. Get data    
+```{r}
+
+prosj <- c('O 19330;ANA19 - MILKYS2019',
+           'O 210330;ANA21 - MILKYS 2021; Hovedanalyser 2021')
+
+prosj <- c('O 210330','ANA21 - MILKYS 2021; Hovedanalyser 2021')
+
+labware_2020 <- get_nivabase_selection(
+  "*",
+  "LABWARE_CHECK_SAMPLE", 
+  "TEXT_ID",
+  dat_2020$TEXT_ID, values_are_text = TRUE)
+
+labware_2020 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT in 'prosj','") %>%
+  mutate(PROSJEKT = oracle_fix_norw_letters(PROSJEKT),
+         DESCRIPTION = oracle_fix_norw_letters(DESCRIPTION)
+         )
+
+```
+
 
 ## 6. Save  
 Data should then be uploaded to Jupyterhub Milkys2, folder 'Input_data', for use there       
@@ -239,13 +294,21 @@ Data should then be uploaded to Jupyterhub Milkys2, folder 'Input_data', for use
 file_date <- Sys.time() %>% substr(1, 10)
 # file_date
 
-filename <- paste0("Labware_samples_2018_", file_date, ".rds")
-saveRDS(labware_2018_2, paste0("Data_to_upload_to_Jupyterhub/", filename))
-cat("File", sQuote(filename), "saved for 2018 \n\n")
+if (FALSE){
+  
+  filename <- paste0("Labware_samples_2018_", file_date, ".rds")
+  saveRDS(labware_2018_2, paste0("Data_to_upload_to_Jupyterhub/", filename))
+  cat("File", sQuote(filename), "saved for 2018 \n\n")
+  
+  filename <- paste0("Labware_samples_2019_", file_date, ".rds")
+  saveRDS(labware_2019, paste0("Data_to_upload_to_Jupyterhub/", filename))
+  cat("File", sQuote(filename), "saved for 2019 \n")
+  
+}
 
-filename <- paste0("Labware_samples_2019_", file_date, ".rds")
-saveRDS(labware_2019, paste0("Data_to_upload_to_Jupyterhub/", filename))
-cat("File", sQuote(filename), "saved for 2019 \n")
+filename <- paste0("Labware_samples_2020_", file_date, ".rds")
+saveRDS(labware_2020, paste0("Files_to_Jupyterhub_2020/", filename))
+cat("File", sQuote(filename), "saved for 2020 \n")
 
 ```
 
