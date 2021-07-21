@@ -102,9 +102,16 @@ read_excel_nilu1 <- function(filename, sheetname,
   
   dat_meta <- dat_meta %>%
     select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Unit)
-    
+  
+  # Delete columns with no NIVA sample number
+  sel <- !is.na(colnames(dat_lower))
+  
+  if (sum(!sel) > 0){
+    warning(name_Sample_no, " lacking for ", sum(!sel), " samples. These will not be included!")
+  }
+  
   # Restructure data
-  dat_result <- dat_lower %>% 
+  dat_result <- dat_lower[,sel] %>% 
     gather("Sample_no", "Value", -c(Parameter, IPUAC_no)) %>%
     left_join(dat_meta, by = c("Sample_no" = "Sample_no")) %>%
     mutate(IPUAC_no = as.numeric(IPUAC_no))
