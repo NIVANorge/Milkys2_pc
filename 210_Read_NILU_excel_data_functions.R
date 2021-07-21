@@ -55,29 +55,31 @@ read_excel_nilu1 <- function(filename, sheetname,
 
   # Test read used to set row numbers ----
   test_read <- read_excel(filename, sheet = sheetname, 
-                          col_names = FALSE, col_types = "text")
+                          col_names = FALSE, col_types = "text") %>%
+    as.data.frame()    # in order to be able to get columns as [,1] etc.
   
   # upper part
-  row1a <- grep(find_upper_top, test_read$X__1, ignore.case = TRUE)
-  row1b <- grep(find_upper_bottom, test_read$X__1, ignore.case = TRUE)
+  row1a <- grep(find_upper_top, test_read[,1], ignore.case = TRUE)
+  row1b <- grep(find_upper_bottom, test_read[,1], ignore.case = TRUE)
   # lower part
-  row2 <- grep(find_lower_top, test_read$X__1, ignore.case = TRUE)
+  row2 <- grep(find_lower_top, test_read[,1], ignore.case = TRUE)
   #
   # Upper part ----
   #
   dat_upper <- read_excel(filename, sheet = sheetname, 
-                          skip = row1a - 1, n_max = row1b - row1a + 1, col_names = FALSE, col_types = "text")
-  row_sampleno <- grep(name_Sample_no, dat_upper$X__1, ignore.case = TRUE)
-  sample_no <- dat_upper[row_sampleno,] %>% as.data.frame() %>% .[,3:ncol(dat_upper)]
+                          skip = row1a - 1, n_max = row1b - row1a + 1, col_names = FALSE, col_types = "text") %>%
+    as.data.frame()    # in order to be able to get columns as [,1] etc.
+  row_sampleno <- grep(name_Sample_no, dat_upper[,1], ignore.case = TRUE)
+  sample_no <- dat_upper[4,-(1:2)] %>% as.character()
   
   # Swap rows and columns
-  dat_meta <- dat_upper %>% select(-X__2) %>% as.matrix() %>% t() %>% .[-1,]
-  dat_meta[1:5,]
+  dat_meta <- dat_upper[,-2] %>% as.matrix() %>% t() %>% .[-1,]
+  # dat_meta <- dat_upper %>% select(-X__2) %>% as.matrix() %>% t() %>% .[-1,]
   dat_meta <- data.frame(dat_meta, stringsAsFactors = FALSE)
-  colnames(dat_meta) <- dat_upper$X__1
+  colnames(dat_meta) <- as.data.frame(dat_upper)[,1]
   
   # Change names for the columns we will use
-  # dput(dat_upper$X__1)
+  # dput(dat_upper[,1])
   
   sel <- colnames(dat_meta) %in% name_Sample_no_NILU; if (sum(sel)==0) stop(paste(name_Sample_no_NILU,"not found"))
   colnames(dat_meta)[sel] <- "Sample_no_NILU"
@@ -99,13 +101,12 @@ read_excel_nilu1 <- function(filename, sheetname,
   colnames(dat_lower)[3:ncol(dat_lower)] <- sample_no
   
   dat_meta <- dat_meta %>%
-    as_tibble() %>%
     select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Unit)
     
   # Restructure data
   dat_result <- dat_lower %>% 
     gather("Sample_no", "Value", -c(Parameter, IPUAC_no)) %>%
-    left_join(dat_meta, by = "Sample_no") %>%
+    left_join(dat_meta, by = c("Sample_no" = "Sample_no")) %>%
     mutate(IPUAC_no = as.numeric(IPUAC_no))
   
   # Set LOQ flag
