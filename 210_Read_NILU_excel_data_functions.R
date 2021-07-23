@@ -205,7 +205,7 @@ read_excel_nilu2 <- function(filename, sheetname,
   dat_unit <- tibble(Parameter = colnames(dat_upper), Unit = as.character(as.data.frame(dat_upper)[1,]))
   dat_result <- dat_result %>% 
     left_join(dat_unit, by = "Parameter") %>%
-    mutate(IPUAC_no = NA)
+    mutate(IPUAC_no = as.numeric(NA))
   cat("\nReturning", nrow(dat_result), "rows of data\n")
   dat_result %>% select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Parameter, IPUAC_no, Value, Unit, Flag1)
 }
@@ -261,8 +261,8 @@ nilu_param_pcb_pbde <- function(df){
   df %>% 
     mutate(
       PARAM = 
-        case_when(PARAM == "" & Group %in% "PCB" & !is.na(IPUAC_no) ~ paste0("CB", IPUAC_no),
-                  PARAM == "" & Group %in% "PBDE" & !is.na(IPUAC_no) ~ paste0("BDE", IPUAC_no),
+        case_when(PARAM == "" & Group %in% "PCB" & !is.na(IPUAC_no) ~ paste0("PCB-", IPUAC_no),
+                  PARAM == "" & Group %in% "PBDE" & !is.na(IPUAC_no) ~ paste0("BDE-", IPUAC_no),
                   TRUE ~ ""
         )
     )
@@ -275,7 +275,6 @@ nilu_param <- function(df){
                   "202  Hg  [ No Gas ]", "208  Pb  [ No Gas ]", "52  Cr  [ He ]", 
                   "59  Co  [ He ]", "60  Ni  [ He ]",  "63  Cu  [ He ]",
                   "66  Zn  [ He ]", "75  As  [ He ]",
-                  "a-HBCD", "b-HBCD", "g-HBCD", 
                   "MCCP", "SCCP", "HCB",
                   "Fett %",
                   "D4","D5","D6"),
@@ -283,7 +282,6 @@ nilu_param <- function(df){
                   "HG", "PB", "CR",
                   "CO", "NI", "CU",
                   "ZN", "AS",
-                  "HBCDA", "HBCDB", "HBCDG",
                   "MCCP", "SCCP", "HCB",
                   "Fett",
                   "D4","D5","D6")
