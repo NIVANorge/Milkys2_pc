@@ -22,52 +22,163 @@ source('210_Read_NILU_excel_data_functions.R')
 # Note: File fixed beforehand (see '31_Read_excel_data_functions.R')
 # (Also the row names of the upper part had to be moved one row up)
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# 2a. Read data parts, NILU files ----
+# 2. Read eider duck data from NILU ----
 #
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
-fn <- "Input_files_2020/Samperapport.xlsx"
+fn <- "Input_files_2020/Samperapport_edited.xlsx"
 excel_sheets(fn)
 # 1] "Fett"       "CP"         "HBCD"       "PBDE"       "PCB"        "Siloksaner" "Metaller"  
 
+# Define data list that will be used 
 dat <- vector("list", 7)
 
-# Data 1-2: read_excel_nilu1
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+# . a Data 1-2: data of type 1 (read_excel_nilu1) ----
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+# debugonce(read_excel_nilu1)
 dat[[1]] <- read_excel_nilu1(fn, "PBDE",
                             lessthans_given_as_negative_number = TRUE) %>%
   mutate(Group = "PBDE")
+# View(dat[[1]])
 
+# debugonce(read_excel_nilu1)
 dat[[2]] <- read_excel_nilu1(fn, "PCB",
                            lessthans_given_as_negative_number = FALSE,
                            name_Sample_amount = "Analysed sample amount:",
                            ) %>%
   mutate(Group = "PCB")
+# View(dat[[2]])
 
-# Data 3-5: read_excel_nilu2
-# Note 3rd data column for CP sheet (dat[[4]]): "Rec %", we call it "Rec_percent"
-dat[[3]] <- read_excel_nilu2(fn, "HBCD",
-                       lessthans_given_as_negative_number = TRUE,
-                       contains_sample_amount = TRUE) %>%
-  mutate(Group = "HBCD")
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+# . b Data 3, HBCD - manually ----   
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
-dat[[4]] <- read_excel_nilu2(fn, "CP",
-                       lessthans_given_as_negative_number = FALSE,
-                       contains_sample_amount = TRUE) %>%
-  mutate(Group = "CP") %>%
-  mutate(Parameter = ifelse(Parameter == "X__1", "Rec_percent", Parameter))
+# File type 1, but with the variation that "<" is in a separate column....
+
+# Define columns with concentrations (NOT counting the first "Component" column)
+cols_conc <- seq(2,30,by = 2)
+cols_lessthans <- seq(1,30,by = 2)
+
+# Metadata
+df_meta <- read_excel(fn, sheet = "HBCD", n_max = 10, col_names = FALSE) %>%
+  as.matrix() %>%
+  t() %>%
+  .[-1,]
+sample_numbers_nilu <- df_meta[cols_conc, 2]
+tissue <- df_meta[cols_conc, 7]
+
+# Data including less-thans
+df2a <- read_excel(fn, sheet = "HBCD", skip = 13, n_max = 3, col_names = FALSE) %>%
+  as.matrix() %>%
+  t()
+df2b <- df2a[-1,] %>%
+  as.data.frame()
+colnames(df2b) <- df2a[1,]
+
+# Data on broad form
+# Concentrations
+df_data_broad <- df2b[cols_conc,]
+df_data_broad$Sample_no_NILU <- sample_numbers_nilu
+df_data_broad$Tissue <- tissue
+# Less-thans
+df_data_broad_lt <- df2b[cols_lessthans,]
+df_data_broad_lt$Sample_no_NILU <- sample_numbers_nilu
+
+# Prepare  NIVA sample numbers + tissue form the other data
+df_sampleno_niva <- dat[[1]] %>%
+  distinct(Sample_no_NILU, Sample_no, Tissue)
+
+# Prepare Less-thans, long (tidy) form
+df_data_lt <- df_data_broad_lt %>%
+  pivot_longer(-Sample_no_NILU, names_to = "Parameter", values_to = "Flag1")
+
+# Finish data
+df_data <- df_data_broad %>%
+  pivot_longer(c(-Sample_no_NILU, -Tissue), names_to = "Parameter", values_to = "Value") %>%  # Concentrations, long (tidy) form
+  mutate(
+    Value = as.numeric(Value),
+    Sample_no_NILU = sub("20", "21", Sample_no_NILU)
+    ) %>%      # Sample_no_NILU start with '20', should be 21 
+  left_join(df_data_lt, by = c("Parameter", "Sample_no_NILU")) %>%  # Add less-thans
+  left_join(df_sampleno_niva, by = "Sample_no_NILU") %>%            # Add NIVA sample numbers + tissue
+  mutate(
+    Sample_amount = 1,
+    Unit = "ng/g",
+    Group = "HBCD"
+  )
+
+dat[[3]] <- df_data
+
+table(dat[[3]]$Parameter)
+
+# View(dat[[3]])
+# str(dat[[3]])
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+# . c Data 4 (CP) - manually ---- 
+# Almost type 2, but "<" is given as separate column
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+df1 <- read_excel(fn, sheet = "CP", range = "A2:H31", 
+                      col_names = c("Sample_no_NILU", "Matrix", "Sample_no", 
+                                    "SCCP_lt", "SCCP", "MCCP_lt", "MCCP", "Sample_amount"))
+
+# Prepare less-thans
+df_data_lt <- df1 %>%
+  select(Sample_no_NILU, SCCP_lt, MCCP_lt) %>%
+  pivot_longer(-Sample_no_NILU, names_to = "Parameter", values_to = "Flag1") %>%  # long (tidy) form
+  mutate(Parameter = sub("_lt", "", Parameter))   # needed for join below
+
+df_data <- df1 %>%
+  select(-SCCP_lt, -MCCP_lt) %>%
+  pivot_longer(c(SCCP, MCCP), names_to = "Parameter", values_to = "Value") %>%  # Concentrations, long (tidy) form
+  left_join(df_data_lt, by = c("Parameter", "Sample_no_NILU")) %>%              # Add less-thans
+  mutate(
+    Group = "CP",
+    Tissue = case_when(
+      grepl("egg", Matrix) ~ "Egg",
+      grepl("blod", Matrix) ~ "Blod",
+      TRUE ~ Matrix
+    ),
+    Unit = "mg/kg"
+  ) %>%
+  select(-Matrix)
+
+dat[[4]] <- df_data
+
+# View(dat[[4]])
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+# . d Data 5 (metals) data type 2 (read_excel_nilu2) ----  
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 dat[[5]] <- read_excel_nilu2(fn, "Metaller",
-                       lessthans_given_as_negative_number = TRUE,
-                       contains_sample_amount = FALSE,
-                       skip = 2) %>%
-  mutate(Group = "Metaller")
+                       lessthans_given_as_negative_number = TRUE, 
+                       contains_sample_amount = TRUE,
+                       skip = 5) %>%
+  mutate(
+    # Extract second "word", i.e. exctract "Cr" from "52  Cr  [ He ]"
+    Parameter = stringr::str_extract(Parameter, "(?<=\\s)[^\\s]+(?=\\s)"),  
+    Group = "Metaller"
+    )
 
-# Data 6: we do manually
-df <- read_excel(fn, "Fett %")
+# unique(dat[[5]]$Parameter) %>% stringr::str_extract("(?<=\\s)[^\\s]+(?=\\s)")
+
+# View(dat[[5]])
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+# . e Data 6 (fat) - manually ----
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+df <- read_excel(fn, "Fett")
 colnames(df)
 df <- df %>%
   rename(Sample_no_NILU = `Lab nr.`,
-         Sample_no = Comment,
+         Sample_no = `NIVA ID.nr.`,
          Tissue = Matrix,
          Value = `Fett %`) %>%
   mutate(Parameter = "Fett %",
@@ -76,75 +187,70 @@ dat[[6]] <- df %>%
   select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Parameter, IPUAC_no, Value, Unit, Flag1) %>% # line copied from read_excel_nilu1 or .2
   mutate(Group = "Fat")
 
-#
-# 2b. Read data parts, siloxans ----
-#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+# . f Data 7 (siloxans) - manually ----  
+# Differs from 1-6 by not using sample ID, but sample numbers (1-15 and 90-95)
+# - just using a new variable for this  
+# Also contains LOD and LOQ 
+# - Note that in the "edited" version of the excel file, I have reshuffled these columns
+# This sheet also contains cod   
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
-# Two data sets in this sheet, which has a different format
-#
-# Top: NIVA-collected data (cod from stations 30B, 24B, 43B2, 19B, 10B)
-#   Contains station + same sample number as used for *muscle* (see MILKYS+Lange tidsserier - analyser 2018.xlsx sheet 24B)
-# Bottom: NILU-collected data (eider duck at 19N)
-#   Contains station + Sample_no_NILU + Sample_no
-#
+x <- c("D4", "D5", "D6")
+varnames <- c("Sample", 
+              x, paste0(x, "_LOD"), paste0(x, "_LOQ"),
+              "Kommentar", "Tissue", "SPECIMEN_NO")
 
-data_siloksan <- read_excel(fn, sheet = "Siloksaner", skip = 1)
+df1 <- read_excel(fn, "Siloksaner", range = "A2:M107",     # read all data, including cod
+                 col_names = varnames,
+                 col_types = c(rep("text",4), rep("numeric", 6), rep("text",3))
+                 )
 
-# Change column names (knowing that these names doesn't fit well for the top part, we'll fix that later)
-colnames(data_siloksan)[1:3] <- c("Sample_no_NILU", "Sample_no", "Tissue")
+# Make long data set for value text  
+df_data_txt <- as.data.frame(df1)[,c(1:4,11:13)] %>%
+  pivot_longer(c(D4,D5,D6), names_to = "Parameter", values_to = "Value_txt")
 
-# Pick rows 
-first_letters <- substr(data_siloksan$Sample_no_NILU, 1, 3)   # look at first part of 'Sample_no_NILU'
-tab <- table(first_letters)                  
-first_letters_selected <- names(tab)[tab >= 10]               # pick those that are frequent
-data_siloksan <- data_siloksan[first_letters %in% first_letters_selected,]  # pick those rows from file
+# Prepare less-thans
+df_data_lt <- df_data_txt %>%
+  select(Parameter, Sample, Value_txt) %>%
+  mutate(Flag1 = ifelse(
+    grepl("<", Value_txt), "<", as.character(NA)
+  ))
 
-# Check manually:
-# data_siloksan %>% View()
+# Prepare LOD and LOQ
+df_data_lod <- as.data.frame(df1)[,c(1, 5:7)] %>%
+  pivot_longer(-Sample, names_to = "Parameter", values_to = "LOD") %>%
+  mutate(Parameter = sub("_LOD", "", Parameter))
+df_data_loq <- as.data.frame(df1)[,c(1, 8:10)] %>%
+  pivot_longer(-Sample, names_to = "Parameter", values_to = "LOQ") %>%
+  mutate(Parameter = sub("_LOQ", "", Parameter))
 
-# Fix data
-data_siloksan_fix <- data_siloksan %>%
-  select(Sample_no_NILU:D6) %>%
-  tidyr::gather("Parameter", "Value_flag", D4:D6) %>%                   # reformat data to tall/narrow form
-  mutate(Value = sub(" *< *", "", Value_flag),                          # Split value into value+flag
-         Flag1 = ifelse(grepl("<", Value_flag), "<", as.character(NA))
-  ) %>% 
-  mutate(Value = sub(")", "", Value)) %>%                                   # only one case 
-  mutate(Value = as.numeric(sub(",", ".", Value))) %>%                      # turn value into number
-  mutate(Value = ifelse(Value_flag %in% "Below fieldblank", 0, Value)) %>%  # We set "Below fieldblank" to Value=0
-  mutate(Unit = "ng/g")
+df_data <- df_data_txt %>%
+  mutate(
+    x1 = sub("<", "", Value_txt),
+    x2 = sub(",", ".", x1),
+    Value = as.numeric(x2)
+    ) %>% # View()
+  left_join(df_data_lt %>% select(-Value_txt), 
+            by = c("Parameter", "Sample")) %>%                           # Add less-thans
+  left_join(df_data_lod, by = c("Parameter", "Sample")) %>%              # Add LOD
+  left_join(df_data_loq, by = c("Parameter", "Sample")) %>%              # Add LOQ
+  mutate(Unit = "ng/g") %>%
+  select(-x1, -x2)
+# View(df_data)
 
-table(substr(data_siloksan$Sample_no_NILU, 1, 3))
+# Save for later use
+# saveRDS(df_data, "Data/210_Siloxans_2020.rds")
 
-#
-# Split data set in two
-#
-# table(substr(data_siloksan$Sample_no_NILU, 1, 3)) %>% names() %>% dput()
-data_siloksan_cod <- data_siloksan_fix %>%
-  filter(substr(Sample_no_NILU,1,3) %in% c("10B", "19B", "24B", "30B", "43B"))
-
-data_siloksan_eider <- data_siloksan_fix %>%
-  filter(substr(Sample_no_NILU,1,3) %in% "18/")
-
-#
-# Check that data set is split correctly
-#
-check <- nrow(data_siloksan_eider) + nrow(data_siloksan_cod) == nrow(data_siloksan_fix)
-if (!check)
-  cat("SOME ROWS ARE LACKING FROM COD OR EIDER DATASET")
-
-dat[[7]] <- data_siloksan_eider %>%
-  select(-Value_flag) %>%
-  as.data.frame()
-
-dat[[6]] %>% head(3)
-dat[[7]] %>% head(3)
-# dat[[7]] %>% View()
+dat[[7]] <- df_data %>%
+  filter(Tissue %in% c("Egg","Blod")) %>%
+  mutate(Group = "Siloxans") %>%
+  select(-Kommentar)
 
 
 
 #
-# 3. Combine the separate NILU files to a single file ----
+# 3. Checks before combining the separate NILU files to a single file ----
 #
 
 # Check column types
@@ -155,395 +261,199 @@ get_coltypes <- function(dataframe){
 }
 dat %>% purrr::map_df(get_coltypes)
 
-#
-# Combine data 1-7
-#
-dat_nilu <- bind_rows(dat)
+# Remove some columns before combining
+dat[[7]]$Sample <- NULL
+dat[[7]]$Value_txt <- NULL
+
+# Values of some columns
+dat %>% purrr::map(~table(.$Tissue))
+dat %>% purrr::map(~table(.$Unit))
+
 
 #
-# Save at this stage
-#
-saveRDS(dat_nilu, "Data/31_data_nilu_niluformat.rds")
-
-#
-# 4. Units and tissues ----
+# 4. Combine data 1-7 ----
+#    Includes fixing units and tissues
 #
 
-# xtabs(~Unit, dat_nilu)
-# xtabs(~UNIT, df_2018)  # df_2018 from script 01!
+dat_eiderduck <- bind_rows(dat) %>%
+  select(-Sample_amount) %>%           # not needed (and not always with a value)
+  mutate(
+    TISSUE_NAME = case_when(
+      grepl("egg", Tissue, ignore.case = TRUE) ~ "Egg",
+      grepl("blod", Tissue, ignore.case = TRUE) ~ "Blod",
+      TRUE ~ Tissue),
+    UNIT = case_when(
+      Unit %in% "mg/kg" ~ "MG_P_KG",
+      Unit %in% "ng/g" ~ "UG_P_KG",
+      Unit %in% "%" ~ "PERCENT")
+  ) 
 
-# Parameter UNIT added (old "Unit" is kept)
-dat_nilu <- nilu_fix_units(dat_nilu)
-dat_nilu <- nilu_fix_hg_unit(dat_nilu)
-sum(is.na(dat_nilu$UNIT))  # SHOULD BE ZERO
-table(dat_nilu$UNIT)
+# Check unit
+xtabs(~Group + addNA(Unit), dat_eiderduck)
+xtabs(~Group + addNA(UNIT), dat_eiderduck)
 
-# Parameter TISSUE_NAME added (old "Tissue" is kept)
-dat_nilu <- nilu_fix_tissue(dat_nilu)
-sum(is.na(dat_nilu$TISSUE_NAME))  # SHOULD BE ZERO
-
-nrow(dat_nilu)  # 2610
+# Check tissue
+xtabs(~Group + addNA(Tissue), dat_eiderduck)
+xtabs(~Group + addNA(TISSUE_NAME), dat_eiderduck)
 
 #
 # 5. Parameters (PARAM) ----
 #    originally Parameter, we set PARAM here ('Parameter' is kept)
 #
 
-dat_nilu$PARAM <- ""                        # Create PARAM
-dat_nilu <- nilu_param_pcb_pbde(dat_nilu)   # Set PARAM for PBCs and PBDEs (using IPUAC nr)
-dat_nilu <- nilu_param(dat_nilu)            # Set PARAM for the most of the rest
+# table(dat_eiderduck$Parameter)
 
-# Finally, Sum PCB
-sel <- dat_nilu2$Parameter %in% "Sum 7 PCB"; sum(sel)
-dat_nilu$PARAM[sel] <- "CB_S7"
-
-# All parameters
-# dat_nilu %>% count(Parameter, PARAM) %>% View()
-
-# Check remaining missing PARAM
-dat_nilu %>% filter(PARAM == "") %>% count(Parameter, PARAM)    # none
-dat_nilu %>% filter(is.na(PARAM)) %>% count(Parameter, PARAM)
-
-# 1 PeCB        NA       30     # THESE ARE DROPPED IN THE FINAL DATASET! (part 23)
-# 2 Rec_percent NA       30
-# 3 Sum-HepCB   NA       30
-# 4 Sum-HexCB   NA       30
-# 5 Sum-PenCB   NA       30
-# 6 Sum-TetCB   NA       30
-# 7 Sum-TriCB   NA       30
-# 8 Sum 7 PCB   NA       30
-# 9 TBA         NA       30
-
-#
-# S
-#
-# Compare with 2018 data - if necessary
-#
-# tab2 <- xtabs(~PARAM, df_2018 %>% filter(!substr(PARAM,1,3) %in% c("PCB", "BDE")))  # df_2018 from script 01!
-# x <- names(tab2)
-# paste(x, collapse = ", ")
-# grep("HBCD", x, value = TRUE)
-# grep("CCP", x, value = TRUE)
-
+# Setting PARAM
+dat_eiderduck$PARAM <- ""                             # Create PARAM
+dat_eiderduck <- nilu_param_pcb_pbde(dat_eiderduck)   # Set PARAM for PBCs and PBDEs (using IPUAC nr)
+dat_eiderduck <- nilu_param(dat_eiderduck) %>%        # Set PARAM for the most of the rest
+  mutate(
+    PARAM = case_when(
+      Parameter %in% "Sum 7 PCB" ~ "Sum PCB7",
+      TRUE ~ PARAM),
+    PARAM = case_when(                              
+      is.na(PARAM) ~ Parameter,                                     # PARAM = Parameter in the case of the rest (incl metals)
+      !is.na(PARAM) ~ PARAM)
+  )
 
 
 #
-# 6. Standardize Sample_no ----
+# 6. Add METHOD_ID ----
 #
 
-# Change NILU numbers so they conform with Nivabase
-# NILU:     Sample_no   "Nr. 2018-09655"
-# Labware;  TEXT_ID     "NR-2018-09676"
-
-# Testing....
-# grepl("Nr[:blank:]*", c(" Nr.", "Nr.", "Nr. ", "Nr", "Nr.  "))
-# sub("[:blank:]?Nr.*[:blank:]*", "NR-", c(" Nr.", "Nr.", "Nr. ", "Nr", "Nr.  "))
-# sub("*Nr.*[:blank:]*", "NR-", c(" Nr.", "Nr.", "Nr. ", "Nr", "Nr.  "))
-
-# dat_nilu_back <- dat_nilu  # Backup (if you need that)
-# dat_nilu <- dat_nilu_back  # Restore from backup
-
-# Make TEXT_ID (keep the old 'Sample_no')
-dat_nilu <- dat_nilu %>%
-  mutate(TEXT_ID = sub(".*Nr.+ +", "NR-", Sample_no)) %>%
-  mutate(TEXT_ID = sub("Nr", "NR", TEXT_ID)) %>%
-  mutate(TEXT_ID = sub("NR.", "NR-", TEXT_ID, fixed = TRUE)) %>%
-  mutate(TEXT_ID = sub(" *2018", "2018", TEXT_ID))
-
-xtabs(~TEXT_ID, dat_nilu)
-
-#
-# 7. Change HG unit from UG_P_KG to MG_P_KG ----
-#
-
-# Check
-# dat_nilu %>% filter(PARAM %in% "HG")
-
-
-# 1:7 %>% purrr::map_int(~dat[[.]] %>% filter(is.na(Parameter)) %>% nrow())
-
-
-#
-# 21. Get existing data ---- 
-#   
-
-# Existing chemical data
-# Needed to check if df_samples captures all samples
-dat_all <- readRDS(file = "Data/01_dat_all.rds")
-df_2018 <- dat_all %>% filter(MYEAR %in% 2018)
-
-# Get Labware sample file (df_samples) 
-df_samples <- readRDS(file = "Data/01_df_samples.rds")
-
-#
-# Check that all samples (station + sample number) in data are found in df_samples 
-#
-df_2018_id <- paste(df_2018$STATION_CODE, df_2018$SAMPLE_NO) %>% unique()
-df_samp_id <- paste(df_samples$AQUAMONITOR_CODE, df_samples$BIOTA_SAMPLENO) %>% unique
-found <- df_2018_id %in% df_samp_id
-mean(found)  # should be 1
-# 1  
-
-
-#
-# Checks
-# Note Somateria mollissima (eider duck) at 19N in df_samples 
-#
-df_samples %>%
-  group_by(SPECIES) %>%
-  summarise(paste(sort(unique(AQUAMONITOR_CODE)), collapse = ", "))
-
-# 1 NA                  16R, 20R, RE02, RE04, RE08, RN2, RN4, RN5, RN6, RN7, RN9                                                                        
-# 2 Gadus morhua        02B, 10B, 13B, 15B, 19B, 23B, 24B, 28B, 30B, 36B, 43B2, 45B2, 53B, 71B, 80B, 96B, 98B1                                          
-# 3 Littorina littorea  71G                                                                                                                             
-# 4 Mytilus edulis      10A2, 11X, 15A, 22A, 26A2, 28A2, 30A, 31A, 36A1, 51A, 52A, 56A, 57A, 64A, 65A, 71A, 76A2, 91A2, 97A2, 97A3, 98A2, I023, I024, I~
-# 5 Nucella lapillus    11G, 131G, 15G, 227G2, 22G, 36G, 76G, 98G                                                                                       
-# 6 Platichthys flesus  33F                                                                                                                             
-# 7 Somateria mollissi~ 19N    
-
-df_2018 %>%
-  group_by(LATIN_NAME) %>%
-  summarise(paste(sort(unique(STATION_CODE)), collapse = ", "))
-
-# 1 Gadus morhua      02B, 10B, 13B, 15B, 19B, 23B, 24B, 28B, 30B, 36B, 43B2, 45B2, 53B, 71B, 80B, 96B, 98B1                                            
-# 2 Littorina littor~ 71G                                                                                                                               
-# 3 Mytilus edulis    10A2, 11X, 15A, 22A, 26A2, 28A2, 30A, 31A, 36A1, 51A, 52A, 56A, 57A, 64A, 65A, 76A2, 91A2, 97A2, 97A3, 98A2, I023, I024, I131A, I~
-# 4 Nucella lapillus  11G, 131G, 15G, 227G2, 22G, 36G, 76G, 98G                                                                                         
-# 5 Platichthys fles~ 33F  
-
-
-
-#
-# 22a. Add columns from df_samples ----
-#    Creating dat_nilu2
-#
-head(dat_nilu, 2)
-head(df_2018, 2)
-head(df_samples, 2)
-
-# COLUMN COMPARISON
-# - - - - - - - - - - - - - - - - - - - - - - - - - 
-# Nivabasen biota part - Labware table (df_samples)  
-# - - - - - - - - - - - - - - - - - - - - - - - - - 
-# STATION_CODE         - AQUAMONITOR_CODE
-# STATION_ID           - AQUAMONITOR_ID
-# STATION_NAME         - AQUAMONITOR_NAME
-# SAMPLE_DATE          - SAMPLED_DATE (note the extra 'D')
-# LATIN_NAME           - SPECIES
-# TISSUE_NAME          - TISSUE (note: "Lever" = "LI-Lever" etc.)
-# SAMPLE_ID            - not given
-# SAMPLE_NO            - BIOTA_SAMPLENO (e.g. 1-15)
-# REPNO                - X_BULK_BIO ???
-# not always given     - TEXT_ID
-
-df_samples_forjoin <- df_samples %>%
-  rename(
-    STATION_CODE = AQUAMONITOR_CODE,
-    STATION_ID = AQUAMONITOR_ID,
-    STATION_NAME = AQUAMONITOR_NAME,
-    SAMPLE_DATE = SAMPLED_DATE,
-    LATIN_NAME = SPECIES,
-    TISSUE_NAME = TISSUE,
-    SAMPLE_NO = BIOTA_SAMPLENO,
-    REPNO = X_BULK_BIO          # not included at this stage (see 'select' below)
-  ) %>%
-  select(TEXT_ID, STATION_CODE, STATION_ID, STATION_NAME, SAMPLE_DATE, LATIN_NAME, SAMPLE_NO)
-
-dat_nilu2 <- dat_nilu %>% 
-  left_join(df_samples_forjoin, by = "TEXT_ID") %>%
-  mutate(MYEAR = 2018,
-         BASIS = "W")
-
-# Check of number of rows after join
-if (nrow(dat_nilu) != nrow(dat_nilu2))
-  cat("TEXT_ID SEEMS NOT TO BE UNIQUE IN df_samples")
-
-# Visual check of tissue
-# dat_nilu2 %>% select(TISSUE_NAME.x, TISSUE_NAME.y) %>% View()
-
-#
-# 22b. Add sum variables ----
-#
-
-# Define sum parameters
-pars_list <- get_sumparameter_definitions("Milkys_2018/01b_synonyms.csv")
-
-# unique(dat_nilu2$PARAM)
-
-# We already have "CB_S7" in the form of Parameter = 'Sum 7 PCB', so we delete it for definitions
-sel <- names(pars_list) %in% "CB_S7"
-pars_list <- pars_list[!sel]
-
-
-# Check 
-dat_nilu2 %>%
-  filter(PARAM %in% names(pars_list)) %>%
-  nrow()   # 0
-
-# Add sum parameters (as extra rows)  
-dat_nilu3 <- dat_nilu2 %>%
-  rename(VALUE = Value, FLAG1 = Flag1) %>%
-  mutate(UNCERTAINTY = NA,
-         QUANTIFICATION_LIMIT = NA)
-
-for (i in seq_along(pars_list)){
-  dat_nilu3 <- add_sumparameter(i, pars_list, dat_nilu3)
- }
-
-
-### Tables for number of cogeners per sum parameter  
-# Change FALSE to TRUE to show tables
 if (FALSE){
-  data_all_updated %>%
-    filter(MYEAR >= 2010 & PARAM %in% c("CB_S7", "BDE6S", "PFAS", "CB118")) %>%
-    xtabs(~MYEAR + PARAM, .)
+  
+  # Get existing NILU methods from METHOD_DEFINITIONS
+  # One time only
+  
+  set_credentials()
+  
+  # Get df_methods for NILU
+  df_methods_nilu <- get_nivabase_selection("*", "METHOD_DEFINITIONS", 
+                                            "LABORATORY", "NILU", values_are_text = TRUE)
+  
+  saveRDS(df_methods_nilu, "Data/210_df_methods_nilu_2020.rds")
 
-    for (i in 1:length(pars_list)){
-    par <- names(pars_list)[i]
-    print(par)
-    print(
-      xtabs(~MYEAR + N_par, data_all_updated %>% filter(PARAM %in% par & !is.na(VALUE)))
-    )
-  }
 }
 
-
 #
-# 23. Add dat_nilu3 rows to dat_all ----
-#
-
-# Put dat_nilu3 data in same format as df_2018
-# After check
-dat_nilu3 <- dat_nilu3 %>% 
-  rename(VALUE_WW = Value,
-         FLAG1 = Flag1)
-
-head(dat_nilu3, 2)
-head(df_2018, 2)
-
-dat_nilu3 <- dat_nilu3 %>% 
-  select(MYEAR, STATION_CODE, LATIN_NAME, TISSUE_NAME, PARAM, BASIS, SAMPLE_NO, FLAG1, UNIT, STATION_ID, 
-         VALUE_WW, STATION_NAME, SAMPLE_DATE) %>%
-  filter(!is.na(PARAM))
-
-
-# . 23a. Save NILU eider duck data (2018 only)  ----
-saveRDS(dat_nilu3, "Data/31_data_nilu_eider_nivaformat.rds")
-
-
-# . 23b. Add to complete data ----
-dat_all_updated1 <- bind_rows(dat_all, dat_nilu3)
-
-nrow(dat_all)           # 464852
-nrow(dat_all_updated1)  # 467552
-
-
-
-#
-# 24. Add cod siloxane rows to df_2018 ----
-#     see section 2b
 # 
-head(dat_nilu3)
-head(data_siloksan_cod)
-xtabs(~Tissue, data_siloksan_cod)
-xtabs(~TISSUE_NAME, df_2018)
-xtabs(~Unit, data_siloksan_cod)
-xtabs(~UNIT, df_2018)
-xtabs(~Sample_no_NILU, data_siloksan_cod)
+df_methods_nilu <- readRDS("Data/210_df_methods_nilu_2020.rds") %>%
+  filter(is.na(MATRIX) | (MATRIX %in% c("Biota","BIOTA")))
 
-data_siloksan_cod2 <- data_siloksan_cod %>%
-  rename(PARAM = Parameter,
-         FLAG1 = Flag1,
-         VALUE_WW = Value
-  ) %>%
-  mutate(MYEAR = 2018,
-         STATION_CODE = stringr::str_extract(Sample_no_NILU, "[^_]+"),
-         LATIN_NAME = "Gadus morhua",
-         TISSUE_NAME = "Lever",
-         BASIS = "W",
-         SAMPLE_NO = as.numeric(Sample_no),
-         UNIT = "UG_P_KG"
-  ) %>%
-  select(MYEAR, STATION_CODE, LATIN_NAME, TISSUE_NAME, PARAM, BASIS, SAMPLE_NO, FLAG1, UNIT, VALUE_WW)
+
+# table(addNA(df_methods_nilu$MATRIX))
+
+#
+# Select methods by METHOD_ID (makes 'df_methods_test')
+#
+
+meth_id <- 32375 + seq(-250,250)
+meth_id <- c(meth_id, 10370, 19602, 27765:27767, 27710, 27711, 28434, 29338, 29339, 29340, 29341, 29342, 34204, 34206, 35084)
+# range(meth_id)
+df_methods_test <- df_methods_nilu %>%
+  filter(METHOD_ID %in% meth_id) %>% 
+  select(METHOD_ID, NAME, UNIT, METHOD_REF, ENTERED_BY, ENTERED_DATE)
+# View(df_methods_test)
+# plot(df_methods_test$METHOD_ID)
+
+# Are NAME unique?
+tab <- pull(df_methods_test, NAME) %>% table()
+if (sum(tab>1) > 0){
+  warning("Some NAME are not unique! Please remove some METHOD_ID values.")
+  tab[tab>1]
+}
+
+# Are all PARAM values found? (Makes a 'test' by joining)
+test <- dat_eiderduck %>%
+  left_join(df_methods_test, by = c("PARAM" = "NAME"))
+nrow(dat_eiderduck)
+nrow(test)
+test_lacking <- test %>% filter(is.na(METHOD_ID)) %>% pull(PARAM) %>% unique()
+if (length(test_lacking) > 0){
+  warning("Some PARAM does not have a corresponding NAME!")
+  test_lacking
+}
+
+# If any, where are the lacking PARAM values found in 'df_methods_nilu'?
+if (length(test_lacking) > 0){
+  df_lacking <- df_methods_nilu %>%
+    filter(NAME %in% test_lacking & grepl("w.w.", UNIT, fixed = TRUE)) %>%
+    select(METHOD_ID, NAME, UNIT, METHOD_REF, ENTERED_BY, ENTERED_DATE) %>%
+    arrange(METHOD_ID)
+  View(df_lacking)
+  df_lacking %>% pull(METHOD_ID) %>% .[-c(3,9)] %>% dput()
+}
+
+#
+# Do the final join to add METHOD_ID
+#
+
+df_methods <- df_methods_test %>%
+  select(NAME, METHOD_ID)
+
+dat_eiderduck_joined <- dat_eiderduck %>%
+  left_join(df_methods, by = c("PARAM" = "NAME"))
+
+if (nrow(dat_eiderduck) < nrow(dat_eiderduck_joined)){
+  stop("Error! Not all NAME are unique")
+} else if (sum(is.na(dat_eiderduck_joined$METHOD_ID)) > 0){
+  stop("Error! Not all PARAM are found")
+  dat_eiderduck_joined 
+} else {
+  dat_eiderduck <- dat_eiderduck_joined
+  cat("METHOD_ID successfuly added")
+}
+
+#
+# 7. Check and fix sample identities ---- 
+#    part b fixes 'Sample_no'  
+#
+
+#
+# a. Sample_no vs SPECIMEN_NO
+#    Only demonstrated here. This will be handled in script 812 '2020data'  
+#
+
+# Siloxans lack 'Sample_no'   
+xtabs(~is.na(Sample_no) + Group, dat_eiderduck)
+
+# But siloxans have 'SPECIMEN_NO' instead     
+xtabs(~is.na(SPECIMEN_NO) + Group, dat_eiderduck)
 
 
 #
-# Add STATION_NAME, SAMPLE_DATE
-#
-# Taken from df_2018
-df_for_join <- df_2018 %>%
-  filter(STATION_CODE %in% unique(data_siloksan_cod2$STATION_CODE)) %>%
-  group_by(STATION_CODE) %>%
-  summarise(STATION_NAME = first(STATION_NAME), SAMPLE_DATE = first(SAMPLE_DATE))
-
-data_siloksan_cod2 <- data_siloksan_cod2 %>%
-  left_join(df_for_join)
-
-
-#
-# Add to 2018 data
+# b. Sample_no values
+#    Fixed here
 #
 
-dat_all_updated2 <- bind_rows(dat_all_updated1, data_siloksan_cod2)
+# One sample lacks '.' after 'Nr'
 
-nrow(dat_all)           # 464869
-nrow(dat_all_updated1)  # 467552
-nrow(dat_all_updated2)  # 467807
+# test
+# sub("Nr ", "Nr. ", dat_eiderduck$Sample_no, fixed = TRUE) %>% table()
+dat_eiderduck$Sample_no <- sub("Nr ", "Nr. ", dat_eiderduck$Sample_no, fixed = TRUE)
 
-# Save NILU cod data (2018 only) 
-saveRDS(data_siloksan_cod2, "Data/31_data_nilu_cod_nivaformat.rds")
+# For PCBs, a "8" has sneaked in, e.g. 'Nr. 2020-08434' instead of 'Nr. 2020-0434'
+dat_eiderduck$Sample_no <- sub("-084", "-04", dat_eiderduck$Sample_no, fixed = TRUE)
+
+# Check table
+# Note that some samples lacks PCB, while others have only PCB
+xtabs(~Sample_no + Group, dat_eiderduck)
 
 
 #
-# 25. Save ----
+# 8. Check METHOD_ID ---- 
+#     All OK
 #
 
-# All data 
-saveRDS(dat_all_updated2, "Data/31_dat_all.rds")
+xtabs(~is.na(METHOD_ID) + Group, dat_eiderduck)
 
-
-
-#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
-#
-# We go on to use this in script 34
-#
-#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+# long output:
+# xtabs(~METHOD_ID + Group, dat_eiderduck)
 
 #
-# 26. Checks etc. ----
+# 9. Save ----
 #
+saveRDS(dat_eiderduck, "Data/210_dat_eiderduck_2020.rds")
 
-a <- colnames(df_2018)
-b <- colnames(dat_nilu3)
-a[a %in% b]
-a[!a %in% b]
-
-xtabs(~addNA(BIOTA_SAMPLENO), df_samples %>% filter(AQUAMONITOR_CODE %in% "19N"))
-xtabs(~addNA(SPECIES), df_samples %>% filter(AQUAMONITOR_CODE %in% "19N"))
-xtabs(~addNA(TISSUE), df_samples %>% filter(AQUAMONITOR_CODE %in% "19N"))
-
-df_2018_updated %>% filter(STATION_CODE %in% "19N") %>% View()
-
-# Check same station using df_2018 from script 01
-df_2018 %>%     # this object is from script 01!
-  filter(STATION_CODE %in% "15B") %>%
-  head(2)
-df_samples %>% filter(AQUAMONITOR_CODE %in% "15B") %>% head(2)
-
-head(df_2018, 2)
-
-xtabs(~addNA(SPECIES), df_samples %>% filter(AQUAMONITOR_CODE %in% "15B"))
-xtabs(~addNA(TISSUE), df_samples %>% filter(AQUAMONITOR_CODE %in% "15B"))
-
-
-#
-# 27. Get medians for sum parameters ----
-#
-
-# dat_nilu3 <- readRDS("Data/31_data_nilu_eider_nivaformat.rds")
-
-dat_nilu3 %>% 
-  filter(PARAM %in% c("CB_S7", "BDE6S", "HBCDD", "BDESS")) %>%
-  group_by(PARAM) %>% 
-  summarise(Median = median(VALUE), Over_LOQ = sum(is.na(FLAG1)))
-
+# dat_eiderduck <- readRDS("Data/210_dat_eiderduck_2020.rds")
