@@ -1,6 +1,20 @@
+#
+# Reading NILU data from Excel
+#
+# - One single excel file, 7 sheets
+# - Several different formats, some of which can be read using the functions
+#   read_excel_nilu1 (data 1,2) and read_excel_nilu2 (5), some which are read 'manually' (the rest)
+# 
+
+# Data saved (and used in script 812)
+# Main data (eider duck) saved in part 9:
+# - 210_dat_eiderduck_2020.rds
+# Cod siloxans (part of data set 7) saved in 2f:
+# - 210_dat_cod-siloxans_2020.rds
 
 # Based on 'Milkys' project script '31_Read_excel_data_2019.R'  
 #
+
 # 1a. Libraries and scripts ----
 # 
 library(dplyr)
@@ -28,6 +42,12 @@ source('210_Read_NILU_excel_data_functions.R')
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+# . a1 Preparations ----
+# Define fn and dat
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+
 fn <- "Input_files_2020/Samperapport_edited.xlsx"
 excel_sheets(fn)
 # 1] "Fett"       "CP"         "HBCD"       "PBDE"       "PCB"        "Siloksaner" "Metaller"  
@@ -36,7 +56,7 @@ excel_sheets(fn)
 dat <- vector("list", 7)
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
-# . a Data 1-2: data of type 1 (read_excel_nilu1) ----
+# . a2 Data 1-2: data of type 1 (read_excel_nilu1) ----
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 # debugonce(read_excel_nilu1)
@@ -193,7 +213,7 @@ dat[[6]] <- df %>%
 # - just using a new variable for this  
 # Also contains LOD and LOQ 
 # - Note that in the "edited" version of the excel file, I have reshuffled these columns
-# This sheet also contains cod   
+# NOTE: This sheet also contains cod   
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 x <- c("D4", "D5", "D6")
@@ -239,15 +259,35 @@ df_data <- df_data_txt %>%
   select(-x1, -x2)
 # View(df_data)
 
+# Check Tissue  
+xtabs(~addNA(Tissue), df_data)
+
 # Save for later use
 # saveRDS(df_data, "Data/210_Siloxans_2020.rds")
+# Read
+# df_data <- readRDS("Data/210_Siloxans_2020.rds")
 
+#
+# Get Eider duck data
+# - added to 'dat'
+#
 dat[[7]] <- df_data %>%
   filter(Tissue %in% c("Egg","Blod")) %>%
   mutate(Group = "Siloxans") %>%
   select(-Kommentar)
 
+#
+# Get cod data
+# - saved as a separate file instead of adding to 'dat'
+#
+dat_cod <- df_data %>%
+  filter(Tissue %in% c("Lever")) %>%
+  mutate(
+    Group = "Siloxans",
+    Sample_no = paste("Nr.", substr(Sample, 1, 10))) %>%
+  select(-Kommentar)
 
+saveRDS(dat_cod, "Data/210_dat_cod-siloxans_2020.rds")
 
 #
 # 3. Checks before combining the separate NILU files to a single file ----
@@ -457,3 +497,5 @@ xtabs(~is.na(METHOD_ID) + Group, dat_eiderduck)
 saveRDS(dat_eiderduck, "Data/210_dat_eiderduck_2020.rds")
 
 # dat_eiderduck <- readRDS("Data/210_dat_eiderduck_2020.rds")
+
+
