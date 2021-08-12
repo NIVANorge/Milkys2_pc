@@ -279,6 +279,8 @@ dat[[7]] <- df_data %>%
 #
 # Get cod data
 # - saved as a separate file instead of adding to 'dat'
+# - Note that the 'Sample_no' numbers are not correct and should just be ignored!
+#   We will instead use SPECIMEN_NO (set manually in the excel file)
 #
 dat_cod <- df_data %>%
   filter(Tissue %in% c("Lever")) %>%
@@ -473,13 +475,20 @@ xtabs(~is.na(SPECIMEN_NO) + Group, dat_eiderduck)
 # sub("Nr ", "Nr. ", dat_eiderduck$Sample_no, fixed = TRUE) %>% table()
 dat_eiderduck$Sample_no <- sub("Nr ", "Nr. ", dat_eiderduck$Sample_no, fixed = TRUE)
 
-# For PCBs, a "8" has sneaked in, e.g. 'Nr. 2020-08434' instead of 'Nr. 2020-0434'
-dat_eiderduck$Sample_no <- sub("-084", "-04", dat_eiderduck$Sample_no, fixed = TRUE)
+
+# After checking 'df_samples_eider' in script 812 (2020 version)
+#   we find that all Eider duck sample numbers start with "NR-2020-084"
+substr(df_samples_eider$TEXT_ID, 1, 11) %>% unique()
+
+# ...while Sample_no it the table we just created mostly lack the '8' (the exception is a few PCBs)
+substr(dat_eiderduck$Sample_no, 1, 11) %>% table()
+
+# Let us insert that lacking '8'
+dat_eiderduck$Sample_no <- sub("Nr. 2020-04", "Nr. 2020-084", dat_eiderduck$Sample_no, fixed = TRUE)
 
 # Check table
 # Note that some samples lacks PCB, while others have only PCB
 xtabs(~Sample_no + Group, dat_eiderduck)
-
 
 #
 # 8. Check METHOD_ID ---- 
