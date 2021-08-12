@@ -68,9 +68,6 @@ We only keep the data for the curret year
 # Data at sample level (chemical data, biological efect parameters and VDSI)
 data_all <- readRDS(file = "Files_to_Jupyterhub_2020/01_df_2020_notstandard_2021-06-15.rds")
 
-dat_eider_nivabase <- data_all %>%
-  filter(LATIN_NAME %in% "Somateria mollissima")
-
 ```
 
 
@@ -107,30 +104,10 @@ df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
          Specimen_no = stringr::str_extract(DESCRIPTION2, "[0-9]+") %>% as.numeric(),
          TISSUE_NAME = stringr::str_sub(TISSUE, start = 4))
 
-# Remove everything except Eider duck stations
-df_samples_eider <- df_samples %>%
-  filter(AQUAMONITOR_CODE %in% dat_eider_nivabase$STATION_CODE)
-
-if (FALSE){
-  df_samples_eider %>%
-    select(TEXT_ID, DESCRIPTION, SPECIES, TISSUE, Specimen_no, BIOTA_SAMPLENO, X_BULK_BIO) %>%
-    arrange(TISSUE, BIOTA_SAMPLENO)
-}
-
-
 ```
 
-### d. Plot samples    
-* Note blood samples numbered 90-95 (probably means that they have no corresponding egg data)   
-```{r, fig.width=7, fig.height=3}
 
-ggplot(df_samples_eider, aes(BIOTA_SAMPLENO, Specimen_no, color = is.na(X_BULK_BIO))) +
-  geom_point() +
-  facet_grid(vars(AQUAMONITOR_CODE), vars(TISSUE))
-
-```
-
-### e. Get some generic lookup tables  
+### d. Get some generic lookup tables  
 * Tissues  
 * Species names  
 * Projects
@@ -162,77 +139,6 @@ df_methods <- get_nivabase_selection(
 
 ```
 
-### f1. Read existing Nivabase chemical data  
-- % C, % N    
-- Delta 13C, Delta 15N  
-- PFAS  
-```{r}
-
-df_chem_specimens <- get_specimens_from_stationdata(
-  df_stations %>% filter(STATION_CODE %in% dat_eider_nivabase$STATION_CODE))
-
-# Add species 
-df_chem_species <- get_nivabase_data(paste(
-  "select a.TAXONOMY_CODE_ID, b.LATIN_NAME",
-  "from NIVADATABASE.TAXONOMY_CODES a left join NIVADATABASE.TAXONOMY b",
-  "on a.NIVA_TAXON_ID = b.NIVA_TAXON_ID",
-  "where a.TAXONOMY_CODE_ID =",
-  unique(df_chem_specimens$TAXONOMY_CODE_ID)
-  ))
-df_chem_specimens <- left_join(df_chem_specimens, df_chem_species, by = "TAXONOMY_CODE_ID")
-
-# Get data frame of chemical results (30 seconds or so)
-df_chem <- get_biota_chemistry(
-  years = selected_year, 
-  specimendata = df_chem_specimens, 
-  stationdata = df_stations,
-  report_samples = TRUE)
-
-cat("\nDownloaded", nrow(df_chem), "records\n")
-
-```
-
-### f2 Table of SPECIMEN_NO (shows number of specimens)
-```{r}
-
-df_chem_specimens %>%
-  filter(year(DATE_CAUGHT) == selected_year) %>%
-  pull(SPECIMEN_NO) %>%
-  table()
-
-```
-
-### f3. Table of SAMPLE_NO (shows number of measurements) 
-```{r}
-
-xtabs(~SAMPLE_NO + TISSUE_NAME, dat_eider_nivabase)
-
-```
-
-
-### f4. Table of parameters   
-```{r}
-
-tab <- xtabs(~NAME + STATION_CODE, df_chem)
-tab
-
-```
-
-
-
-### g. DROP?? Define parameters that we can drop  
-* Based on table above (but note that names are not identical)    
-```{r}
-
-params_already_in_database <- c(
-  "Delta13C", "Delta15N", "% C", "% N", "C/N", "PFAS", "PFBS", 
-  "PFDcA", "PFHpA", "PFHxA", "PFHxS", "PFNA", "PFOA", "PFOS", "PFOSA", 
-  "PFUdA")
-
-# Sum parameters etc. that we don't need to enter
-params_to_drop <- c("BDE6S", "BDESS", "HBCDD", "CB_S7", "Sample")
-
-```
 
 
 
