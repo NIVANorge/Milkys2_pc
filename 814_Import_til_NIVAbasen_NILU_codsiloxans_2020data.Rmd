@@ -117,12 +117,12 @@ df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
 df_tissue <- get_nivabase_data(
   "select TISSUE_ID,TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
 
-df_taxon <- get_nivabase_selection(
-  "NIVA_TAXON_ID, LATIN_NAME", 
-  "TAXONOMY", 
-  "LATIN_NAME",
-  unique(dat_eider_nivabase$LATIN_NAME), values_are_text = TRUE
-  )
+# df_taxon <- get_nivabase_selection(
+#   "NIVA_TAXON_ID, LATIN_NAME", 
+#   "TAXONOMY", 
+#   "LATIN_NAME",
+#   unique(dat_eider_nivabase$LATIN_NAME), values_are_text = TRUE
+#   )
 
 # Get a list of projects
 df_projects <- get_projects()   # we call it 'df_projects' (the default name)
@@ -138,7 +138,6 @@ df_methods <- get_nivabase_selection(
   "NILU", values_are_text = TRUE)
 
 ```
-
 
 
 
@@ -229,6 +228,7 @@ if (sum(!check) == 0){
 } else {
   warning("NOT ALL tissue names exist in NIVAbasen!")
 }
+
 ```
 
 
@@ -250,11 +250,24 @@ if (sum(!check) == 0){
 
 ```
 
-### e. Date - not needed       
+### e. Date  
+Assuming that there is one sampling date per station  
 ```{r}
-# from 
-# data_for_input_1 %>% 
-#   count(STATION_CODE, SAMPLE_DATE)
+
+data_for_input_2 <- data_for_input_1 %>%
+  left_join(
+    df_samples %>%
+      filter(AQUAMONITOR_CODE %in% data_for_input_1$STATION_CODE) %>%
+      distinct(AQUAMONITOR_CODE, SAMPLED_DATE),
+    by = c("STATION_CODE" = "AQUAMONITOR_CODE")
+  )
+
+if (nrow(data_for_input_2) > nrow(data_for_input_1)){
+  stop("There must be more than one sampling date per station!")
+} else {
+  message("Date added")
+}
+
 ```
 
 ### f. Parameters  
@@ -270,7 +283,7 @@ df_lookup_methods_1 <- get_nivabase_selection(
 df_lookup_methods_2 <- df_lookup_methods_1 %>%
   filter(LABORATORY == "NILU" & grepl("w.w.", UNIT))
 
-df2 <- get_nivabase_selection("*", "BIOTA_CHEMISTRY_VALUES", "METHOD_ID", df_lookup_methods$METHOD_ID)
+df2 <- get_nivabase_selection("*", "BIOTA_CHEMISTRY_VALUES", "METHOD_ID", df_lookup_methods_1$METHOD_ID)
 df3 <- get_nivabase_selection("*", "BIOTA_SAMPLES", "SAMPLE_ID", df2$SAMPLE_ID)
 df_lookup_methods <- df_lookup_methods_2 %>% 
   select(METHOD_ID, NAME, UNIT) %>%
@@ -286,7 +299,7 @@ if(sum(table(df_lookup_methods$NAME) > 1)){
 }
 
 # Add METHOD_ID 
-data_for_input <- data_for_input_1 %>%
+data_for_input <- data_for_input_2 %>%
   left_join(
     df_lookup_methods %>% rename(UNIT_Method = UNIT),
     by = c("Parameter" = "NAME")
@@ -334,10 +347,335 @@ for (station in stations){
 
 ```
 
+## 4. Existing data in NIVABASE
+
+
+### a. Existing BIOTA_SAMPLES    
+- And in particular existing SAMPLE_NO  
+```{r}
+
+existing_samples <- get_nivabase_selection(
+  "*",
+  "BIOTA_SAMPLES",
+  "STATION_ID",
+  unique(data_for_input$STATION_ID),
+  extra_where = "and extract (YEAR from SAMPLE_DATE) = 2020" 
+) %>%
+  left_join(df_tissue, by = "TISSUE_ID") %>%
+  left_join(df_stations %>% select(STATION_ID, STATION_CODE), by = "STATION_ID")
+
+
+message("existing_samples: n = ", nrow(existing_samples))
+
+#
+# check SAMPLE_NO
+#
+cat("\n")
+message("Tables:")
+
+xtabs(~STATION_CODE, existing_samples)
+xtabs(~TISSUE_NAME, existing_samples)
+xtabs(~SAMPLE_NO, existing_samples)
+
+#
+# Full tables
+#
+if (FALSE){
+  # All SAMPLE_NO is 1-17
+  xtabs(~SAMPLE_NO + STATION_CODE + TISSUE_NAME, existing_samples)
+}
+
+#
+# check REPNO
+#
+cat("\n")
+check <- existing_samples %>%
+  filter(REPNO != SAMPLE_NO)
+
+if (nrow(check) == 0){
+  message("REPNO always equal to SAMPLE_NO")
+} else {
+  warning("REPNO not always equal to SAMPLE_NO")
+}
+
+```
+
+
+### b. Existing BIOTA_SAMPLES_SPECIMENS      
+```{r}
+
+existing_samples_spec <- get_nivabase_selection(
+  "SAMPLE_ID, SPECIMEN_ID",
+  "BIOTA_SAMPLES_SPECIMENS",
+  "SAMPLE_ID",
+  existing_samples$SAMPLE_ID)
+)
+
+```
+### c. Existing BIOTA_SINGLE_SPECIMENS    
+- And in particular existing SAMPLE_NO  
+```{r}
+
+existing_specimens <- get_nivabase_selection(
+  "SPECIMEN_ID, DATE_CAUGHT, SAMPLE_POINT_ID, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+  "BIOTA_SINGLE_SPECIMENS",
+  "SPECIMEN_ID",
+  unique(existing_samples_spec$SPECIMEN_ID)
+  ) %>%
+  left_join(df_stations %>% select(STATION_ID, STATION_CODE), by = "STATION_ID")
+
+
+message("existing_specimens: n = ", nrow(existing_specimens))
+
+#
+# check SAMPLE_NO
+#
+cat("\n")
+message("Tables:")
+
+xtabs(~STATION_CODE, existing_specimens)
+xtabs(~SPECIMEN_NO, existing_specimens)
 
 
 
-## 10. BIOTA_SINGLE_SPECIMENS  
+```
+
+
+## 5. BIOTA_SAMPLES    
+Makes `biota_samples`, used in 5  
+In this case, quite similar to BIOTA_SINGLE_SPECIMENS, but includes TISSUE_ID   
+- Note: EROD data should be given as TISSUE_ID = 64 (TISSUE_NAME = 'Liver - microsome'),
+not TISSUE_ID = 3 (TISSUE_NAME = 'Lever')
+
+
+### a. Start `biota_samples` 
+```{r}
+# df <- get_nivabase_data("select * from NIVADATABASE.BIOTA_SAMPLES where rownum < 4")
+# df
+# df %>% colnames() %>% dput()
+
+
+# "SAMPLE_ID"            - Let the database decide
+# "SPECIES_ID"           - NA seems to be the current standard for these data
+# "TISSUE_ID"            - Lookup value from TISSUE_NAME
+# "STATION_ID"           - Use value in 'data_for_input'
+# "REMARK"               - NA
+# "SAMPLE_NO"            - (e.g. 1-15 for each tissue) - reference to numbers found in Excel sheets
+#                        - set to number found in Excel sheets + 100 to distinguish them
+#                         from ordinary samples!
+# "SAMPLE_DATE"          - set to TO_DATE('2019-09-03', 'yyyy-mm-dd')
+# "TAXONOMY_CODE_ID"     - Lookup value
+# "SAMPLE_DATE"          - Sample_date in 'data_insert2'
+
+biota_samples <- data_for_input %>%
+  # in the case of siloxans, one SPECIMEN_NO = one sample:
+  distinct(STATION_ID, LATIN_NAME, TISSUE_NAME, SAMPLED_DATE, SPECIMEN_NO) %>%  
+  safe_left_join(df_tissue,                                                      # adds TISSUE_ID
+                 na_matches = "never", by = "TISSUE_NAME", check = "BV")  %>%
+  mutate(
+    SAMPLE_NO = as.numeric(SPECIMEN_NO) + 100,    # in order to avoid overlap with existing liver measurements
+    REPNO = SAMPLE_NO,
+    TAXONOMY_CODE_ID = latin_to_taxid("Gadus morhua")$TAXONOMY_CODE_ID,
+  ) %>%
+  rename(SAMPLE_DATE = SAMPLED_DATE) 
+
+
+# nrow(biota_samples)
+
+# For inspection of data 
+biota_samples %>% 
+  select(STATION_ID, TISSUE_ID, SAMPLE_NO, TAXONOMY_CODE_ID, SAMPLE_DATE) %>%
+  arrange(STATION_ID, TISSUE_ID, SAMPLE_NO)
+
+cat("===================================\n")
+cat("Biota samples that will be inserted in database: \n")
+xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), biota_samples)
+
+cat("===================================\n")
+cat("Records for input: \n")
+xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), data_for_input)
+
+
+
+# 47025
+```
+
+### b. Check 'biota_samples' vs single specimens   
+NOT NEEDED? Done in 10a-b.  
+  
+Check whether all stations/samples in 'biota_samples' has a corresponding fish in BIOTA_SINGLE_SPECIMENS  
+- In this case, many of the 53B fish are from fish individuals that are not in the database   
+- FOr these, we must not only add samples, but also BIOTA_SINGLE_SPECIMENS and BIOTA_SAMPLES_SPECIMENS  
+```{r}
+
+# check1 <- biota_samples %>% 
+#   select(STATION_ID, SAMPLE_NO, TISSUE_NAME) %>%
+#   safe_left_join(existing_singlespec %>% select(STATION_ID, SPECIMEN_NO, DATE_CAUGHT),
+#                  na_matches = "never", 
+#                  by = c("STATION_ID", "SAMPLE_NO" = "SPECIMEN_NO"),
+#                  check = "Vm")     # 'm' means 'warn if not all x records are matched'   
+#                                    # also prints the STATION_ID/SAMPLE_NO combinations
+#                                    #    not matched
+
+
+check1 <- data_for_input %>%
+  select(STATION_CODE, TISSUE_NAME, SPECIMEN_NO) %>%
+  mutate(SPECIMEN_NO = as.numeric(SPECIMEN_NO)) %>%
+  left_join(existing_specimens, 
+            by = c("STATION_CODE", "SPECIMEN_NO")) %>%
+  filter(is.na(SPECIMEN_ID))
+
+if (nrow(check1) == 0){
+  message("All specimens found")  
+} else {
+  warning("Not all specimens found!")  
+  # Show samples (STATION_CODE, TISSUE_NAME, SAMPLE_NO) lacking a specimen
+  View(check1)
+    
+}
+
+```
+
+
+
+### c. Labware: Check SAMPLE_NO   
+Not needed here (for Bjørnar and Espen)   
+
+
+### d. Check tissues
+There is a specific "liver - microsome" tissue 
+```{r}
+# Overview
+biota_samples %>%
+  xtabs(~STATION_ID + paste(TISSUE_ID, TISSUE_NAME), .)
+
+```
+
+
+### e. Make SQLs
+PASTE INTO SQL DEVELOPER TO ADD THE RECORDS   
+Note to DHJ: use "SQL developer (latest version)" from desktop. Don't use the start menu.  
+- remember `commit;` after running the insert sentences  
+```{r}
+
+# Test functions
+# make_sql_sample(1, biota_samples_eider)
+
+sql_list <- 1:nrow(biota_samples) %>% 
+  map_chr(make_sql_sample, data = biota_samples)
+sql <- paste(sql_list, collapse = ";\n")
+sql <- paste0(sql, ";\n")
+writeLines(sql, "clipboard")  # copies SQLs to clipboard - go to SQL Developer and paste
+
+cat("Number of SQLs: \n")
+length(sql_list)  # 144
+
+cat("\nSample of SQLs: \n")
+sql_list[1:3]
+
+
+```
+
+### Check no of lines  
+```{r}
+
+get_nivabase_data("select count(*) from NIVADATABASE.BIOTA_SAMPLES")
+
+```
+
+```{r}
+
+i <- 1
+get_nivabase_data(sql_list[[i]])
+
+```
+### Check no of lines again 
+```{r}
+
+get_nivabase_data("select count(*) from NIVADATABASE.BIOTA_SAMPLES")
+
+```
+
+
+### f. Get the records we just added  
+Directly from R, instead of pasting into SQL Developer for getting data  
+- in contrast to the original of this code (for 2018 data)   
+Remember to **commit** in SQL developer first  
+```{r}
+
+biota_samples_fromdatabase <- niRvana::get_nivabase_selection(
+  "*",
+  "BIOTA_SAMPLES",
+  "STATION_ID",
+  biota_samples$STATION_ID, 
+  extra_where = paste(
+    "and extract(YEAR from SAMPLE_DATE) =",
+    selected_year, 
+    "and ENTERED_BY = 'DHJ'")
+)
+
+cat("Number of records: ")
+nrow(biota_samples_fromdatabase) %>% cat()   # 144
+cat("\nShould be the same as number of SQLs above! \n")
+
+
+```
+
+
+### g. Add SAMPLE_ID from 'biota_samples_fromdatabase' 
+```{r}
+
+biota_samples <- biota_samples %>%
+  safe_left_join(biota_samples_fromdatabase %>% select(STATION_ID, TISSUE_ID, TAXONOMY_CODE_ID, SAMPLE_NO, SAMPLE_ID), 
+                 by = c("STATION_ID", "TISSUE_ID", "TAXONOMY_CODE_ID", "SAMPLE_NO"),
+                 na_matches = "never",
+                 check = "BCV") %>%
+  safe_left_join(df_stations %>% select(STATION_ID, STATION_CODE),   # add STATION_CODE as well  
+                 by = "STATION_ID",
+                 na_matches = "never",
+                 check = "BCV")
+  
+
+cat("Number of records: ")
+length(unique(biota_samples$SAMPLE_ID)) %>% cat()
+cat("\nShould be the same as above! \n")
+cat("\n")
+
+# Check ID
+cat("SAMPLE_ID: ")
+range(biota_samples$SAMPLE_ID) %>% paste(collapse = " - ") %>% cat()
+cat("\n")
+
+```
+
+### h. Visualise `biota_samples`     
+```{r}
+
+
+if (FALSE) {
+  
+  # Check taht IDs are unique
+  tab <- xtabs(~SAMPLE_ID, biota_samples)
+  table(tab)
+  
+  # Check that SAMPLE_NO + TISSUE_NAME + STATION_ID are unique
+  xtabs(~SAMPLE_NO + TISSUE_NAME + STATION_ID, biota_samples)
+  
+}
+
+
+ggplot(biota_samples, aes(TISSUE_NAME, SAMPLE_NO)) +
+  geom_point() +
+  facet_grid(cols = vars(STATION_CODE)) +
+  theme(axis.text.x = element_text(hjust = 0, angle = -30))
+
+
+
+```
+
+
+## 6. BIOTA_SINGLE_SPECIMENS  
+
 ### a. Gets existing BIOTA_SINGLE_SPECIMENS  
 ```{r}
 
@@ -512,7 +850,7 @@ cat("\n")
 
 
 
-## 11. BIOTA_SAMPLES_SPECIMENS   
+## 7. BIOTA_SAMPLES_SPECIMENS   
 Add records for   
 1. The new specimens  
 2. The 'old' specimens, linking to new samples (biota_samples)  
@@ -540,16 +878,24 @@ nrow(biota_specimens_complete) %>% cat()   # 144
 ```{r}
 
 # biota_samples already have SPECIMEN_NO added (from 10b)
+# biota_samples_specimens <- biota_samples %>%
+#   select(STATION_ID, STATION_CODE, TISSUE_NAME, SAMPLE_NO, SAMPLE_ID, SPECIMEN_NO) %>%
+#   safe_left_join(
+#     biota_specimens_complete %>% select(STATION_ID, SPECIMEN_NO, SPECIMEN_ID),
+#     na_matches = "never",
+#     by = c("STATION_ID", "SPECIMEN_NO"),
+#     check = "BCV")
+
 biota_samples_specimens <- biota_samples %>%
   select(STATION_ID, STATION_CODE, TISSUE_NAME, SAMPLE_NO, SAMPLE_ID, SPECIMEN_NO) %>%
+  mutate(SPECIMEN_NO = as.numeric(SPECIMEN_NO)) %>%
   safe_left_join(
-    biota_specimens_complete %>% select(STATION_ID, SPECIMEN_NO, SPECIMEN_ID),
+    existing_specimens %>% select(STATION_ID, SPECIMEN_NO, SPECIMEN_ID),
     na_matches = "never",
-    by = c("STATION_ID", "SPECIMEN_NO"),
-    check = "BCV")
+    by = c("STATION_ID", "SPECIMEN_NO"))
     
 cat("Number of records that will be added to BIOTA_SAMPLES_SPECIMENS: ")
-nrow(biota_samples_specimens) %>% cat()   # 144
+nrow(biota_samples_specimens) %>% cat()   # 74
 
 ```
 
@@ -588,67 +934,71 @@ sql_list[1:3]
 
 
 
-## 12. BIOTA_CHEMISTRY_VALUES
+## 8. BIOTA_CHEMISTRY_VALUES
+
+### a. Start `biota_values` 
+```{r}
+
+# "SAMPLE_ID"            - Get from 'biota_samples'
+# "METHOD_ID"            - Already in 'data_for_input' (from script 210)
+# "VALUE"                -    " 
+# "FLAG1"                -    "
+
+biota_chemistry_values <- data_for_input %>%
+  # in the case of siloxans, one SPECIMEN_NO = one sample:
+  select(STATION_ID, SPECIMEN_NO, METHOD_ID, Value, Flag1) %>%
+  rename(VALUE = Value, FLAG1 = Flag1) %>%
+  mutate(SAMPLE_NO = as.numeric(SPECIMEN_NO) + 100) %>%             
+  left_join(biota_samples_fromdatabase %>% select(STATION_ID, SAMPLE_NO, SAMPLE_ID),
+            by = c("STATION_ID", "SAMPLE_NO"))
+
+if (nrow(data_for_input) == nrow(biota_chemistry_values)){
+  message("SAMPLE_ID added to data_for_input by joining")
+} else {
+  stop("Number of lines increased, check the join!")
+}
+
+cat("===================================\n")
+cat("Biota samples that will be inserted in database: \n")
+xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), biota_samples)
+
+cat("===================================\n")
+cat("Records for input: \n")
+xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), data_for_input)
+
+
+
+# 47025
+```
 
 ### a1. Check uniqueness  
 ```{r}
 
-data_insert2 %>%
-  count(STATION_ID, LATIN_NAME, TISSUE_NAME, SAMPLE_NO, NAME) %>%
+biota_chemistry_values %>%
+  count(STATION_ID, SAMPLE_NO, METHOD_ID) %>%
   xtabs(~n, .)  # should be only 1's!
 
 ```
 ### a2. Check that SAMPLE_NO is given for all   
 ```{r}
 
-data_insert2 %>%
+biota_chemistry_values %>%
   filter(is.na(SAMPLE_NO)) %>%
   nrow()
 
 ```
 
-### b. Make `biota_chemistry_values`  
-Also here, we have to make sure that we use 'Liver - microsome' and not just 'Lever'  
-- See 9a  
-```{r}
-
-biota_chemistry_values <- data_insert2 %>%
-  mutate(
-    REPNO = SAMPLE_NO,
-    TAXONOMY_CODE_ID = latin_to_taxid("Gadus morhua")$TAXONOMY_CODE_ID,
-    TISSUE_NAME = case_when(
-      TISSUE_NAME == "Lever" ~ "Liver - microsome",   # HARD-CODED
-      TRUE ~ TISSUE_NAME)
-  ) %>%
-  safe_left_join(biota_samples %>% 
-                   select(STATION_ID, TISSUE_NAME, SAMPLE_NO, SAMPLE_ID),
-                 by = c("STATION_ID", "TISSUE_NAME", "SAMPLE_NO"),
-                 na_matches = "never",
-                 check = "BCMV")  # ''M' give error if x has unmatched sets of joining values
-
-cat("Number of records that will be added to BIOTA_SAMPLES_SPECIMENS: ")
-nrow(biota_chemistry_values) %>% cat()   # 203
-
-# Check if SAMPLE_NO or SAMPLE_ID is NA
-if (FALSE){
-  sum(is.na(biota_chemistry_values$SAMPLE_NO))
-  sum(is.na(biota_chemistry_values$SAMPLE_ID))
-}
-
-```
 
 ### c. Visualise data   
 Compare with plot in 1c  
 ```{r}
 
-ggplot(biota_chemistry_values, aes(TISSUE_NAME, SAMPLE_NO, color = VALUE)) +
+biota_chemistry_values %>%
+  left_join(biota_samples_fromdatabase %>% select(SAMPLE_ID, TISSUE_ID),
+            by = c("SAMPLE_ID")) %>%
+  ggplot(aes(TISSUE_ID, SAMPLE_ID, color = VALUE)) +
   geom_point() +
-  facet_grid(cols = vars(STATION_CODE), rows = vars(NAME)) +
-  theme(axis.text.x = element_text(hjust = 0, angle = -30))
-
-ggplot(biota_chemistry_values, aes(SAMPLE_NO, VALUE)) +
-  geom_point() +
-  facet_grid(cols = vars(STATION_CODE), rows = vars(NAME), scale = "free_y") +
+  facet_grid(cols = vars(STATION_ID), rows = vars(METHOD_ID)) +
   theme(axis.text.x = element_text(hjust = 0, angle = -30))
 
 
