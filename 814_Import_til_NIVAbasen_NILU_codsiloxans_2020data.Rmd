@@ -183,8 +183,8 @@ dat_cod <- readRDS("Data/210_dat_cod-siloxans_2020.rds") %>%
 ```{r}
 
 # Make lookup table for finding station code + ID
-df_lookup_stations <- data_all %>%
-  distinct(STATION_CODE, STATION_NAME, STATION_ID)
+# df_lookup_stations <- data_all %>%
+#   distinct(STATION_CODE, STATION_NAME, STATION_ID)
 
 # Check contents of 'Sample' field
 table(substr(dat_cod$Sample, 13, 20))
@@ -200,7 +200,8 @@ data_for_input_1 <- dat_cod %>%
       grepl("varanger", Sample) ~ "10B",
       TRUE ~ "",
   )) %>%
-  left_join(df_lookup_stations, by = "STATION_CODE") %>%
+  left_join(df_stations %>% select(STATION_CODE, STATION_NAME, STATION_ID), 
+            by = "STATION_CODE") %>%
   mutate(
     LATIN_NAME = "Gadus morhua"
   ) %>%
@@ -444,6 +445,8 @@ xtabs(~SPECIMEN_NO, existing_specimens)
 ## 5. BIOTA_SAMPLES    
 Makes `biota_samples`, used in 5  
 In this case, quite similar to BIOTA_SINGLE_SPECIMENS, but includes TISSUE_ID   
+- NOTE: For cod siloxans: BECAUSE WE ALREADY HAVE LIVER, we add 100 in order to avoid overlap with existing liver measurements (see code below)  
+- Regarding thos, also see `8a` and change the code there  
 - Note: EROD data should be given as TISSUE_ID = 64 (TISSUE_NAME = 'Liver - microsome'),
 not TISSUE_ID = 3 (TISSUE_NAME = 'Lever')
 
@@ -473,7 +476,8 @@ biota_samples <- data_for_input %>%
   safe_left_join(df_tissue,                                                      # adds TISSUE_ID
                  na_matches = "never", by = "TISSUE_NAME", check = "BV")  %>%
   mutate(
-    SAMPLE_NO = as.numeric(SPECIMEN_NO) + 100,    # in order to avoid overlap with existing liver measurements
+    # NOTE: BECAUSE WE ALREADY HAVE LIVER, we add 100 in order to avoid overlap with existing liver measurements:
+    SAMPLE_NO = as.numeric(SPECIMEN_NO) + 100,    
     REPNO = SAMPLE_NO,
     TAXONOMY_CODE_ID = latin_to_taxid("Gadus morhua")$TAXONOMY_CODE_ID,
   ) %>%
@@ -937,6 +941,8 @@ sql_list[1:3]
 ## 8. BIOTA_CHEMISTRY_VALUES
 
 ### a. Start `biota_values` 
+* NOTE: ADDING 100 to SPECIMEN_NO to get SAMPLE_NO, fitting with 5a  
+* NOTE: `TISSUE_ID` not included in the join, that works because thre is only oe tissue here (see script 815)
 ```{r}
 
 # "SAMPLE_ID"            - Get from 'biota_samples'
@@ -948,7 +954,9 @@ biota_chemistry_values <- data_for_input %>%
   # in the case of siloxans, one SPECIMEN_NO = one sample:
   select(STATION_ID, SPECIMEN_NO, METHOD_ID, Value, Flag1) %>%
   rename(VALUE = Value, FLAG1 = Flag1) %>%
+  # NOTE: ADDING 100 to SPECIMEN_NO to get SAMPLE_NO, fitting with 5a
   mutate(SAMPLE_NO = as.numeric(SPECIMEN_NO) + 100) %>%             
+  # NOTE: `TISSUE_ID` not included in the join, that works because thre is only oe tissue here (see script 815)
   left_join(biota_samples_fromdatabase %>% select(STATION_ID, SAMPLE_NO, SAMPLE_ID),
             by = c("STATION_ID", "SAMPLE_NO"))
 
@@ -1037,20 +1045,59 @@ sql_list[1:3]
 
 ## 13. Final check    
 
+### 0. Functions modified   
+NOT USED (but works)
+```{r}
+
+get_specimens_from_stationdata <- function (station_data, years = NULL) {
+  if (!is.null(years)){
+    extra_where <- paste0(" and extract (YEAR from DATE_CAUGHT) in (", 
+                          paste(years, collapse = ","), 
+                          ")")
+  } else {
+    extra_where <- ""
+  }
+  get_nivabase_selection("*", 
+                         "BIOTA_SINGLE_SPECIMENS", 
+                         "STATION_ID", 
+                         station_data$STATION_ID,
+                         extra_where = extra_where)
+}
+
+# Test
+
+if (FALSE){
+  df_specimens_allyrs <- get_specimens_from_stationdata(
+    df_stations %>% filter(STATION_CODE %in% c("19B", "43B2", "30B", "24B", "10B")),
+    years = 2015:2020)
+}
+
+```
+
 ### a. Reload data  
 ```{r}
 
-# Get all specimens collected at these stations (20 seconds or so)
-df_specimens_allyrs <- get_specimens_from_stationdata(df_stations)
+df_specimens_allyrs <- get_nivabase_selection(
+  "*", 
+  "BIOTA_SINGLE_SPECIMENS", 
+  "STATION_ID", 
+  unique(data_for_input_1$STATION_ID),
+  extra_where = " and extract (YEAR from DATE_CAUGHT) > 2014")
+
+xtabs(~year(DATE_CAUGHT), df_specimens_allyrs)
+
+# Didn't work
+#  extra_where = " and (extract YEAR from DATE_CAUGHT) = 2020")
 
 # Get data frame of chemical results (30 seconds or so)
+message("\nGet data frame of chemical results")
 dat_test <- get_biota_chemistry(
-  years = selected_year, 
+  years = 2014:2020, 
   specimendata = df_specimens_allyrs,
   stationdata = df_stations,
   report_samples = TRUE)
 
-head(dat_test)
+# head(dat_test)
 
 if (FALSE){
   
@@ -1077,23 +1124,24 @@ Should look like the plot in 1c and 12c! (Except that 1c has more parameters  )
 
 # Parameters
 pars <- c("PA1O", "PYR1O", "BAP3O", "PA1OH", "PYR1OH", "BAP3OH", "ALAD", "EROD", "ABS380")
+pars <- c("D4", "D5", "D6")
 
 dat_test %>%
   filter(NAME %in% pars) %>% # View()
   # group_by(STATION_CODE, NAME) %>%
   # summarise(VALUE = median(VALUE)) %>%
-ggplot(aes(SAMPLE_NO, VALUE)) +
+  mutate(Year = year(SAMPLE_DATE)) %>%
+  ggplot(aes(Year, VALUE)) +
   geom_point() +
-  facet_grid(cols = vars(STATION_CODE), rows = vars(NAME), scales = "free_y")
-
+  facet_grid(cols = vars(STATION_CODE), rows = vars(NAME), scales = "free_y") +
+  scale_x_continuous(breaks = 2018:2020) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
 
 ```
 
 
 
 ## APPENDIX  
-```{r}
-
 ```{r}
 
 df1 <- get_nivabase_selection(
@@ -1134,6 +1182,5 @@ df3b <- get_nivabase_selection(
   69750,
   extra_where = " and extract(YEAR from SAMPLE_DATE) = 2020")
 
-```
 ```
 
