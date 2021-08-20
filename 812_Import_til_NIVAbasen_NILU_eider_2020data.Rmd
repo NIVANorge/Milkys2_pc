@@ -12,7 +12,7 @@ Make tables for inserting into NIVAbase
 For eider duck data from NILU  
 - Note: source of files the same as for cod siloxans (script 210)  
 
-NOTE: samples mosty exist in Nivabasen, but two samples MUST BE ADDED   
+NOTE: samples mostly exist in Nivabasen, but two samples MUST BE ADDED   
 
 
 ## 0. Libraries and functions
@@ -69,7 +69,7 @@ We only keep the data for the curret year
 ```{r}
 # dir("Data")
 # Data at sample level (chemical data, biological efect parameters and VDSI)
-data_all <- readRDS(file = "Files_to_Jupyterhub_2020/01_df_2020_notstandard_2021-06-15.rds")
+data_all <- readRDS(file = "Files_to_Jupyterhub_2020/01_df_2020_notstandard_2021-08-19.rds")
 
 dat_eider_nivabase <- data_all %>%
   filter(LATIN_NAME %in% "Somateria mollissima")
@@ -123,13 +123,64 @@ if (FALSE){
 
 ```
 
-### d. Plot samples    
+### d1. Plot samples and Specimen_no     
 * Note blood samples numbered 90-95 (probably means that they have no corresponding egg data)   
 ```{r, fig.width=7, fig.height=3}
 
 ggplot(df_samples_eider, aes(BIOTA_SAMPLENO, Specimen_no, color = is.na(X_BULK_BIO))) +
   geom_point() +
   facet_grid(vars(AQUAMONITOR_CODE), vars(TISSUE))
+
+```
+
+### d2. Check SPECIMEN_NO in Nivabase        
+* Note that   
+    - specimens are separate for blood and eggs (as should be)   
+    - SPECIMEN_NO in Nivabasen is different from Specimen_no in the data!   
+    - 'Specimen_no' 10 and 11 are lacking in Nivabasen   
+    (not shown here because 'df_lookup_SPECIMEN_ID' starts with Nivabasen )
+```{r, fig.width=7, fig.height=3}
+
+# Get 
+df_samplespec <- get_nivabase_selection(
+  "SAMPLE_ID, SPECIMEN_ID",
+  "BIOTA_SAMPLES_SPECIMENS",
+  "SAMPLE_ID",
+  unique(dat_eider_nivabase$SAMPLE_ID))
+
+df_spec <- get_nivabase_selection(
+  "SPECIMEN_ID, DATE_CAUGHT, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+  "BIOTA_SINGLE_SPECIMENS",
+  "SPECIMEN_ID",
+  unique(df_samplespec$SPECIMEN_ID))
+
+# Note that 
+df_lookup_SPECIMEN_ID <- dat_eider_nivabase %>%
+  distinct(TISSUE_NAME, SAMPLE_NO, SAMPLE_ID) %>%
+  left_join(df_samplespec, by = "SAMPLE_ID") %>%
+  left_join(df_spec, by = "SPECIMEN_ID") %>%
+  # Add Specimen_no from excel data
+  left_join(df_samples_eider %>% select(TISSUE_NAME, BIOTA_SAMPLENO, Specimen_no),
+            by = c("TISSUE_NAME", "SAMPLE_NO" = "BIOTA_SAMPLENO"))
+# nrow(check)
+
+# xtabs(~SPECIMEN_NO + TISSUE_NAME, check)
+
+# xtabs(~paste(SPECIMEN_NO, "-", SAMPLE_NO) + TISSUE_NAME, check)
+
+# Check relationship between SPECIMEN_NO (number given inside table) and SAMPLE_NO in Nivabasen
+cat("Relationship between SPECIMEN_NO (number given inside table) and SAMPLE_NO in Nivabasen \n")  
+xtabs(SPECIMEN_NO ~ SAMPLE_NO + TISSUE_NAME, df_lookup_SPECIMEN_ID)
+cat("\n\n")
+
+# Check relationship between SPECIMEN_NO (number given inside table) and SAMPLE_NO in Nivabasen
+# NOTE: data in 
+cat("Relationship between Specimen_no (in excel, top) and SPECIMEN_NO (in Nivabasen, bottom) \n")  
+cat("TISSUE_NAME == 'Egg' \n")
+xtabs(SPECIMEN_NO ~ Specimen_no, df_lookup_SPECIMEN_ID %>% filter(TISSUE_NAME == "Egg"))
+cat("\n")
+cat("TISSUE_NAME == 'Blod' \n")
+xtabs(SPECIMEN_NO ~ Specimen_no, df_lookup_SPECIMEN_ID %>% filter(TISSUE_NAME == "Blod"))
 
 ```
 
@@ -239,6 +290,7 @@ params_to_drop <- c("BDE6S", "BDESS", "HBCDD", "CB_S7", "Sample")
 
 
 
+
 ## 2a. Data to insert in NIVAbase
 1. Eider duck data are from specimens/samples that MOSTLY ARE in the NIVAbase (for 2018 data, they were NOT) 
     - Sample ID given as Labware ID, e.g. 'NR-2020-09188' 
@@ -268,17 +320,40 @@ liver fraction). Samples are numbered corresponding to the muscle samples (as NI
 
 ### a. Read NILU data   
 From script 210 (2020 version)  
+- Station-defining columns  
+    * not given
+- Sample- (and specimen-)defining columns  
+    * Sample_no_NILU - not used in this script     
+    * Sample_no = NIVA sample number, containing TEXT_ID (example: `Nr. 2020-08432`)  - here used for all except siloxans  
+    * TEXT_ID (already added in script 210 - all except siloxans)
+    * TISSUE_NAME  
+    * SPECIMEN_NO (1, 2, 3, .....) - here, only used for siloxans  
+- Parameter  
+    * PARAM
+    * METHOD_ID (added in script 210 in this case)
+    * UNIT
+- Measurements  
+    * Value   
+    * Flag1  
 ```{r}
 
 dat_eider <- readRDS("Data/210_dat_eiderduck_2020.rds") %>%
-  mutate(TEXT_ID = sub("Nr. ", "NR-", Sample_no, fixed = TRUE))
+  mutate(TEXT_ID = sub("Nr. ", "NR-", Sample_no, fixed = TRUE)) %>%
+  mutate(SPECIMEN_NO = as.numeric(SPECIMEN_NO))
 
 # Show all
 # xtabs(~TEXT_ID + Group, dat_eider)
 
+if (FALSE){
+  
+  dat_eider %>%
+    count(TISSUE_NAME, TEXT_ID, SPECIMEN_NO) %>%
+    arrange(TISSUE_NAME, TEXT_ID, SPECIMEN_NO)
+  
+}
 ```
 
-### b. Eider duck: Check TEXT_ID    
+### b. Eider duck: Check existing TEXT_ID    
 - Except siloxan, all data have sample ID (as can be seen in the excel file)   
 ```{r}
 
@@ -286,11 +361,6 @@ dat_eider <- readRDS("Data/210_dat_eiderduck_2020.rds") %>%
 id_eider <- data.frame(TEXT_ID = names(table(dat_eider$TEXT_ID))) %>%
   left_join(df_samples_eider %>% select(TEXT_ID, SPECIES, AQUAMONITOR_ID, AQUAMONITOR_CODE,
                                         BIOTA_SAMPLENO, X_BULK_BIO, TISSUE, DESCRIPTION2, Specimen_no),
-            by = "TEXT_ID") %>%
-  mutate(TISSUE_NAME = stringr::str_sub(TISSUE, start = 4))
-id_cod <- data.frame(TEXT_ID = names(table(dat_cod$TEXT_ID))) %>%
-  left_join(df_samples %>% select(TEXT_ID, SPECIES, AQUAMONITOR_ID, AQUAMONITOR_CODE,
-                                  BIOTA_SAMPLENO, X_BULK_BIO, TISSUE, DESCRIPTION2, Specimen_no),
             by = "TEXT_ID") %>%
   mutate(TISSUE_NAME = stringr::str_sub(TISSUE, start = 4))
 
@@ -303,16 +373,19 @@ if (mean(sel) < 1){
   cat("Lacking: \n")
   id_eider$TEXT_ID[!sel]
 } else {
-  message("Eider duck: All TEXT_ID found in Labware samples \n")
+  message("Eider duck: All existing TEXT_ID found in Labware samples \n")
 }
 
 dat_eider_lacking_id <- dat_eider %>%
   filter(is.na(TEXT_ID))
 
-if (nrow(check) > 0){
+if (nrow(dat_eider_lacking_id) > 0){
   warning("Eider duck: NOT all samples have TEXT_ID \n")
-  cat("Lacking: \n")
-  table(dat_eider_lacking_id$Group)
+  cat("Lacking (number of samples): \n")
+  dat_eider %>%
+    filter(is.na(TEXT_ID)) %>%
+    distinct(Group, TISSUE_NAME, TEXT_ID, SPECIMEN_NO) %>% # View()
+    xtabs(~Group + TISSUE_NAME, .)
 } else {
   message("Eider duck: All samples have TEXT_ID \n")
 }
@@ -338,10 +411,9 @@ if (nrow(check) > 0){
 
 ```
 
-### c. Eider duck: Make lookup table for samples, including SAMPLE_ID    
-- Lacking SAMPLE_ID for 10 blood samples  
-- These data have not entered NIVAbase  
-- The reason is probably that X_BULK_BIO contains a letter instead of just the number  
+### c1. Eider duck: Make lookup table for 'SAMPLE_ID' for samples already included in Nivabasen    
+- To be used for getting existing SAMPLE_ID   
+- Also identifies samples in labware that have not entered the database (i.e. somethng is wrng in the labware data)      
 ```{r}
 
 # Get the link (tissue, SAMPLE_NO) -> SAMPLE_ID by "extracting" from Nivabasen
@@ -357,8 +429,10 @@ df_lookup_sample_id <- df_samples_eider %>%
   left_join(df_lookup_sample_id_1, 
             by = c("TISSUE_NAME", "BIOTA_SAMPLENO" = "SAMPLE_NO"))
 
-# Lacking SAMPLE_ID for 10 samples  
+# Lacking SAMPLE_ID? Should be all FALSE. (Used to lack 10 samples, error corrected now)
+# Meaning: samples in labware samples that have not entered the database
 table(is.na(df_lookup_sample_id$SAMPLE_ID))
+
 
 #
 # For sending to Espen, for fixing the error
@@ -375,7 +449,43 @@ if (FALSE){
 
 ```
 
-### d. Eider duck: Add SAMPLE_ID     
+### c2. Add specimen data   
+```{r}
+
+existing_samples_spec <- get_nivabase_selection(
+  "SAMPLE_ID, SPECIMEN_ID",
+  "BIOTA_SAMPLES_SPECIMENS",
+  "SAMPLE_ID",
+  df_lookup_sample_id$SAMPLE_ID
+)
+
+existing_specimens <- get_nivabase_selection(
+  "SPECIMEN_ID, DATE_CAUGHT, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+  "BIOTA_SINGLE_SPECIMENS",
+  "SPECIMEN_ID",
+  unique(existing_samples_spec$SPECIMEN_ID)
+  )
+
+summarise_values <- function(x){
+  paste(unique(x), collapse = ",")
+}
+# summarise_values(c(5,5,6))
+
+# 1 row per sample
+existing_specimens_by_sample <- existing_samples_spec %>%
+  left_join(existing_specimens, by = "SPECIMEN_ID") %>%
+  group_by(SAMPLE_ID) %>%
+  summarise(across(.fns = summarise_values))
+
+# Add to 'df_lookup_sample_id'  
+
+df_lookup_sample_id <- df_lookup_sample_id %>%
+  left_join(existing_specimens_by_sample, by = "SAMPLE_ID")
+
+```
+
+
+### d. Eider duck: Starting with excel data, adding SAMPLE_ID     
 - Using TEXT_ID for all except siloxans (part a)  
 - Using TISSUE_NAME + SPECIMEN_NO for siloxans (part b)  
 - In addition to lacking : Two samples (blod 10 + 11) have siloxan data but lack in Labware    
@@ -383,23 +493,75 @@ if (FALSE){
 ```{r}
 
 # Join this table 
+
+# Add SAMPLE_ID by looking up TEXT_ID   
+# For all excel rows *with* TEXT_ID (everything except siloxans in this case)
 dat_eider2_a <- dat_eider %>%
   filter(!is.na(TEXT_ID)) %>%
-  left_join(df_lookup_sample_id %>% select(TEXT_ID, SAMPLE_ID), 
+  left_join(df_lookup_sample_id %>% 
+              select(TEXT_ID, BIOTA_SAMPLENO, X_BULK_BIO, SAMPLE_ID, SPECIMEN_NO) %>%
+              rename(SPECIMEN_NO_nivabase = SPECIMEN_NO), 
             by = "TEXT_ID")
 
+# Add TEXT_ID by looking up TISSUE_NAME + SPECIMEN_NO   
+# For all excel rows *without* TEXT_ID (siloxans in this case)
 dat_eider2_b <- dat_eider %>%
   filter(is.na(TEXT_ID)) %>%
-  mutate(SPECIMEN_NO = as.numeric(SPECIMEN_NO)) %>%
-  left_join(df_lookup_sample_id %>% select(TISSUE_NAME, Specimen_no, SAMPLE_ID), 
+  left_join(df_lookup_sample_id %>% 
+              select(TISSUE_NAME, Specimen_no, BIOTA_SAMPLENO, X_BULK_BIO, SAMPLE_ID, SPECIMEN_NO) %>%
+              rename(SPECIMEN_NO_nivabase = SPECIMEN_NO), 
             by = c("TISSUE_NAME", "SPECIMEN_NO" = "Specimen_no"))
 
 # A lot of NAs in both cases, see previous chunk   
-xtabs(~addNA(SAMPLE_ID), dat_eider2_a)
-xtabs(~addNA(SAMPLE_ID), dat_eider2_b)
+xtabs(~addNA(SAMPLE_ID), dat_eider2_a)   # lacking SAMPLE_ID: sample exists in Labware but not in Nivadatabase 
+xtabs(~addNA(SAMPLE_ID), dat_eider2_b)   # lacking SAMPLE_ID: sample exists in Excel but not in Labware + Nivadatabase 
 
+# Check all samples
+# 3 groups:
+#   excel rows *with* TEXT_ID
+#   excel rows *without* TEXT_ID but Excel SPECIMEN_NO has a corresponding Nivabasen SPECIMEN_NO
+#   excel rows *without* TEXT_ID and Excel SPECIMEN_NO does not have a corresponding Nivabasen SPECIMEN_NO
+bind_rows(dat_eider2_a, dat_eider2_b) %>%
+  count(TISSUE_NAME, TEXT_ID, SPECIMEN_NO, BIOTA_SAMPLENO, X_BULK_BIO, SAMPLE_ID, SPECIMEN_NO_nivabase) %>% 
+  View()
+
+bind_rows(dat_eider2_a, dat_eider2_b) %>%
+  count(TISSUE_NAME, TEXT_ID, SPECIMEN_NO, SAMPLE_ID) %>%
+  arrange(TISSUE_NAME, TEXT_ID, SPECIMEN_NO, SAMPLE_ID)  
+
+bind_rows(dat_eider2_a, dat_eider2_b) %>%
+  count(TISSUE_NAME, TEXT_ID, SPECIMEN_NO, SAMPLE_ID) %>%
+  xtabs(~addNA(TEXT_ID) + addNA(SPECIMEN_NO) + TISSUE_NAME, .)  
+
+
+bind_rows(dat_eider2_a, dat_eider2_b) %>%
+  count(TISSUE_NAME, TEXT_ID, SPECIMEN_NO, SAMPLE_ID) %>%
+  xtabs(~is.na(TEXT_ID) + addNA(SPECIMEN_NO) + TISSUE_NAME, .)  
+
+bind_rows(dat_eider2_a, dat_eider2_b) %>%
+  count(TISSUE_NAME, TEXT_ID, SPECIMEN_NO, SAMPLE_ID) %>%
+  xtabs(~is.na(TEXT_ID) + addNA(SPECIMEN_NO) + TISSUE_NAME, .)  
+
+bind_rows(dat_eider2_a, dat_eider2_b) %>%
+  count(TISSUE_NAME, TEXT_ID, BIOTA_SAMPLENO, SAMPLE_ID) %>%
+  xtabs(n~is.na(TEXT_ID) + addNA(BIOTA_SAMPLENO) + TISSUE_NAME, .)  
+
+bind_rows(dat_eider2_a, dat_eider2_b) %>%
+  count(TISSUE_NAME, SAMPLE_ID, BIOTA_SAMPLENO, SAMPLE_ID) %>%
+  xtabs(n~is.na(SAMPLE_ID) + addNA(BIOTA_SAMPLENO) + TISSUE_NAME, .)  
+
+bind_rows(dat_eider2_a, dat_eider2_b) %>%
+  count(TISSUE_NAME, SAMPLE_ID, BIOTA_SAMPLENO, SAMPLE_ID) %>%
+  xtabs(n~is.na(SAMPLE_ID) + addNA(BIOTA_SAMPLENO) + TISSUE_NAME, .)  
 
 ```
+
+### x.
+### x.
+### x. GOTTEN THIS FAR
+### x.
+### x.
+
 
 ### x. NOTE: ALL METHOD_ID were set in script 210  
  
@@ -603,6 +765,9 @@ if (FALSE){
 
 ### Reread data 
 ```{r}
+
+df_chem_specimens <- get_specimens_from_stationdata(
+  df_stations %>% filter(STATION_CODE %in% "19N"))
 
 # Get data frame of chemical results (30 seconds or so)
 df_chem <- get_biota_chemistry(
