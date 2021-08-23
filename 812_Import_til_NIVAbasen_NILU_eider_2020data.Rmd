@@ -41,7 +41,7 @@ if (FALSE){
 
 ```
 
-### For connectng to Nivabasen    
+### a. Creds for connectng to Nivabasen    
 Store your username and password to R (only once per R session)  
 ```{r}
 
@@ -53,16 +53,400 @@ set_credentials()
 
 ```
 
-## 1. Read data
-
-
-### a. Year
+### b. Year and station(s)
 ```{r}
 
 selected_year <- 2020
+selected_station <- "19N"
+
+# Standard for Milkys
+selected_species <- c("Gadus morhua", "Littorina littorea", "Mytilus edulis", "Nucella lapillus", 
+    "Platichthys flesus", "Somateria mollissima")
+
+# Get the selected_species:
+# readRDS(file = "Files_to_Jupyterhub_2020/01_df_2020_notstandard_2021-08-19.rds") %>%
+#   xtabs(~LATIN_NAME, .) %>% names() %>% dput()
 
 ```
 
+
+## 1. Data from excel    
+
+1. Eider duck data are from specimens/samples that MOSTLY ARE in the NIVAbase (for 2018 data, they were NOT) 
+    - Sample ID given as Labware ID, e.g. 'NR-2020-09188' 
+    - New records in BIOTA_SAMPLES only (SAMPLE_NO taken from data, get SAMPLE_ID from database)
+    - Also note that although pairs of eggs and blood were unrelated (I think!),
+      the same SPECIMEN_ID was giben for pairs of blood/egg samples     
+
+2. NILU cod data (siloxans; D4,D5 and D6) are from specimens that MOSTLY ARE in the NIVAbase, 
+but new samples (liver) are numbered corresponding to the muscle samples
+   - Sample ID should normally be given as station number + sample number (1-100)
+   - This was added manually in the excel file (Samperapport_edited.xlsx)
+     based on the 'fake Labware ID' (e.g. 'NR-2020-09188') added (which doesn't correspond to
+     the actual Labware IDs)
+   - Use existing record in BIOTA_SINGLE_SPECIMENS (existing SPECIMEN_ID)
+   - New records in BIOTA_SAMPLES_SPECIMENS - relationship between SAMPLE_NO and SPECIMEN_ID
+   should be the same as for muscle
+   - New records in BIOTA_SAMPLES (new SAMPLE_ID, SAMPLE_NO taken from data)
+
+3. Biological effects in cod - from specimens that ARE in the NIVAbase, with the 
+exception of a single cod individual (Fish_no = 15, station = 53B). New samples (bile, blood,
+liver fraction). Samples are numbered corresponding to the muscle samples (as NILU cod)
+    - Use existing records in BIOTA_SINGLE_SPECIMENS (existing SPECIMEN_ID)  
+    - New records in BIOTA_SAMPLES_SPECIMENS (new SAMPLE_ID, but existing SPECIMEN_ID)  
+    - New records in BIOTA_SAMPLES (new SAMPLE_ID, SAMPLE_NO taken from data)  
+
+
+### a. Read Eider duck NILU data   
+From script 210 (2020 version)  
+- Station-defining columns  
+    * not given
+- Sample- (and specimen-)defining columns  
+    * Sample_no_NILU - not used in this script     
+    * Sample_no = NIVA sample number, containing TEXT_ID (example: `Nr. 2020-08432`)  - here used for all except siloxans  
+    * TEXT_ID (already added in script 210 - all except siloxans)
+    * TISSUE_NAME  
+    * SPECIMEN_NO (1, 2, 3, .....) - here, only used for siloxans  
+- Parameter  
+    * PARAM
+    * METHOD_ID (added in script 210 in this case)
+    * UNIT
+- Measurements  
+    * Value   
+    * Flag1  
+```{r}
+
+dat_excel <- readRDS("Data/210_dat_eiderduck_2020.rds") %>%
+  mutate(TEXT_ID = sub("Nr. ", "NR-", Sample_no, fixed = TRUE)) %>%
+  mutate(SPECIMEN_NO = as.numeric(SPECIMEN_NO))
+
+# Show all
+# xtabs(~TEXT_ID + Group, dat_excel)
+
+if (FALSE){
+  
+  dat_excel %>%
+    count(TISSUE_NAME, TEXT_ID, SPECIMEN_NO) %>%
+    arrange(TISSUE_NAME, TEXT_ID, SPECIMEN_NO)
+  
+}
+```
+
+
+### b. Check  
+```{r}
+
+xtabs(~Group + is.na(TEXT_ID), dat_excel)
+
+xtabs(~Group + is.na(SPECIMEN_NO), dat_excel)
+
+```
+
+## 2. Get some generic lookup tables  
+* Tissues  
+* Species names  
+* Projects
+* Methods  
+```{r}
+
+df_tissue <- get_nivabase_data(
+  "select TISSUE_ID,TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
+
+# Taxa (here: all taxa)
+df_taxon <- get_nivabase_selection(
+  "NIVA_TAXON_ID, LATIN_NAME", 
+  "TAXONOMY", 
+  "LATIN_NAME",
+  selected_species, values_are_text = TRUE
+)
+
+# Get a list of projects
+df_projects <- get_projects()   # we call it 'df_projects' (the default name)
+
+# Get a list of stations
+df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+
+# Get df_methods (NILU methods only)
+df_methods <- get_nivabase_selection(
+  "*", 
+  "METHOD_DEFINITIONS", 
+  "LABORATORY", 
+  "NILU", values_are_text = TRUE)
+
+```
+
+## 3. Creating df lookup_sample   
+
+- created based on Labware and Nivadatabase   
+- one line per sample    
+
+### a. Get all Milkys samples from Labware table (actually a View)       
+```{r}
+
+# March-December data
+sql <- paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
+  "where extract(YEAR from SAMPLED_DATE) =", selected_year, 
+  "and extract(MONTH from SAMPLED_DATE) >= 3", 
+  "and UPPER(PROSJEKT) like '%MILKYS%';")
+sql
+df_labware_01 <- get_nivabase_data(sql)
+
+# January-February next year data (if any)
+sql <- paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
+  "where extract(YEAR from SAMPLED_DATE) =", selected_year + 1, 
+  "and extract(MONTH from SAMPLED_DATE) <= 2", 
+  "and UPPER(PROSJEKT) like '%MILKYS%';")
+df_labware_02 <- get_nivabase_data(sql)
+
+# Remove everything except Eider duck stations
+# Extract 'Specimen_no' and 'TISSUE_NAME'
+df_samples_labware_all <- bind_rows(df_labware_01, df_labware_02) %>%
+  # Add 'Specimen_no'
+  mutate(DESCRIPTION = gsub("<f8>", "ø", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION = gsub("<c5>", "Å", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION = gsub("<e5>", "å", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION = gsub("<c6>", "Æ", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION = gsub("<e6>", "æ", DESCRIPTION, fixed = TRUE),
+         DESCRIPTION2 = DESCRIPTION %>% stringr::str_sub(start = nchar(AQUAMONITOR_CODE) + 1),
+         Specimen_no = stringr::str_extract(DESCRIPTION2, "[0-9]+") %>% as.numeric(),
+         TISSUE_NAME = stringr::str_sub(TISSUE, start = 4))
+
+
+```
+
+### b. Pick the samples we focus on here  
+- In this case, eidur duck  
+```{r}
+
+# Keep only Eider duck stations
+df_samples_labware <- df_samples_labware_all %>%
+  filter(AQUAMONITOR_CODE %in% selected_station)
+
+if (FALSE){
+  df_samples_labware %>%
+    select(TEXT_ID, DESCRIPTION, SPECIES, TISSUE, Specimen_no, BIOTA_SAMPLENO, X_BULK_BIO) %>%
+    arrange(TISSUE, BIOTA_SAMPLENO)
+}
+
+```
+
+### c. Read existing Nivabase chemical data  
+- % C, % N    
+- Delta 13C, Delta 15N  
+- PFAS  
+```{r}
+
+df_chem_specimens <- get_specimens_from_stationdata(
+  df_stations %>% filter(STATION_CODE %in% selected_station))
+
+# Add species 
+df_chem_species <- get_nivabase_data(paste(
+  "select a.TAXONOMY_CODE_ID, b.LATIN_NAME",
+  "from NIVADATABASE.TAXONOMY_CODES a left join NIVADATABASE.TAXONOMY b",
+  "on a.NIVA_TAXON_ID = b.NIVA_TAXON_ID",
+  "where a.TAXONOMY_CODE_ID =",
+  unique(df_chem_specimens$TAXONOMY_CODE_ID)
+  ))
+df_chem_specimens <- left_join(df_chem_specimens, df_chem_species, by = "TAXONOMY_CODE_ID")
+
+# Get data frame of chemical results (30 seconds or so)
+df_chem <- get_biota_chemistry(
+  years = selected_year, 
+  specimendata = df_chem_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+cat("\nDownloaded", nrow(df_chem), "records\n")
+
+```
+
+### d. Start the lookup table 'df_lookup_samples' for samples already included in Nivabasen    
+- To be used for getting existing SAMPLE_ID   
+- Also identifies samples in labware that have not entered the database (i.e. somethng is wrng in the labware data)      
+```{r}
+
+# Get the link (tissue, SAMPLE_NO) -> SAMPLE_ID by "extracting" from Nivabasen
+df_for_join <- df_chem %>%
+  # Get the sample IDs by "extracting" from Nivabasen
+  distinct(SAMPLE_NO, TISSUE_NAME, SAMPLE_ID) %>%
+  arrange(TISSUE_NAME, SAMPLE_NO)
+
+# Start with labware samples, then add SAMPLE_ID 
+df_lookup_samples <- df_samples_labware %>%
+  select(AQUAMONITOR_CODE, TISSUE_NAME, BIOTA_SAMPLENO, X_BULK_BIO, TEXT_ID, Specimen_no) %>%
+  # ...adding SAMPLE_ID:
+  left_join(df_for_join, 
+            by = c("TISSUE_NAME", "BIOTA_SAMPLENO" = "SAMPLE_NO"))
+
+```
+
+### e. Add specimen columns to 'df_lookup_sample'      
+```{r}
+
+# Get SPECIMEN_IDs from BIOTA_SAMPLES_SPECIMENS
+existing_samples_spec <- get_nivabase_selection(
+  "SAMPLE_ID, SPECIMEN_ID",
+  "BIOTA_SAMPLES_SPECIMENS",
+  "SAMPLE_ID",
+  df_lookup_samples$SAMPLE_ID
+)
+
+# Get records from BIOTA_SINGLE_SPECIMENS
+existing_specimens <- get_nivabase_selection(
+  "SPECIMEN_ID, DATE_CAUGHT, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+  "BIOTA_SINGLE_SPECIMENS",
+  "SPECIMEN_ID",
+  unique(existing_samples_spec$SPECIMEN_ID)
+  )
+
+# Function for summarising several values to one text value (see example) 
+summarise_values <- function(x){
+  paste(unique(x), collapse = ",")
+}
+# Example:
+# summarise_values(c(5,5,6))
+
+# From BIOTA_SINGLE_SPECIMENS, create 1 row per sample
+# E.g. if there are several individuals for a sample, "SPECIMEN_ID" and SPECIMEN_NO
+#   will be one text value with the original value separated by comma (e.g "50000,50001" or "10,11")  
+# STATION_ID, DATE_CAUGHT and TAXONOMY_CODE_ID should normallly be just one number
+existing_specimens_by_sample <- existing_samples_spec %>%
+  left_join(existing_specimens, by = "SPECIMEN_ID") %>%
+  group_by(SAMPLE_ID) %>%
+  summarise(across(.fns = summarise_values))
+
+# Add to 'df_lookup_sample_id'  
+
+# Check if spec
+if (!"SPECIMEN_ID" %in% names(df_lookup_samples)){
+  df_lookup_samples <- df_lookup_samples %>%
+    left_join(existing_specimens_by_sample, by = "SAMPLE_ID")
+    message("Specimen columns (SPECIMEN_ID, DATE_CAUGHT, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO) added")
+} else {
+  message("Specimen columns already added")
+}
+
+```
+## 4. Checking 'df_lookup_sample'
+
+
+### a. Lacking SAMPLE_ID? 
+
+Should be all FALSE. (Used to lack 10 samples, error corrected now)
+```{r}
+
+# Lacking SAMPLE_ID? Should be all FALSE. (Used to lack 10 samples, error corrected now)
+# Meaning: samples in labware samples that have not entered the database
+
+check <- sum(is.na(df_lookup_samples$SAMPLE_ID))
+
+if (check == 0){
+  message("No SAMPLE_ID lacking")
+} else {
+  stop(check, " SAMPLE_IDs lacking. Some records in Labware has not entered NIVADATABASE")
+}
+
+
+#
+# For sending to Espen, for fixing the error
+#
+if (FALSE){
+  
+  df_lookup_samples %>% 
+    select(TISSUE_NAME, BIOTA_SAMPLENO, TEXT_ID, X_BULK_BIO, DESCRIPTION) %>%
+    writexl::write_xlsx("Data/Prøver_ærfugl_2020_raw.xlsx")
+  
+  df_lookup_samples %>% 
+    writexl::write_xlsx("Data/Prøver_ærfugl_2020_allekolonner.xlsx")
+}
+
+```
+### b. Number of specimens per sample   
+```{r}
+
+check <- grepl(",", df_lookup_samples$SPECIMEN_ID, fixed = TRUE)
+
+if (sum(check) == 0){
+  message("No samples are linked to more than a single specimen (no pooled samples)")
+} else {
+  warning(sum(check), " samples are linked to several specimens (pooled samples).")
+  df_lookup_samples[check,] %>%
+    select(SAMPLE_ID, SPECIMEN_ID, SPECIMEN_NO) %>%
+    knitr::kable(format = "html")
+}
+
+
+```
+
+
+## 3. 
+
+### b. Eider duck: Check existing TEXT_ID    
+- Except siloxan, all data have sample ID (as can be seen in the excel file)   
+```{r}
+
+# Get unique IDs
+id_eider <- data.frame(TEXT_ID = names(table(dat_excel$TEXT_ID))) %>%
+  left_join(df_samples_eider %>% select(TEXT_ID, SPECIES, AQUAMONITOR_ID, AQUAMONITOR_CODE,
+                                        BIOTA_SAMPLENO, X_BULK_BIO, TISSUE, DESCRIPTION2, Specimen_no),
+            by = "TEXT_ID") %>%
+  mutate(TISSUE_NAME = stringr::str_sub(TISSUE, start = 4))
+
+# Check TEXT_ID is found in Labware samples 
+
+sel <- !is.na(id_eider$AQUAMONITOR_ID)
+
+if (mean(sel) < 1){
+  warning("Eider duck: NOT all TEXT_ID is found in Labware samples \n")
+  cat("Lacking: \n")
+  id_eider$TEXT_ID[!sel]
+} else {
+  message("Eider duck: All existing TEXT_ID found in Labware samples \n")
+}
+
+dat_excel_lacking_id <- dat_excel %>%
+  filter(is.na(TEXT_ID))
+
+if (nrow(dat_excel_lacking_id) > 0){
+  warning("Eider duck: NOT all samples have TEXT_ID \n")
+  cat("Lacking (number of samples): \n")
+  dat_excel %>%
+    filter(is.na(TEXT_ID)) %>%
+    distinct(Group, TISSUE_NAME, TEXT_ID, SPECIMEN_NO) %>% # View()
+    xtabs(~Group + TISSUE_NAME, .)
+} else {
+  message("Eider duck: All samples have TEXT_ID \n")
+}
+
+#
+# Code for cod, NOT USED as we use SPECIMEN_NO instead
+#
+#
+# sel <- !is.na(id_cod$AQUAMONITOR_ID)
+# 
+# if (mean(sel) < 1){
+#   warning("Cod: NOT all TEXT_ID is found in Labware samples \n")
+#   id_cod$TEXT_ID[!sel]
+# } else {
+#   message("Cod: All TEXT_ID found in Labware samples \n")
+# }
+# 
+# # I don't understand why not all TEXT_IDs are found for cod,
+# #   or why they have TEXT_ID at all. Last year they had just station + no 1-15,
+# #   which fits with the "opparbeiding" excel files from Bjørnar
+# write.csv2(id_cod, "Data/210_Cod_siloxan_IDs_raw.csv")
+
+
+```
+
+
+### x.
+### x.
+### x. OLD
+### x.
+### x.
 
 ### b. Get most recent data produced in Jupyterhub  
 We only keep the data for the curret year
@@ -138,8 +522,10 @@ ggplot(df_samples_eider, aes(BIOTA_SAMPLENO, Specimen_no, color = is.na(X_BULK_B
     - specimens are separate for blood and eggs (as should be)   
     - SPECIMEN_NO in Nivabasen is different from Specimen_no in the data!   
     - 'Specimen_no' 10 and 11 are lacking in Nivabasen   
-    (not shown here because 'df_lookup_SPECIMEN_ID' starts with Nivabasen )
+    (not shown here because 'df_lookup_SPECIMEN_ID' starts with Nivabasen )   
 ```{r, fig.width=7, fig.height=3}
+#
+# df_lookup_SPECIMEN_ID is only used in this 
 
 # Get 
 df_samplespec <- get_nivabase_selection(
@@ -291,125 +677,7 @@ params_to_drop <- c("BDE6S", "BDESS", "HBCDD", "CB_S7", "Sample")
 
 
 
-## 2a. Data to insert in NIVAbase
-1. Eider duck data are from specimens/samples that MOSTLY ARE in the NIVAbase (for 2018 data, they were NOT) 
-    - Sample ID given as Labware ID, e.g. 'NR-2020-09188' 
-    - New records in BIOTA_SAMPLES only (SAMPLE_NO taken from data, get SAMPLE_ID from database)
-    - Also note that although pairs of eggs and blood were unrelated (I think!),
-      the same SPECIMEN_ID was giben for pairs of blood/egg samples     
 
-2. NILU cod data (siloxans; D4,D5 and D6) are from specimens that MOSTLY ARE in the NIVAbase, 
-but new samples (liver) are numbered corresponding to the muscle samples
-   - Sample ID should normally be given as station number + sample number (1-100)
-   - This was added manually in the excel file (Samperapport_edited.xlsx)
-     based on the 'fake Labware ID' (e.g. 'NR-2020-09188') added (which doesn't correspond to
-     the actual Labware IDs)
-   - Use existing record in BIOTA_SINGLE_SPECIMENS (existing SPECIMEN_ID)
-   - New records in BIOTA_SAMPLES_SPECIMENS - relationship between SAMPLE_NO and SPECIMEN_ID
-   should be the same as for muscle
-   - New records in BIOTA_SAMPLES (new SAMPLE_ID, SAMPLE_NO taken from data)
-
-3. Biological effects in cod - from specimens that ARE in the NIVAbase, with the 
-exception of a single cod individual (Fish_no = 15, station = 53B). New samples (bile, blood,
-liver fraction). Samples are numbered corresponding to the muscle samples (as NILU cod)
-    - Use existing records in BIOTA_SINGLE_SPECIMENS (existing SPECIMEN_ID)  
-    - New records in BIOTA_SAMPLES_SPECIMENS (new SAMPLE_ID, but existing SPECIMEN_ID)  
-    - New records in BIOTA_SAMPLES (new SAMPLE_ID, SAMPLE_NO taken from data)  
-
-## 2b. Eider duck
-
-### a. Read NILU data   
-From script 210 (2020 version)  
-- Station-defining columns  
-    * not given
-- Sample- (and specimen-)defining columns  
-    * Sample_no_NILU - not used in this script     
-    * Sample_no = NIVA sample number, containing TEXT_ID (example: `Nr. 2020-08432`)  - here used for all except siloxans  
-    * TEXT_ID (already added in script 210 - all except siloxans)
-    * TISSUE_NAME  
-    * SPECIMEN_NO (1, 2, 3, .....) - here, only used for siloxans  
-- Parameter  
-    * PARAM
-    * METHOD_ID (added in script 210 in this case)
-    * UNIT
-- Measurements  
-    * Value   
-    * Flag1  
-```{r}
-
-dat_eider <- readRDS("Data/210_dat_eiderduck_2020.rds") %>%
-  mutate(TEXT_ID = sub("Nr. ", "NR-", Sample_no, fixed = TRUE)) %>%
-  mutate(SPECIMEN_NO = as.numeric(SPECIMEN_NO))
-
-# Show all
-# xtabs(~TEXT_ID + Group, dat_eider)
-
-if (FALSE){
-  
-  dat_eider %>%
-    count(TISSUE_NAME, TEXT_ID, SPECIMEN_NO) %>%
-    arrange(TISSUE_NAME, TEXT_ID, SPECIMEN_NO)
-  
-}
-```
-
-### b. Eider duck: Check existing TEXT_ID    
-- Except siloxan, all data have sample ID (as can be seen in the excel file)   
-```{r}
-
-# Get unique IDs
-id_eider <- data.frame(TEXT_ID = names(table(dat_eider$TEXT_ID))) %>%
-  left_join(df_samples_eider %>% select(TEXT_ID, SPECIES, AQUAMONITOR_ID, AQUAMONITOR_CODE,
-                                        BIOTA_SAMPLENO, X_BULK_BIO, TISSUE, DESCRIPTION2, Specimen_no),
-            by = "TEXT_ID") %>%
-  mutate(TISSUE_NAME = stringr::str_sub(TISSUE, start = 4))
-
-# Check TEXT_ID is found in Labware samples 
-
-sel <- !is.na(id_eider$AQUAMONITOR_ID)
-
-if (mean(sel) < 1){
-  warning("Eider duck: NOT all TEXT_ID is found in Labware samples \n")
-  cat("Lacking: \n")
-  id_eider$TEXT_ID[!sel]
-} else {
-  message("Eider duck: All existing TEXT_ID found in Labware samples \n")
-}
-
-dat_eider_lacking_id <- dat_eider %>%
-  filter(is.na(TEXT_ID))
-
-if (nrow(dat_eider_lacking_id) > 0){
-  warning("Eider duck: NOT all samples have TEXT_ID \n")
-  cat("Lacking (number of samples): \n")
-  dat_eider %>%
-    filter(is.na(TEXT_ID)) %>%
-    distinct(Group, TISSUE_NAME, TEXT_ID, SPECIMEN_NO) %>% # View()
-    xtabs(~Group + TISSUE_NAME, .)
-} else {
-  message("Eider duck: All samples have TEXT_ID \n")
-}
-
-#
-# Code for cod, NOT USED as we use SPECIMEN_NO instead
-#
-#
-# sel <- !is.na(id_cod$AQUAMONITOR_ID)
-# 
-# if (mean(sel) < 1){
-#   warning("Cod: NOT all TEXT_ID is found in Labware samples \n")
-#   id_cod$TEXT_ID[!sel]
-# } else {
-#   message("Cod: All TEXT_ID found in Labware samples \n")
-# }
-# 
-# # I don't understand why not all TEXT_IDs are found for cod,
-# #   or why they have TEXT_ID at all. Last year they had just station + no 1-15,
-# #   which fits with the "opparbeiding" excel files from Bjørnar
-# write.csv2(id_cod, "Data/210_Cod_siloxan_IDs_raw.csv")
-
-
-```
 
 ### c1. Eider duck: Make lookup table for 'SAMPLE_ID' for samples already included in Nivabasen    
 - To be used for getting existing SAMPLE_ID   
