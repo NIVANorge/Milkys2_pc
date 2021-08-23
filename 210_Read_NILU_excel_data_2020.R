@@ -219,7 +219,7 @@ dat[[6]] <- df %>%
 x <- c("D4", "D5", "D6")
 varnames <- c("Sample", 
               x, paste0(x, "_LOD"), paste0(x, "_LOQ"),
-              "Kommentar", "Tissue", "SPECIMEN_NO")
+              "Kommentar", "Tissue", "Specimen_label")
 
 df1 <- read_excel(fn, "Siloksaner", range = "A2:M107",     # read all data, including cod
                  col_names = varnames,
@@ -280,14 +280,16 @@ dat[[7]] <- df_data %>%
 # Get cod data
 # - saved as a separate file instead of adding to 'dat'
 # - Note that the 'Sample_no' numbers are not correct and should just be ignored!
-#   We will instead use SPECIMEN_NO (set manually in the excel file)
+#   We will instead use Specimen_label (set manually in the excel file)
+# - See script 814 for adding these data to Nivabasen
 #
 dat_cod <- df_data %>%
   filter(Tissue %in% c("Lever")) %>%
   mutate(
     Group = "Siloxans",
     Sample_no = paste("Nr.", substr(Sample, 1, 10))) %>%
-  select(-Kommentar)
+  select(-Kommentar) %>%
+  rename(SPECIMEN_NO = Specimen_label)   # when we made script 814, we used 'SPECIMEN_NO', so we stick to that
 
 saveRDS(dat_cod, "Data/210_dat_cod-siloxans_2020.rds")
 
@@ -453,15 +455,15 @@ if (nrow(dat_eiderduck) < nrow(dat_eiderduck_joined)){
 #
 
 #
-# a. Sample_no vs SPECIMEN_NO
+# a. Sample_no vs Specimen_label
 #    Only demonstrated here. This will be handled in script 812 '2020data'  
 #
 
 # Siloxans lack 'Sample_no'   
 xtabs(~is.na(Sample_no) + Group, dat_eiderduck)
 
-# But siloxans have 'SPECIMEN_NO' instead     
-xtabs(~is.na(SPECIMEN_NO) + Group, dat_eiderduck)
+# But siloxans have 'Specimen_label' instead     
+xtabs(~is.na(Specimen_label) + Group, dat_eiderduck)
 
 
 #
