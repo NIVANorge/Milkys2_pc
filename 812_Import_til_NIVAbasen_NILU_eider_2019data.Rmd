@@ -51,7 +51,6 @@ set_credentials()
 
 ## 1. Read data
 
-
 ### a. Year
 ```{r}
 

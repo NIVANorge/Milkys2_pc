@@ -8,7 +8,10 @@ library(tidyr)
 library(niRvana)
 library(safejoin)   # https://github.com/moodymudskipper/safejoin
 
-sql_from_jens <- "select 
+# See "Full SQL" and "Selected columns below"!
+# Also see 
+
+sql_main <- "select 
  a.sample_id, a.value_id, a.flag1, a.value, a.remark as biota_chem_val_remark, a.approved, a.detection_limit, a.quantification_limit, a.method_id
 , b.station_id, b.sample_date, b.sample_no, b.TISSUE_ID, b.repno
 , c.project_id, c.station_code, c.station_name
@@ -17,7 +20,7 @@ sql_from_jens <- "select
 , f.name as p_name, f.unit as p_unit
 , h.tissue_name, h.niva_code
 , i.taxonomy_code_id, i.taxonomy_domain_id, i.code, i.name as taxonomy_codes_name
---, j.species_id, j.NIVA_CODE as species_code
+, j.species_id, j.NIVA_CODE as species_code
 , L.biota_sampling_method_id , L.CAUGHT_BY , L.DATE_CAUGHT , L.REMARK , L.SAMPLE_POINT_ID , l.SAMPLING_METHOD_ID 
 , L.SPECIES_ID as ss_species_id, L.SPECIMEN_ID , L.SPECIMEN_NO , L.STATION_ID as ss_station_id, L.TAXONOMY_CODE_ID as ss_taxonomy_code_id
 from NIVADATABASE.biota_CHEMISTRY_VALUES a
@@ -30,8 +33,9 @@ left join NIVADATABASE.BIOTA_TISSUE_TYPES h on h.tissue_id=B.TISSUE_ID
 left join nivadatabase.taxonomy_codes i on i.taxonomy_code_id=b.taxonomy_code_id
 left join nivadatabase.biota_samples_specimens k on k.sample_id=b.sample_id
 left join nivadatabase.biota_single_specimens l on K.SPECIMEN_ID=L.SPECIMEN_ID"
+sql_main <- sub("\n", "", sql_main, fixed = TRUE)
 
-sql_where <- "where p_name = 'CB118' and extract(YEAR from sample_date) = 2018"
+sql_where <- "where f.name = 'CB118' and extract(YEAR from b.sample_date) = 2018"
 sql_where <- "where extract(YEAR from sample_date) = 2015"
 
 dftest <- get_nivabase_data(paste(sql_main, sql_where))
@@ -79,8 +83,11 @@ df <- get_nivabase_data(sql)
 nrow(df)
 head(df, 3)
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
 # Full sql
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
 # Note: this will return several rows per sample/parameter if we don't select on PROJECT_ID as well
 #
@@ -107,8 +114,15 @@ left join NIVADATABASE.BIOTA_SAMPLES_SPECIMENS k on k.sample_id=b.sample_id
 left join NIVADATABASE.BIOTA_SINGLE_SPECIMENS l on k.specimen_id=l.specimen_id
 left join NIVADATABASE.PROJECTS m on m.project_id=c.project_id"
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+# Selected columns
+# Also note: added YEAR ('extract(YEAR from L.DATE_CAUGHT) as YEAR')  
+# 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
 sql_main_sel <- "select m.project_name, c.project_id, c.station_code, c.station_name,
-h.tissue_name, L.DATE_CAUGHT, L.SPECIMEN_NO, 
+h.tissue_name, L.DATE_CAUGHT, extract(YEAR from L.DATE_CAUGHT) as YEAR, L.SPECIMEN_NO, 
 b.TAXONOMY_CODE_ID, b.SAMPLE_NO, b.REPNO,
 a.VALUE, a.FLAG1, 
 d.NAME as m_NAME, d.UNIT as m_UNIT, LABORATORY, d.METHOD_ID, 
@@ -129,6 +143,7 @@ left join NIVADATABASE.BIOTA_SINGLE_SPECIMENS l on k.specimen_id=l.specimen_id
 left join NIVADATABASE.PROJECTS m on m.project_id=c.project_id"
 
 sql_where_1 <- "where d.NAME = 'CB118' and extract(YEAR from l.DATE_CAUGHT) > 2012"  # Select parameter from METHOD_DEFINITIONS
+sql_where_1b <- "where d.NAME = 'CB118' and YEAR > 2012"                             # ...Use YEAR instead (doesn't work!)
 sql_where_2 <- "where f.NAME = 'CB118' and extract(YEAR from l.DATE_CAUGHT) > 2012"  # Select parameter from BIOTA_PARAMETER_DEFINITIONS
 
 #
@@ -144,6 +159,54 @@ nrow(df1a) # 34
 df1b <- get_nivabase_data(paste(sql_main_sel, sql_where_1))
 nrow(df1b) # 34
 # head(df1b, 3)
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+# Return only the number of rows
+#   (can be used in order to see if your query is too big)
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+sql_main_sel_count <- "select count(*) from 
+NIVADATABASE.BIOTA_CHEMISTRY_VALUES a
+join NIVADATABASE.BIOTA_SAMPLES b on a.sample_id=b.sample_id
+join NIVADATABASE.PROJECTS_STATIONS c on b.station_id=c.station_id
+join NIVADATABASE.METHOD_DEFINITIONS d on a.method_id=d.method_id 
+left join NIVADATABASE.BIOTA_PARAMETERS_METHODS e on e.method_id=d.method_id
+left join NIVADATABASE.BIOTA_PARAMETER_DEFINITIONS f on f.parameter_id=e.parameter_id 
+left join NIVADATABASE.BIOTA_TISSUE_TYPES h on h.tissue_id=b.tissue_id
+left join nivadatabase.taxonomy_codes i on i.taxonomy_code_id=b.taxonomy_code_id
+left join NIVADATABASE.BIOTA_SAMPLES_SPECIMENS k on k.sample_id=b.sample_id
+left join NIVADATABASE.BIOTA_SINGLE_SPECIMENS l on k.specimen_id=l.specimen_id
+left join NIVADATABASE.PROJECTS m on m.project_id=c.project_id"
+
+# Returns only the number of rows  
+get_nivabase_data(paste(sql_main_sel_count, "where extract(YEAR from l.DATE_CAUGHT) > 2012"))   # 844150
+get_nivabase_data(paste(sql_main_sel_count, "where f.NAME = 'Kobber'"))  # 0
+get_nivabase_data(paste(sql_main_sel_count, "where f.NAME = 'Cu'"))      # 46603
+get_nivabase_data(paste(sql_main_sel_count, "where f.NAME like '%CB%'"))
+# f.NAME versus d.NAME:
+get_nivabase_data(paste(sql_main_sel_count, "where f.NAME = 'PCB 118' and extract(YEAR from l.DATE_CAUGHT) > 2012"))   # 0
+get_nivabase_data(paste(sql_main_sel_count, "where d.NAME = 'PCB 118' and extract(YEAR from l.DATE_CAUGHT) > 2012"))   # 8106
+get_nivabase_data(paste(sql_main_sel_count, "where f.NAME = 'CB118' and extract(YEAR from l.DATE_CAUGHT) > 2012"))     # 8880
+
+df1 <- get_nivabase_data(paste(sql_main_sel, "where f.NAME like '%PCB%' and f.NAME like '%118%' and extract(YEAR from l.DATE_CAUGHT) > 2012"))  # 189
+table(df1$M_NAME)  
+get_nivabase_data(paste(sql_main_sel_count, "where f.NAME like '%CB%' and extract(YEAR from l.DATE_CAUGHT) > 2019"))  # 10159
+df2 <- get_nivabase_data(paste(sql_main_sel, "where f.NAME like '%CB%' and extract(YEAR from l.DATE_CAUGHT) > 2019"))
+table(df2$M_NAME)
+table(df2$STATION_NAME)
+
+
+get_nivabase_data(paste(sql_main_sel_count, "where STATION_NAME = 'Inner Oslofjord'"))
+
+names(table(df2$M_NAME)[2]) -> x
+sfsmisc::AsciiToInt("ø")
+sfsmisc::AsciiToInt(substr(x,4,4))
+
+
+# head(df1b, 3)
+
 
 #
 # Note: The SQL above has returned several rows per sample/parameter, as we don't select on PROJECT_ID
