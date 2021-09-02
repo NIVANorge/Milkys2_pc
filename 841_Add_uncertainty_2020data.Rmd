@@ -28,14 +28,33 @@ library(here)
 
 ```
 
-## 2. Chemical data    
-We only keep the 2019 data
+### Selected year  
 ```{r}
+
+selected_year <- 2020
+
+```
+
+
+## 2. Chemical data    
+We only keep data from the last year  
+```{r}
+
 # dir("Data")
 # Data at sample level (chemical data, biological efect parameters and VDSI)
 # Also in "../Milkys2/Data/101_data_updated_2020-08-05.rds"
-dat_all_allyears <- readRDS("Input_data_2019/101_data_updated_2020-08-05.rds") %>%
-  rename(SAMPLE_NO = SAMPLE_NO2) %>%
+
+fn <- "Files_from_Jupyterhub_2020/Raw_data/101_dat_new_2021-09-01.rds"
+
+dat_all_allyears <- readRDS(fn)
+
+check <- dat_all_allyears %>%
+  filter(SAMPLE_NO != SAMPLE_NO2)
+
+if (nrow(check) > 0)
+  stop("Check cases where SAMPLE_NO != SAMPLE_NO2")
+
+dat_all_allyears <- dat_all_allyears %>%
   mutate(
     TISSUE_NAME = case_when(
       TISSUE_NAME %in% "Egg homogenate of yolk and albumin" ~ "Egg",
@@ -43,7 +62,7 @@ dat_all_allyears <- readRDS("Input_data_2019/101_data_updated_2020-08-05.rds") %
   )
 
 dat_all <-dat_all_allyears %>%
-  filter(MYEAR %in% 2019)
+  filter(MYEAR %in% selected_year)
 
 xtabs(~ addNA(LATIN_NAME), dat_all)
 
@@ -205,7 +224,7 @@ df_uncert <- bind_rows(
   df_uncert_extra
 ) %>%
   filter(!is.na(PARAM)) %>%
-  mutate(MYEAR = 2019,
+  mutate(MYEAR = selected_year,
          Uncertainty = Uncertainty_expand/2)    # from "expanded uncert." to uncrtainty
 
 # df_uncert %>%
@@ -235,10 +254,10 @@ dat_all <- dat_all %>%
 ### Values lacking uncertainty
 ```{r}
 
-xtabs(~is.na(Uncertainty), dat_all %>% filter(MYEAR == 2019))
+xtabs(~is.na(Uncertainty), dat_all %>% filter(MYEAR == selected_year))
 
 if (FALSE)
-  xtabs(~PARAM + Lab, dat_all %>% filter(MYEAR == 2019 & is.na(Uncertainty)))
+  xtabs(~PARAM + Lab, dat_all %>% filter(MYEAR == selected_year & is.na(Uncertainty)))
 
 ```
 
@@ -248,7 +267,7 @@ if (FALSE)
 if (FALSE) {
   
   dat_all %>%
-    filter(PARAM %in% "BDE126" & MYEAR == 2019) %>%
+    filter(PARAM %in% "BDE126" & MYEAR == selected_year) %>%
     select(TISSUE_NAME, PARAM, Lab, VALUE_WW, Uncertainty)
 
 }
@@ -265,7 +284,7 @@ if (FALSE) {
 ```{r, fig.width=5, fig.height=10}
 
 tab_loq1 <- dat_all %>%
-  filter(MYEAR == 2019 & FLAG1 %in% "<") %>%
+  filter(MYEAR == selected_year & FLAG1 %in% "<") %>%
   group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM) %>%
   summarise(LOQ_gi_min = min(QUANTIFICATION_LIMIT, na.rm = TRUE),
             LOQ_given = median(QUANTIFICATION_LIMIT, na.rm = TRUE),
@@ -299,7 +318,7 @@ df %>%
 ```{r}
 
 tab_loq2 <- dat_all %>%
-  filter(MYEAR %in% 2019 & !is.na(VALUE_WW)) %>%
+  filter(MYEAR %in% selected_year & !is.na(VALUE_WW)) %>%
   group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM) %>%
   summarise(Min_value = min(VALUE_WW) %>% round(4),
             .groups = "drop")
@@ -340,31 +359,31 @@ dat_all_updated <- dat_all %>%
   )
 # We keep Lab, LOQ_lt_med and LOQ_given for later!
 
-xtabs(~is.na(QUANTIFICATION_LIMIT), dat_all_updated %>% filter(MYEAR == 2019))
+xtabs(~is.na(QUANTIFICATION_LIMIT), dat_all_updated %>% filter(MYEAR == selected_year))
 ```
 
 #### Checks (not necessary)
 ```{r}
 # xxx
 dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1)) %>%
+  filter(MYEAR == selected_year & is.na(FLAG1)) %>%
   xtabs(~PARAM + is.na(QUANTIFICATION_LIMIT), .)
 
 dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1) & PARAM == "BDE47") %>%
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "BDE47") %>%
   xtabs(~Lab + is.na(QUANTIFICATION_LIMIT), .)
 
 dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1) & PARAM == "CB118") %>%
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "CB118") %>%
   xtabs(~Lab + is.na(QUANTIFICATION_LIMIT), .)
 
 dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1) & PARAM == "CB118" & Lab %in% "NILU") 
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "CB118" & Lab %in% "NILU") 
   
 tab_loq2 %>%
-    filter(MYEAR == 2019 & PARAM == "CB118" & Lab %in% "NILU")
+    filter(MYEAR == selected_year & PARAM == "CB118" & Lab %in% "NILU")
 tab_loq %>%
-    filter(MYEAR == 2019 & PARAM == "CB118" & Lab %in% "NILU")
+    filter(MYEAR == selected_year & PARAM == "CB118" & Lab %in% "NILU")
 ```
 
 
@@ -412,18 +431,18 @@ dat_all_updated <- dat_all_updated %>%
 
 ### Checks
 ```{r}
-xtabs(~is.na(UNCRT), dat_all_updated %>% filter(MYEAR == 2019))
-xtabs(~is.na(Uncertainty), dat_all_updated %>% filter(MYEAR == 2019))
-xtabs(~is.na(s), dat_all_updated %>% filter(MYEAR == 2019))
+xtabs(~is.na(UNCRT), dat_all_updated %>% filter(MYEAR == selected_year))
+xtabs(~is.na(Uncertainty), dat_all_updated %>% filter(MYEAR == selected_year))
+xtabs(~is.na(s), dat_all_updated %>% filter(MYEAR == selected_year))
 
 
 param <- "CB118"
 
 df1 <- dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1))
+  filter(MYEAR == selected_year & is.na(FLAG1))
 
 df2 <- dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1) & PARAM == param)
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == param)
 
 cat("\n************************************************************\n")
 cat("Check error/value ratio for 1) all data and 2) CB118\n\n")
@@ -447,7 +466,7 @@ for (i in 1:2){
 
   
 
-# xtabs(~PARAM + Lab, dat_all_updated %>% filter(MYEAR == 2019 & is.na(UNCRT)))
+# xtabs(~PARAM + Lab, dat_all_updated %>% filter(MYEAR == selected_year & is.na(UNCRT)))
 # dat_all_updated %>% filter(PARAM %in% "BDE47" & STATION_CODE == "19N") %>% View()
 
 ```
@@ -477,7 +496,8 @@ nrow(check)  # 0
 **This is input for 22_ICES_submission_2019data.Rmd**
 ```{r}
 
-saveRDS(dat_all_updated, "Data/34_dat_all_2019.rds")
+fn <- paste0("Data/841_dat_all_", selected_year) 
+saveRDS(dat_all_updated, fn)
 
 
 #
@@ -493,18 +513,18 @@ saveRDS(dat_all_updated, "Data/34_dat_all_2019.rds")
 
 # xxx
 dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1)) %>%
+  filter(MYEAR == selected_year & is.na(FLAG1)) %>%
   xtabs(~PARAM + is.na(UNCRT), .)
 
 dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1) & PARAM == "BDE47") %>%
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "BDE47") %>%
   xtabs(~Lab + is.na(UNCRT), .)
 
 dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1) & PARAM == "BDE47" & Lab %in% "NILU")
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "BDE47" & Lab %in% "NILU")
 
 dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1) & PARAM == "BDE126" & Lab %in% "NILU")
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "BDE126" & Lab %in% "NILU")
 
 ```
 
@@ -512,7 +532,7 @@ dat_all_updated %>%
 ```{r}
 
 df <- dat_all_updated %>% 
-  filter(MYEAR == 2019 & is.na(FLAG1) & 
+  filter(MYEAR == selected_year & is.na(FLAG1) & 
            PARAM == "HG" & STATION_CODE == "30B" &
            TISSUE_NAME == "Muskel")
 df %>%
