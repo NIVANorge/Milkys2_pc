@@ -48,6 +48,7 @@ fn <- "Files_from_Jupyterhub_2020/Raw_data/101_dat_new_2021-09-01.rds"
 
 dat_all_allyears <- readRDS(fn)
 
+# Remember: for sum variables, only SAMPLE_NO2 has been set (SAMPLE_NO is NA)
 check <- dat_all_allyears %>%
   filter(SAMPLE_NO != SAMPLE_NO2)
 
@@ -61,7 +62,7 @@ dat_all_allyears <- dat_all_allyears %>%
       TRUE ~ TISSUE_NAME)
   )
 
-dat_all <-dat_all_allyears %>%
+dat_all <- dat_all_allyears %>%
   filter(MYEAR %in% selected_year)
 
 xtabs(~ addNA(LATIN_NAME), dat_all)
@@ -73,14 +74,14 @@ xtabs(~ addNA(LATIN_NAME), dat_all)
 ### Check if there are unique values 
 ```{r}
 
-check <- dat_all %>%
+check <- dat_all_allyears %>%
   ungroup() %>%
-  group_by(STATION_CODE, LATIN_NAME, TISSUE_NAME, MYEAR, SAMPLE_NO, 
+  group_by(STATION_CODE, LATIN_NAME, TISSUE_NAME, MYEAR, SAMPLE_NO2, 
            UNIT, PARAM) %>%
   mutate(n = n()) %>%
   filter(n > 1)
 
-cat("The number of duplicate values in 'dat_all' is: ", nrow(check))  # 0
+cat("The number of duplicate values in 'dat_all_allyears' is: ", nrow(check))  # 0
 
 
 if (FALSE){
@@ -91,7 +92,8 @@ if (FALSE){
 
 ```
 
-### QUANTIFICATION_LIMIT  
+### QUANTIFICATION_LIMIT   
+- Given for metals  
 ```{r}
 
 sel <- !is.na(dat_all$QUANTIFICATION_LIMIT)
@@ -128,12 +130,13 @@ if (min(dat_all$QUANTIFICATION_LIMIT[sel2]) >= 0.5){
 
 
 ## 3a. Uncertainty data   
-### Eurofins  
-NOTE: Uncertainty given in data sheet is 2*SE ("expanded uncertianty")
+### Eurofins   
+- NOTE: Uncertainty given in data sheet is 2*SE ("expanded uncertainty")   
+- `Uncertainty_expand` is `Uncert_EF` if it has data, otherwise it is `Uncert_DHJ`
 ```{r}
 
-# Uncertainty data
-fn <- "Input_data/Uncertainty/2018-2019_MILKYS_QAdata_Eurofins_for2019data.xlsx"
+# Uncertainty data  
+fn <- "Input_files_2020/Uncertainty/2018-2019_MILKYS_QAdata_Eurofins_for2019data.xlsx"
 
 df_uncert1 <- read_excel(fn, sheet = "QA-data", skip = 5) %>%
   filter(!is.na(`Parameter code`)) %>%
@@ -181,7 +184,7 @@ df_uncert1 <- df_uncert1 %>%
 # This part is used only one time, in order to make the start of an Excel sheet 
 #   that is filled out manually
 
-fn <- "Input_data/Uncertainty/NILU_draft.csv"
+fn <- "Input_files_2020/Uncertainty/NILU_draft.csv"
 
 make_manual_excel_sheet <- FALSE
 if (make_manual_excel_sheet){
@@ -193,7 +196,7 @@ if (make_manual_excel_sheet){
 }
 #  end of 'make_manual_excel_sheet' part
 
-fn <- "Input_data/Uncertainty/NILU uncertainty.xlsx"
+fn <- "Input_files_2020/Uncertainty/NILU uncertainty.xlsx"
 df_uncert2 <- read_excel(fn, sheet = "For reading")
 df_uncert2
 
@@ -206,9 +209,10 @@ df_uncert2
 df_uncert_extra <- read.csv(textConnection("
 PARAM,Uncertainty_expand,Lab
 BDE126,30,Eurofins
-BDE126,30,NILU
 BDE183,30,Eurofins
-BDE183,30,NILU
+BDE6S,30,Eurofins
+BDESS,30,Eurofins
+CB_S7,30,Eurofins
 DBA3A,30,Eurofins
 PFDcA,35,Eurofins
 PFDA,35,Eurofins
@@ -220,19 +224,26 @@ PFOS,35,Eurofins
 PFOSA,35,Eurofins
 PFUdA,35,Eurofins
 PFUnda,35,Eurofins
+P_S,35,Eurofins
+PFAS,35,Eurofins
+HBCDD,30,Eurofins
+PAH16,30,Eurofins
+KPAH,30,Eurofins
 TDEPP,20,Eurofins
 PFBS,35,Eurofins
 "), stringsAsFactors = FALSE)
+
 
 ```
 
 
 ### Combine
 ```{r}
+
 df_uncert <- bind_rows(
   df_uncert1 %>% select(PARAM, Uncertainty_expand) %>% 
     mutate(Lab = "Eurofins"),
-  df_uncert1 %>% select(PARAM, Uncertainty_expand) %>% 
+  df_uncert2 %>% select(PARAM, Uncertainty_expand) %>% 
     mutate(Lab = "NILU"),
   df_uncert_extra
 ) %>%
@@ -245,21 +256,38 @@ df_uncert <- bind_rows(
 
 ```
 
+```{r}
+df_uncert1 %>% filter(PARAM == "BDESS")
+df_uncert2 %>% filter(PARAM == "BDESS")
+df_uncert %>% filter(PARAM == "BDESS")
+df_uncert %>% filter(PARAM == "BDESS")
+```
+
 
 
 ## 3b. Add 'Uncertainty' and 'Lab' to data
 ```{r}
-dat_all <- dat_all %>%
+
+dat_all_2 <- dat_all %>%
   mutate(Lab =
            case_when(LATIN_NAME %in% "Somateria mollissima" ~ "NILU",
                      PARAM %in% c("D4", "D5", "D6") ~ "NILU",
                      TRUE ~ "Eurofins")
   ) %>%
-  safe_left_join(df_uncert %>% select(-Uncertainty_expand),
+  left_join(df_uncert %>% select(-Uncertainty_expand),
                  na_matches = "never",
-            by = c("MYEAR", "Lab", "PARAM"),
-            check = "V"
+            by = c("MYEAR", "Lab", "PARAM")
             )
+
+
+if (nrow(dat_all) != nrow(dat_all_2)){
+  stop("Duplicated rows in 'PARAM'!")
+
+  df_uncert %>%
+    add_count(MYEAR, Lab, PARAM) %>%
+    filter(n > 1)  
+  
+    }
 
 ```
 
@@ -267,10 +295,12 @@ dat_all <- dat_all %>%
 ### Values lacking uncertainty
 ```{r}
 
-xtabs(~is.na(Uncertainty), dat_all %>% filter(MYEAR == selected_year))
+xtabs(~is.na(Uncertainty), dat_all_2 %>% filter(MYEAR == selected_year))
 
-if (FALSE)
-  xtabs(~PARAM + Lab, dat_all %>% filter(MYEAR == selected_year & is.na(Uncertainty)))
+if (FALSE){
+  xtabs(~PARAM + Lab, dat_all_2 %>% filter(MYEAR == selected_year & is.na(Uncertainty)))
+  xtabs(~PARAM + Lab, dat_all_2 %>% filter(MYEAR == selected_year & !is.na(Uncertainty)))
+}
 
 ```
 
@@ -279,7 +309,7 @@ if (FALSE)
 
 if (FALSE) {
   
-  dat_all %>%
+  dat_all_2 %>%
     filter(PARAM %in% "BDE126" & MYEAR == selected_year) %>%
     select(TISSUE_NAME, PARAM, Lab, VALUE_WW, Uncertainty)
 
@@ -294,16 +324,18 @@ if (FALSE) {
     - BDE: LOQ from less-than = or > LOQ as given
     - PCB cod: LOQ from less-than > or >> LOQ as given
     - PCB mussel: LOQ from less-than > or >> LOQ as given for the common, opposite for some uncommon
-```{r, fig.width=5, fig.height=10}
+```{r, fig.width=5, fig.height=10, warning=FALSE}
 
-tab_loq1 <- dat_all %>%
+
+tab_loq1 <- dat_all_2 %>%
   filter(MYEAR == selected_year & FLAG1 %in% "<") %>%
   group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM) %>%
   summarise(LOQ_gi_min = min(QUANTIFICATION_LIMIT, na.rm = TRUE),
             LOQ_given = median(QUANTIFICATION_LIMIT, na.rm = TRUE),
             LOQ_lt_min = min(VALUE_WW, na.rm = TRUE) %>% round(4),
             LOQ_lt_med = median(VALUE_WW, na.rm = TRUE) %>% round(4),
-            LOQ_lt_max = max(VALUE_WW, na.rm = TRUE) %>% round(4)
+            LOQ_lt_max = max(VALUE_WW, na.rm = TRUE) %>% round(4),
+            .groups = "drop"
             ) %>%
   ungroup()
 
@@ -317,20 +349,28 @@ df <- tab_loq1 %>%
 
 df
 
-df %>%
-  mutate(LOQ_lt_min = LOQ_lt_min/LOQ_given,
-         LOQ_lt_med = LOQ_lt_med/LOQ_given,
-         LOQ_lt_max = LOQ_lt_max/LOQ_given) %>%
-  pivot_longer(LOQ_gi_min:LOQ_lt_max, names_to = "Type", values_to = "LOQ") %>%
-  ggplot(aes(x = Type, y = paste(PARAM, TISSUE_NAME), fill = LOQ)) +
-  geom_tile()
+# Records with given QUANTIFICATION_LIMIT and less-than values
+
+# If any data (with less-thans) are given with QUANTIFICATION_LIMIT, make plot:
+if (sum(!is.na(df$LOQ_given)) > 0){
+  
+  df %>%
+    mutate(LOQ_lt_min = LOQ_lt_min/LOQ_given,
+           LOQ_lt_med = LOQ_lt_med/LOQ_given,
+           LOQ_lt_max = LOQ_lt_max/LOQ_given) %>%
+    pivot_longer(LOQ_gi_min:LOQ_lt_max, names_to = "Type", values_to = "LOQ") %>%
+    ggplot(aes(x = Type, y = paste(PARAM, TISSUE_NAME), fill = LOQ)) +
+    geom_tile()
+  
+}
+
 
 ```
 
 ### Overall minimum value - where there are no less-thans
 ```{r}
 
-tab_loq2 <- dat_all %>%
+tab_loq2 <- dat_all_2 %>%
   filter(MYEAR %in% selected_year & !is.na(VALUE_WW)) %>%
   group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM) %>%
   summarise(Min_value = min(VALUE_WW) %>% round(4),
@@ -354,7 +394,7 @@ tab_loq <- safejoin::safe_full_join(
 If no less-thans exist, we use half of the minimum value!
 Creating new data set 'dat_all_updated'  
 ```{r}
-dat_all_updated <- dat_all %>%
+dat_all_updated <- dat_all_2 %>%
   # Add LOQ_lt_med variable
   safe_left_join(tab_loq %>% select(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM, 
                                     LOQ_lt_med, Min_value),
@@ -442,12 +482,15 @@ dat_all_updated <- dat_all_updated %>%
 
 ```
 
-### Checks
+### Checks 1
 ```{r}
-xtabs(~is.na(UNCRT), dat_all_updated %>% filter(MYEAR == selected_year))
-xtabs(~is.na(Uncertainty), dat_all_updated %>% filter(MYEAR == selected_year))
+xtabs(~is.na(UNCRT) + is.na(Uncertainty), dat_all_updated %>% filter(MYEAR == selected_year))
+cat("\n")
 xtabs(~is.na(s), dat_all_updated %>% filter(MYEAR == selected_year))
+```
 
+### Checks 2
+```{r}
 
 param <- "CB118"
 
@@ -498,26 +541,48 @@ dat_all_updated <- dat_all_updated %>%
 check <- dat_all_updated %>%
   ungroup() %>%
   group_by(STATION_CODE, LATIN_NAME, TISSUE_NAME, MYEAR, 
-           SAMPLE_NO, UNIT, PARAM) %>%
+           SAMPLE_NO2, UNIT, PARAM) %>%
   mutate(n = n()) %>%
   filter(n > 1)
-nrow(check)  # 0
+
+if (nrow(check) > 0){
+  warning("There are ", nrow(check), " duplicates in the data!")
+  # xtabs(~STATION_CODE + MYEAR, check)
+  xtabs(~PARAM + MYEAR, check)
+} else {
+  message("There are no duplicates in the data.")
+}
+
 
 ```
 
 ## 7. Save  
-**This is input for 22_ICES_submission_2019data.Rmd**
+**This is input for 842_ICES_submission_xxxxdata.Rmd**
 ```{r}
 
 fn <- paste0("Data/841_dat_all_", selected_year) 
 saveRDS(dat_all_updated, fn)
 
+#
+# This is input for script 842 ICES submission
+#
 
 #
-# This is input for script 02_Add_Extra_data
-#
+# Read back, if needed:
+# 2019 data
+# dat_all_updated <- readRDS("../Milkys/Data/34_dat_all.rds")
+# 2020 data
+# dat_all_updated <- readRDS(fn)
 
-# dat_all_updated <- readRDS("Data/34_dat_all.rds")
+```
+
+```{r}
+
+xtabs(~addNA(LOQ_source), dat_all_updated)
+
+dat_all_updated %>% names()
+xtabs(~is.na(Uncertainty) + addNA(LOQ_source), dat_all_updated)
+xtabs(~is.na(UNCRT) + addNA(LOQ_source), dat_all_updated)
 
 ```
 
