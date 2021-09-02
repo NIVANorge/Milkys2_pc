@@ -111,6 +111,19 @@ sum(sel2)
 # Check these data
 # dat_all[sel2,]
 
+# Quantification limits of metals is 1-20; this must be ug/kg, not mg/kg
+dat_all[sel2,] %>%
+  select(PARAM, VALUE_WW, QUANTIFICATION_LIMIT) %>%
+  group_by(PARAM) %>%
+  summarise(across(.fns = list(mean=mean, min=min, sd=sd)))
+
+# If not yet fixed (all QUANTIFICATION_LIMIT are above 0.5)
+if (min(dat_all$QUANTIFICATION_LIMIT[sel2]) >= 0.5){   
+  # fix by dividing values by 1000
+  dat_all$QUANTIFICATION_LIMIT[sel2] <- dat_all$QUANTIFICATION_LIMIT[sel2]/1000
+}
+# after fixing, the lowest QUANTIFICATION_LIMIT is 0.001 (so this fixing can only be done once)
+
 ```
 
 
