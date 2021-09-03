@@ -9,7 +9,7 @@ output:
 
 
 ## 1. Libraries
-```{r}
+```{r, results=}
 
 library(dplyr)
 library(purrr)
@@ -27,6 +27,7 @@ library(here)
 # set_here("C:/Data/seksjon 212/Milkys")
 
 ```
+
 
 ### Selected year  
 ```{r}
@@ -320,10 +321,8 @@ if (FALSE) {
 
 ## 4. Check LOQ  
 ### Compare QUANTIFICATION_LIMIT and LOQ from less-than   
-    - Eurofins only
-    - BDE: LOQ from less-than = or > LOQ as given
-    - PCB cod: LOQ from less-than > or >> LOQ as given
-    - PCB mussel: LOQ from less-than > or >> LOQ as given for the common, opposite for some uncommon
+    - `LOQ_lt_med` (median value of less-than's) will be used where QUANTIFICATION_LIMIT is lacking
+    - In 2019: QUANTIFICATION_LIMIT given by Eurofins, not given in 2020 except for metals  
 ```{r, fig.width=5, fig.height=10, warning=FALSE}
 
 
@@ -349,7 +348,8 @@ df <- tab_loq1 %>%
 
 df
 
-# Records with given QUANTIFICATION_LIMIT and less-than values
+# Parameters/tissues with given QUANTIFICATION_LIMIT and at least one less-than value
+# None in 2020  
 
 # If any data (with less-thans) are given with QUANTIFICATION_LIMIT, make plot:
 if (sum(!is.na(df$LOQ_given)) > 0){
@@ -367,7 +367,8 @@ if (sum(!is.na(df$LOQ_given)) > 0){
 
 ```
 
-### Overall minimum value - where there are no less-thans
+### Overall minimum value  
+- to use where there are neither QUANTIFICATION_LIMIT or less-thans  
 ```{r}
 
 tab_loq2 <- dat_all_2 %>%
@@ -412,7 +413,8 @@ dat_all_updated <- dat_all_2 %>%
   )
 # We keep Lab, LOQ_lt_med and LOQ_given for later!
 
-xtabs(~is.na(QUANTIFICATION_LIMIT), dat_all_updated %>% filter(MYEAR == selected_year))
+xtabs(~is.na(QUANTIFICATION_LIMIT) + LOQ_source, dat_all_updated %>% filter(MYEAR == selected_year))
+
 ```
 
 #### Checks (not necessary)
@@ -442,27 +444,46 @@ tab_loq %>%
 
 
 ## 6. Make UNCRT   
+- UNCRT can be given in three ways:
+    - as standard deviation `u` (set METCU = SD)   
+    - as "expanded uncertainty" = 2 x standard deviation = 2u (set METCU = U2)   
+    - as percentage = 100u/VALUE (set METCU = %)   
 NOTE: The formula sqrt(s^2 + (Value^2)*(v^2)) is taken from Rob Fryer and is given both in Annex 5 of the 2018/19 MIME report as well as in ICES DOME 'Frequently Asked Questions'  
+  
 We choose to convert from percent to standard deviation (METCU = SD; we could also )  
 Based on Annex 5 2018 ('Annex05_reporting_less-thans_and_uncertainties_v3.docx')   
+  - u = standard deviation   
   - u = sqrt(s^2 + (Value^2)*(v^2)) where
       - v = relative uncertainty (percentage divided by 100)
       - s = SD of replicate measurements of the blank
       - s is assumed to be LOD/3
-      - LOD may be assumed to be LOQ/3?
+      - LOD may be assumed to be LOQ/x
       
 ### Example - we here assume (quite conservatively) LOD = LOQ/1.33
 ```{r,fig.width=8, fig.height=4}
 
-v <- 0.3
+v <- 0.3          # relative uncertainty (percentage divided by 100)
 LOQ <- 0.2
-s <- LOQ/4        # assume (quite conservatively) LOD = LOQ/1.33 s = LOD/3 = (LOQ/1.33)/3 = 4
-s <- LOQ/3        # assume (very conservatively) LOD = LOQ
+
+par(mfrow = c(2,2), mar = c(4,4,2,1))
+
+x <- 1.333      # assume (quite conservatively) LOD = LOQ/1.33 s = LOD/3 = (LOQ/1.33)/3 = 4
+LOD <- LOQ/x
+s <- LOD/3      # SD of replicate measurements of the blank - assumed to be LOD/3
 Value <- seq(0.2, 4, 0.1)
 u <- sqrt(s^2 + (Value^2)*(v^2))
-par(mfrow = c(1,2), mar = c(4,4,2,1))
-plot(Value, u)
-plot(Value, u/Value)
+plot(Value, u, main = paste("x =", x, "(LOD = LOQ/x)"))
+plot(Value, 100*u/Value, ylab = "Percent", main = paste("x =", x))
+abline(v = LOQ, lty = "dashed")
+
+x <- 1.000        # assume (very conservatively) LOD = LOQ
+LOD <- LOQ/x
+s <- LOD/3      # SD of replicate measurements of the blank - assumed to be LOD/3
+Value <- seq(0.2, 4, 0.1)
+u <- sqrt(s^2 + (Value^2)*(v^2))
+plot(Value, u, main = paste("x =", x, "(LOD = LOQ/x)"))
+plot(Value, 100*u/Value, ylab = "Percent", main = paste("x =", x))
+abline(v = LOQ, lty = "dashed")
 
 ```
 
@@ -473,12 +494,15 @@ We here use LOQ from less-thans as LOQ, if possible
 ```{r}
 
 dat_all_updated <- dat_all_updated %>%
-  mutate(s = case_when(!is.na(LOQ_lt_med) ~ LOQ_lt_med/3,
-                       is.na(LOQ_lt_med) ~ QUANTIFICATION_LIMIT/3),
-         UNCRT = case_when(!is.na(s) ~ sqrt(s^2 + (VALUE_WW^2)*((Uncertainty/100)^2)),
-                           is.na(s) ~ Uncertainty),    # should be zero cases of this
-         METCU = "SD"
-         )
+  mutate(
+    s = case_when(
+      !is.na(LOQ_lt_med) ~ LOQ_lt_med/3,
+      is.na(LOQ_lt_med) ~ QUANTIFICATION_LIMIT/3),
+    UNCRT = case_when(
+      !is.na(s) ~ sqrt(s^2 + (VALUE_WW^2)*((Uncertainty/100)^2)),
+      is.na(s) ~ Uncertainty),   # should be zero cases of this
+    METCU = "SD"
+  )
 
 ```
 
@@ -489,7 +513,59 @@ cat("\n")
 xtabs(~is.na(s), dat_all_updated %>% filter(MYEAR == selected_year))
 ```
 
-### Checks 2
+### Checks 2   
+- Summary table  
+```{r}
+
+mean_uncrt <- dat_all_updated %>%
+  filter(MYEAR == selected_year & !is.na(UNCRT)) %>%
+  group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME,<6 PARAM) %>%
+  summarise(
+    Uncertainty = mean(Uncertainty, na.rm = TRUE),
+    QUANTIFICATION_LIMIT = mean(QUANTIFICATION_LIMIT, na.rm = TRUE),
+    LOQ_source = paste(unique(LOQ_source), collapse = ","),
+    VALUE_mean = mean(VALUE_WW, na.rm = TRUE) %>% round(3),
+    VALUE_min = min(VALUE_WW, na.rm = TRUE) %>% round(3),
+    UNCRT_mean = mean(UNCRT, na.rm = TRUE) %>% round(3),
+    UNCRT_max = max(UNCRT, na.rm = TRUE) %>% round(3),
+    percerror_mean = mean(100*UNCRT/VALUE_WW, na.rm = TRUE) %>% round(3),
+    percerror_max = max(100*UNCRT/VALUE_WW, na.rm = TRUE) %>% round(3)
+  )
+
+View(mean_uncrt)
+
+# mean_uncrt_1 <- mean_uncrt
+
+```
+
+### Checks 2  
+- Plot one parameter/tissue
+```{r}
+
+plot_error <- function(lab, param, tissue){
+  df_plot <- dat_all_updated %>%
+    filter(MYEAR == selected_year & !is.na(UNCRT)) %>%
+    filter(Lab == lab & PARAM == param & TISSUE_NAME == tissue) %>%
+    mutate(Percent_error = 100*UNCRT/VALUE_WW)
+  
+  gg <- ggplot(df_plot, aes(VALUE_WW, Percent_error)) +
+    geom_point() +
+    geom_vline(xintercept = df_plot$s[1]*3, linetype = "dashed") +
+    xlim(0,50) +
+    labs(title = paste0(param, " (", lab, ") in ", tissue),
+         subtitle = "dotted line = assumed LOD")
+  
+  print(gg)
+  
+}
+
+plot_error("Eurofins", "CB180", "Lever")
+
+```
+
+
+### Checks 3   
+- Kind of table/plot  
 ```{r}
 
 param <- "CB118"
