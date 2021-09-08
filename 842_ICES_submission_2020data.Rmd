@@ -114,7 +114,8 @@ data_all <- readRDS(fn) %>%
       PARAM %in% "1-OH-fenantren" ~ "PA1OH",
       PARAM %in% "1-OH-pyren" ~ "PYR1OH",
       PARAM %in%"3-OH-benzo[a]pyren" ~ "BAP3OH",
-      TRUE ~ PARAM)
+      TRUE ~ PARAM),
+    UNCRT = round(UNCRT, 3)
   )
 
 #
@@ -507,7 +508,6 @@ data_ind2 %>%
 ```{r}
 
 # str(data_ind2)
-xtabs(~ is.na(Uncertainty), data_ind2)
 xtabs(~ is.na(UNCRT), data_ind2)
 
 df1 <- data_ind2 %>%
@@ -2582,11 +2582,17 @@ if (sum(is.na(data_10$SMPNO)) > 0){
 
 ### k3 - METCU may not be filled in when UNCRT is blank
 ```{r}
-xtabs(~is.na(UNCRT) + is.na(METCU), data_10)
+
+cat("Before: \n")
+xtabs(~is.na(UNCRT) + addNA(METCU), data_10)
 
 # Set 
 sel <- is.na(data_10$UNCRT)
 data_10$METCU[sel] <- NA
+
+cat("\nAfter: \n")
+xtabs(~is.na(UNCRT) + addNA(METCU), data_10)
+
 ```
 
 ### k4 - MATRX BL required for PARAM ALAD
@@ -2688,12 +2694,15 @@ table(is.na(data_conc$DETECTION_LIMIT))
 
 ### k9a. For less-thans (QFLAG = <), set UNCRT = NA
 ```{r}
-
-table(addNA(data_10$QFLAG))
+cat("Before: \n")
+xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
 
 sel_lt <- data_10$QFLAG %in% "<"; sum(sel)
 data_10$UNCRT[sel_lt] <- NA
 data_10$METCU[sel_lt] <- NA
+
+cat("\nAfter: \n")
+xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
 
 ```
 
@@ -2701,21 +2710,23 @@ data_10$METCU[sel_lt] <- NA
 ### k9b. When UNCRT present, set METCU  
 ```{r}
 
-sel_uncrt <- !is.na(data_10$UNCRT)
+# This is all old
 
-
-cat("UNCRT given vs less thans \n") 
-# (could also use sel_lt from previous :)
-table(sel_uncrt, sel_lt)
-
-cat("\nCheck METCU \n") 
-table(addNA(data_10$METCU), sel_uncrt)
-
-data_10$METCU[sel_uncrt] <- "SD"
-data_10$METCU[!sel_uncrt] <- NA
-
-cat("\nCheck METCU again \n") 
-table(addNA(data_10$METCU), sel_uncrt)
+# sel_uncrt <- !is.na(data_10$UNCRT)
+# 
+# 
+# cat("UNCRT given vs less thans \n") 
+# # (could also use sel_lt from previous :)
+# table(sel_uncrt, sel_lt)
+# 
+# cat("\nCheck METCU \n") 
+# table(addNA(data_10$METCU), sel_uncrt)
+# 
+# data_10$METCU[sel_uncrt] <- "SD"
+# data_10$METCU[!sel_uncrt] <- NA
+# 
+# cat("\nCheck METCU again \n") 
+# table(addNA(data_10$METCU), sel_uncrt)
 
 ```
 
@@ -2769,7 +2780,7 @@ data_10 <- data_10 %>%
 
 ```
 
-### k13. Check BASIS fro GOSOI measurements     
+### k13. Check BASIS for GOSOI measurements     
 DATSU: 'BASIS is for contaminant and chemical analysis only'  
 ```{r}
 
@@ -2784,6 +2795,22 @@ data_10 <- data_10 %>%
   )
 
 ```
+### k14. Check type of error (METCU)      
+DATSU: 'BASIS is for contaminant and chemical analysis only'  
+```{r}
+
+xtabs(~addNA(METCU), data_10)
+
+
+# Set BASIS to 'not available' for these cases  
+data_10 <- data_10 %>%
+  mutate(BASIS = case_when(
+    PARAM %in% "GOSOI" ~ as.character(NA),
+    TRUE ~ BASIS)
+  )
+
+```
+
 
 ## Table 21 - analytic methods
 
