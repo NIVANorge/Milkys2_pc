@@ -359,9 +359,7 @@ df_uncert <- bind_rows(
       )
 ) %>%
   filter(!is.na(PARAM)) %>%
-  mutate(MYEAR = selected_year,
-         Uncertainty = Uncertainty_expand/2)    # from "expanded uncert." to uncrtainty
-
+  mutate(MYEAR = selected_year)
 # df_uncert %>%
 #   arrange(PARAM)
 
@@ -376,7 +374,7 @@ df_uncert %>% filter(PARAM == "BDESS")
 
 
 
-## 3b. Add 'Uncertainty' and 'Lab' to data   
+## 3b. Add 'Uncertainty_expand' and 'Lab' to data   
 - Creates `dat_all_2` from `dat_all` 
 ```{r}
 
@@ -392,7 +390,7 @@ dat_all_2 <- dat_all %>%
                      PARAM %in% c(param_pfas, param_bioleffects) ~ "NIVA",
                      TRUE ~ "Eurofins")
   ) %>% # filter(PARAM == "ALAD") %>% select(PARAM, Lab) %>% View()
-  left_join(df_uncert %>% select(-Uncertainty_expand),
+  left_join(df_uncert,
                  na_matches = "never",
             by = c("MYEAR", "Lab", "PARAM")
             )
@@ -413,11 +411,11 @@ if (nrow(dat_all) != nrow(dat_all_2)){
 ### Values lacking uncertainty
 ```{r}
 
-xtabs(~is.na(Uncertainty), dat_all_2 %>% filter(MYEAR == selected_year))
+xtabs(~is.na(Uncertainty_expand), dat_all_2 %>% filter(MYEAR == selected_year))
 
 if (FALSE){
-  xtabs(~PARAM + Lab, dat_all_2 %>% filter(MYEAR == selected_year & is.na(Uncertainty)))
-  xtabs(~PARAM + Lab, dat_all_2 %>% filter(MYEAR == selected_year & !is.na(Uncertainty)))
+  xtabs(~PARAM + Lab, dat_all_2 %>% filter(MYEAR == selected_year & is.na(Uncertainty_expand)))
+  xtabs(~PARAM + Lab, dat_all_2 %>% filter(MYEAR == selected_year & !is.na(Uncertainty_expand)))
 }
 
 ```
@@ -429,7 +427,7 @@ if (FALSE) {
   
   dat_all_2 %>%
     filter(PARAM %in% "BDE126" & MYEAR == selected_year) %>%
-    select(TISSUE_NAME, PARAM, Lab, VALUE_WW, Uncertainty)
+    select(TISSUE_NAME, PARAM, Lab, VALUE_WW, Uncertainty_expand)
 
 }
 
@@ -731,17 +729,17 @@ We here use LOQ from less-thans as LOQ, if possible
     - we here assume that LOD = LOQ (so we use 'LOQ_lt_med/3')
 ```{r}
 
-dat_all_updated_test <- dat_all_updated %>%
-  mutate(
-    LOD = case_when(
-      !is.na(LOQ_lt_med) ~ LOQ_lt_med,
-      is.na(LOQ_lt_med) ~ QUANTIFICATION_LIMIT),
-    s = LOD/3,
-    UNCRT = case_when(
-      !is.na(s) ~ sqrt(s^2 + (VALUE_WW^2)*((Uncertainty/100)^2)),
-      is.na(s) ~ Uncertainty),   # should be zero cases of this
-    METCU = "SD"
-  )
+# dat_all_updated_test <- dat_all_updated %>%
+#   mutate(
+#     LOD = case_when(
+#       !is.na(LOQ_lt_med) ~ LOQ_lt_med,
+#       is.na(LOQ_lt_med) ~ QUANTIFICATION_LIMIT),
+#     s = LOD/3,
+#     UNCRT = case_when(
+#       !is.na(s) ~ sqrt(s^2 + (VALUE_WW^2)*((Uncertainty/100)^2)),
+#       is.na(s) ~ Uncertainty),   # should be zero cases of this
+#     METCU = "SD"
+#   )
 
 ```
 
@@ -749,25 +747,25 @@ dat_all_updated_test <- dat_all_updated %>%
 - Summary table  
 ```{r}
 
-mean_uncrt <- dat_all_updated_test %>%
-  filter(MYEAR == selected_year & !is.na(UNCRT)) %>%
-  group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM) %>%
-  summarise(
-    Uncertainty = mean(Uncertainty, na.rm = TRUE),
-    QUANTIFICATION_LIMIT = mean(QUANTIFICATION_LIMIT, na.rm = TRUE),
-    LOQ_source = paste(unique(LOQ_source), collapse = ","),
-    VALUE_mean = mean(VALUE_WW, na.rm = TRUE) %>% round(3),
-    VALUE_min = min(VALUE_WW, na.rm = TRUE) %>% round(3),
-    UNCRT_mean = mean(UNCRT, na.rm = TRUE) %>% round(3),
-    UNCRT_max = max(UNCRT, na.rm = TRUE) %>% round(3),
-    percerror_mean = mean(100*UNCRT/VALUE_WW, na.rm = TRUE) %>% round(3),
-    percerror_max = max(100*UNCRT/VALUE_WW, na.rm = TRUE) %>% round(3)
-  )
-
-# View(mean_uncrt)
-
-# For comparison with minimum less-than value, 
-mean_uncrt_1 <- mean_uncrt
+# mean_uncrt <- dat_all_updated_test %>%
+#   filter(MYEAR == selected_year & !is.na(UNCRT)) %>%
+#   group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM) %>%
+#   summarise(
+#     Uncertainty = mean(Uncertainty, na.rm = TRUE),
+#     QUANTIFICATION_LIMIT = mean(QUANTIFICATION_LIMIT, na.rm = TRUE),
+#     LOQ_source = paste(unique(LOQ_source), collapse = ","),
+#     VALUE_mean = mean(VALUE_WW, na.rm = TRUE) %>% round(3),
+#     VALUE_min = min(VALUE_WW, na.rm = TRUE) %>% round(3),
+#     UNCRT_mean = mean(UNCRT, na.rm = TRUE) %>% round(3),
+#     UNCRT_max = max(UNCRT, na.rm = TRUE) %>% round(3),
+#     percerror_mean = mean(100*UNCRT/VALUE_WW, na.rm = TRUE) %>% round(3),
+#     percerror_max = max(100*UNCRT/VALUE_WW, na.rm = TRUE) %>% round(3)
+#   )
+# 
+# # View(mean_uncrt)
+# 
+# # For comparison with minimum less-than value, 
+# mean_uncrt_1 <- mean_uncrt
 
 ```
 
@@ -776,35 +774,35 @@ mean_uncrt_1 <- mean_uncrt
 - Plot one parameter/tissue
 ```{r}
 
-plot_error <- function(lab, param, species, tissue, data = dat_all_updated) {
-  
-  df_plot <- data %>%
-    filter(MYEAR == selected_year & !is.na(UNCRT)) %>%
-    filter(Lab == lab & PARAM == param & LATIN_NAME == species & TISSUE_NAME == tissue) %>%
-    mutate(Percent_error = 100*UNCRT/VALUE_WW)
-  
-  gg <- ggplot(df_plot, aes(VALUE_WW, Percent_error)) +
-    geom_point() +
-    geom_vline(xintercept = df_plot$s[1]*3, linetype = "dashed") +
-    xlim(0,50) +
-    labs(title = paste0(param, " (", lab, ") in ", species, ", ", tissue),
-         subtitle = "dotted line = assumed LOD")
-  
-  print(gg)
-  
-}
-
-plot_error("Eurofins", "CB180", "Gadus morhua", "Lever", dat_all_updated_test)
+# plot_error <- function(lab, param, species, tissue, data = dat_all_updated) {
+#   
+#   df_plot <- data %>%
+#     filter(MYEAR == selected_year & !is.na(UNCRT)) %>%
+#     filter(Lab == lab & PARAM == param & LATIN_NAME == species & TISSUE_NAME == tissue) %>%
+#     mutate(Percent_error = 100*UNCRT/VALUE_WW)
+#   
+#   gg <- ggplot(df_plot, aes(VALUE_WW, Percent_error)) +
+#     geom_point() +
+#     geom_vline(xintercept = df_plot$s[1]*3, linetype = "dashed") +
+#     xlim(0,50) +
+#     labs(title = paste0(param, " (", lab, ") in ", species, ", ", tissue),
+#          subtitle = "dotted line = assumed LOD")
+#   
+#   print(gg)
+#   
+# }
+# 
+# plot_error("Eurofins", "CB180", "Gadus morhua", "Lever", dat_all_updated_test)
 
 ```
 
-## 8. Just use 'Uncertainty' as given by the labs     
+## 8. Just use 'Uncertainty_expand' as given by the labs     
 -  METCU = %
 ```{r}
 
 dat_all_updated_2 <- dat_all_updated %>%
   mutate(
-    UNCRT = Uncertainty,   # Just use as is
+    UNCRT = Uncertainty_expand,   # Just use as is
     METCU = "%"
   )
 
@@ -828,7 +826,7 @@ xtabs(~is.na(s), dat_all_updated_2 %>% filter(MYEAR == selected_year))
 dat_all_updated_view <- dat_all_updated_2 %>% 
   select(
     STATION_CODE, STATION_NAME, SAMPLE_DATE, LATIN_NAME, TISSUE_NAME, PARAM, MYEAR, 
-    SAMPLE_NO2, VALUE_WW, FLAG1, Lab, QUANTIFICATION_LIMIT, Uncertainty, 
+    SAMPLE_NO2, VALUE_WW, FLAG1, Lab, QUANTIFICATION_LIMIT,  
     LOQ_lt_min, LOQ_lt_med, Min_value, LOQ_source, UNCRT, METCU
   )
 
@@ -926,7 +924,7 @@ df <- dat_all_updated_2 %>%
            PARAM == "HG" & STATION_CODE == "30B" &
            TISSUE_NAME == "Muskel")
 df %>%
-  select(VALUE_WW, Uncertainty, LOQ_lt_min, Min_value, UNCRT, METCU)
+  select(VALUE_WW, Uncertainty_expand, LOQ_lt_min, Min_value, UNCRT, METCU)
 
 ```
 
