@@ -25,6 +25,10 @@ output:
    "BAP3OH" ~ "3-OH-benzo[a]pyren"
 ``` 
 
+Note that   
+- non-normalised PAH metabolites = PYR1OH, PA1OH, BAP3OH
+- absorption-normalised ones = PYR1O, PA1O, BAP3O  
+- absorption itself = ABS380 or AY (the two are the same)    
 
 ## 0. Libraries and functions
 ```{r}
