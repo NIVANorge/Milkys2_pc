@@ -3281,24 +3281,11 @@ cat("New coordinates for", station, ":",
 ```
 
 
-### f. Sample dates  
+### f. Sample dates   
+- Taken from raw data, 
 ```{r}
 
-# 2019 version
-# data_for_dates <- readRDS("Input_data_2019/101_dat_new1_2020-08-05.rds")
-#
-# df_dates <- data_for_dates %>%
-#   rename(STNNO = StationCode) %>%
-#   mutate(Year = year(CatchDateFirst),
-#          Month = month(CatchDateFirst),
-#          MYEAR = case_when(
-#            Month <= 2 ~ Year-1,
-#            Month >= 3 ~ Year)
-#          ) %>%
-#   filter(MYEAR == selected_year) %>%
-#   distinct(STNNO, CatchDateFirst)
-
-data_for_dates <- data_all %>%
+data_for_dates <- data_ind2 %>%
   filter(!is.na(SAMPLE_DATE)) %>%
   distinct(STATION_CODE, SAMPLE_DATE)
 
@@ -3306,72 +3293,65 @@ df_dates <- data_for_dates %>%
   rename(STNNO = STATION_CODE)
 
 # Check stations with >1 date (19N has two)
-df_dates %>%
+check_dates_1 <- df_dates %>%
   group_by(STNNO) %>%
   mutate(n = n()) %>%
   filter(n > 1) %>%
   arrange(STNNO, SAMPLE_DATE)
 
-# Mean of dates for 19N
-df_dates <- df_dates %>%
-  group_by(STNNO) %>%
-  summarise(SAMPLE_DATE = mean(SAMPLE_DATE) %>% floor_date("day"),
-            .groups = "drop") %>%
-  mutate(
-    Date = as.character(SAMPLE_DATE),
-    SDATE = paste0(substr(Date,1,4),substr(Date,6,7),substr(Date,9,10))
-  )
+# If some stations with >1 date:
+if (nrow(check_dates_1) > 0){
+  message("Some stations have >1 date")
+  
+  # Mean of dates for 19N
+  df_dates <- df_dates %>%
+    group_by(STNNO) %>%
+    summarise(
+      SAMPLE_DATE = mean(SAMPLE_DATE) %>% floor_date("day"),
+      .groups = "drop") %>%
+    mutate(
+      Date = as.character(SAMPLE_DATE),
+      SDATE = paste0(substr(Date,1,4),substr(Date,6,7),substr(Date,9,10))
+    )
+  
+  # df_dates %>% filter(STNNO == "19N")
+  # df_dates
+  
+  # Check again stations with >1 date
+  check_dates_2 <- df_dates %>%
+    group_by(STNNO) %>%
+    mutate(n = n()) %>%
+    filter(n > 1) %>%
+    arrange(STNNO, SAMPLE_DATE)
+  
+  if (nrow(check_dates_2) == 0){
+    warning("Mean date used for stations with more than have >1 date. Check 'check_dates_1'. \n")
+  } else {
+    stop("Some stations with more than have >1 date!")
+  }
+  
+}
+cat("\n")
 
-# df_dates %>% filter(STNNO == "19N")
-# df_dates
+# Check if we have all dates we need
+sel <- data_91$STNNO %in% df_dates$STNNO  
+if (sum(!sel) > 0){
+  stop(sum(!sel), " stations not found in 'df_dates'!")
+} else {
+  message("All stations are found in 'df_dates'")
+}
 
 ```
 
 ### g. Add new dates
 ```{r}
 
-# Check if we have all dates we need
-sel <- data_91$STNNO %in% df_dates$STNNO  
-cat(sum(!sel), "stations not found in 'df_dates': \n")
-data_91$STNNO[!sel]   # 26A2
 
-#
-# 2019: We lacked date for 26A2 - used code in brackets to find it  
-#
-if (FALSE){
-  readRDS("Data/01_df_2019_notstandard_2020-08-05.rds") %>% # names()
-    filter(STATION_CODE == "26A2") %>%
-    pull(SAMPLE_DATE) %>%
-    unique()
-  # "2020-10-26 UTC"  - this is a punching error, it is one year too late
-  
-  # Add this date
-  df_dates2 <- df_dates %>%
-    bind_rows(tibble(STNNO = "26A2", SDATE = "20191026"))
-  
-  cat(nrow(df_dates2) - nrow(df_dates), "dates added \n")
-  
-  # Check if we now have all dates we need
-  sel <- data_91$STNNO %in% df_dates2$STNNO  
-  
-  # If so, SDATE is removed and then added again
-  if (sum(!sel) > 0){
-    cat("\nStations not in table 91: \n")
-    df_dates2[!sel,] %>% pull(STNNO)
-  } else {
-    data_91 <- data_91 %>%
-      select(-SDATE) %>%
-      safe_left_join(
-        df_dates2 %>% select(STNNO, SDATE),
-        by = "STNNO", 
-        na_matches = "never",
-        check = "BCVm"
-      )
-    cat("\nDates added to table 91 \n")
-  }
-  
-}
-
+data_91 <- data_91 %>%
+  # Remove old date
+  select(-SDATE) %>%
+  # Add SAMPLE_DATE
+  left_join(df_dates %>% select(STNNO, SDATE),  by = "STNNO")
 
 # Correct column order
 data_91 <- data_91[column_order_91]
