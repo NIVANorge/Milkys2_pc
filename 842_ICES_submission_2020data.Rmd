@@ -1514,24 +1514,24 @@ df_amlnk$n <- NULL
 ```
 
 ### Add 'new' parameters  
-- GOSOI (gonadal somatic index = (gonad weight/whole organism weight) x 100), https://vocab.ices.dk/?CodeID=51654 )
-  
+- GOSOI (gonadal somatic index = (gonad weight/whole organism weight) x 100), https://vocab.ices.dk/?CodeID=51654     
+- INTF% = intersex, https://vocab.ices.dk/?CodeID=53682       
+- C13D and N15D = isotope ratio δ13C:12C (https://vocab.ices.dk/?CodeID=197194) and isotope ratio δ15N:14N (https://vocab.ices.dk/?CodeID=197195)   
 ```{r}
 
-if (sum(df_amlnk$PARAM == "GOSOI") == 0){
-  # add one row to df_amlnk
-  df_amlnk <- bind_rows(
-    df_amlnk,
-    tibble(PARAM = "GOSOI", AMLNK = max(df_amlnk$AMLNK) + 1)
-  )
-}
+# params_new <- c("GOSOI", "INT%", "C13D", "N15D")
+params_new <- c("GOSOI", "INT%")
 
-if (sum(df_amlnk$PARAM == "INTF%") == 0){
-  # add one row to df_amlnk
-  df_amlnk <- bind_rows(
-    df_amlnk,
-    tibble(PARAM = "INTF%", AMLNK = max(df_amlnk$AMLNK) + 1)
-  )
+for (param in params_new){
+  if (sum(df_amlnk$PARAM %in% param) == 0){
+    # add one row to df_amlnk
+    df_amlnk <- bind_rows(
+      df_amlnk,
+      tibble(
+        PARAM = param, 
+        AMLNK = max(df_amlnk$AMLNK) + 1)    # add 1 to the last AMLNK number  
+    )
+  }
 }
 
 ```
@@ -1718,7 +1718,7 @@ tab
 ```
 
 
-### a6. GOSOI - gonadal somatic index ((gonad weight/whole organism weight) x 100)   
+### a6-1. GOSOI - gonadal somatic index, defined as (gonad weight/whole organism weight) x 100   
     - Must be given for all EROD samples  
     - Taken from data_ind_fish
     - Creates `data_conc`    
