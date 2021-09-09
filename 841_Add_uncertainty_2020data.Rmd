@@ -156,6 +156,30 @@ dat_all_allyears$VALUE_FB[sel] <- NA
 # plot_raw_data_liver_highlight("PFDcA") # strange values  
 
 ```
+### Fix concentrations below zero  
+```{r}
+
+if (FALSE){
+  
+  dat_all_allyears %>%
+    filter() %>%
+    xtabs(~LATIN_NAME + PARAM + MYEAR, .)
+  
+}
+
+sel <- with(
+  dat_all_allyears, 
+  VALUE_WW < 0 & !PARAM %in% c("Delta13C") & LATIN_NAME == "Somateria mollissima")
+message("Fix ", sum(sel), " eider duck PCBs with conc. < 0, these are below LOQ")
+
+dat_all_allyears$VALUE_WW[sel] <- -dat_all_allyears$VALUE_WW[sel]
+dat_all_allyears$VALUE_DW[sel] <- -dat_all_allyears$VALUE_DW[sel]
+dat_all_allyears$VALUE_FB[sel] <- -dat_all_allyears$VALUE_WW[sel]
+dat_all_allyears$FLAG1[sel] <- "<"
+
+```
+
+
 ### Create `dat_all`  
 - Data for the selected year   
 
@@ -933,20 +957,21 @@ df %>%
 
 
 
-### Comparison  
+### Comparison   
+- with stuff in 7, but now commented out  
 ```{r}
 
 
-mean_uncrt_compare <- function(lab, param, species, tissue){
-  bind_rows(
-    mean_uncrt_1 %>%
-      filter(Lab == lab & PARAM == param & LATIN_NAME == species, TISSUE_NAME == tissue),
-    mean_uncrt_2 %>%
-      filter(Lab == lab & PARAM == param & LATIN_NAME == species, TISSUE_NAME == tissue)
-  )
-}
-
-mean_uncrt_compare("Eurofins", "CB180", "Gadus morhua", "Lever")
+# mean_uncrt_compare <- function(lab, param, species, tissue){
+#   bind_rows(
+#     mean_uncrt_1 %>%
+#       filter(Lab == lab & PARAM == param & LATIN_NAME == species, TISSUE_NAME == tissue),
+#     mean_uncrt_2 %>%
+#       filter(Lab == lab & PARAM == param & LATIN_NAME == species, TISSUE_NAME == tissue)
+#   )
+# }
+# 
+# mean_uncrt_compare("Eurofins", "CB180", "Gadus morhua", "Lever")
 
 
 
@@ -991,12 +1016,6 @@ for (i in 1:2){
 
 ```
 
-### Remove 's'
-```{r}
 
-dat_all_updated_2 <- dat_all_updated_2 %>%
-  select(-s)
-
-```
 
 
