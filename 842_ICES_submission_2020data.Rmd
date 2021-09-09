@@ -2292,11 +2292,11 @@ xtabs(~STATION_CODE + is.na(SMPNO), data_conc_fish)
 ### c7. Check last year (2018)
 ```{r}
 
-fn1 <- "../Milkys_2018/ICES/Test/NIVA2017CF.NO"
-dat1 <- read_ices_file(fn1) %>%  add_field_codes()
-dat1[["10"]] %>% 
-  count(STNNO, MATRX, SUBNO) %>% 
-  xtabs(~MATRX + STNNO, .)
+# fn1 <- "../Milkys_2018/ICES/Test/NIVA2017CF.NO"
+# dat1 <- read_ices_file(fn1) %>%  add_field_codes()
+# dat1[["10"]] %>% 
+#   count(STNNO, MATRX, SUBNO) %>% 
+#   xtabs(~MATRX + STNNO, .)
 
 ```
 
@@ -2756,6 +2756,15 @@ xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
 # 
 # cat("\nCheck METCU again \n") 
 # table(addNA(data_10$METCU), sel_uncrt)
+
+```
+
+### k9c. Change QFLAG from < to D   
+```{r}
+
+sel_uncrt <- !is.na(data_10$QFLAG)
+sum(sel_uncrt)
+data_10$QFLAG[sel_uncrt] <- "D"
 
 ```
 
@@ -3790,17 +3799,17 @@ if (FALSE){
 
 
 ### Write ICES submission file   
-- Set up to use UTF-8 when writing   
+- Set up to use UTF-8 when writing, but apparently we need to change the file manually to UTF-8 afterwards anyway (in Notepad++, set encoding to ANSI, then "convert to UTF-8")  
 ```{r}
 
 write_ices_file <- FALSE
-# write_ices_file <- TRUE
+ write_ices_file <- TRUE
 
 #
 # Set "scipen" options so we avoid writing scientific notation (almost always)
 # See ?write.table
 #
-cat("Set the way characters are written: \n")
+cat("Set the way numbers are written as characters: \n")
 cat("Existing setting: \n")
 as.character(0.000004)   # check
 old_options <- options(scipen = 3)
@@ -3816,7 +3825,7 @@ if (write_ices_file){
     dir.create(save_folder_txt)
   }
   
-  fns <- dir(save_folder_txt, paste0("NIVA", current_year, "CF*"))
+  fns <- dir(save_folder_txt, paste0("NIVA", selected_year, "CF*"))
   existing_versions <- substr(fns, 12, 13) %>% as.numeric()
   
   if (length(existing_versions) == 0){
@@ -3825,7 +3834,7 @@ if (write_ices_file){
     version <- max(existing_versions) + 1
   }
   
-  string <- paste0("NIVA", current_year, "CF_%02i.NO")
+  string <- paste0("NIVA", selected_year, "CF_%02i.NO")
   fn <- sprintf(string, version)
   icesfile <- file(paste0(save_folder_txt, "/", fn), "w+")
   write.table(data_00, icesfile, sep = ";", quote = FALSE, na = "", 
@@ -3871,7 +3880,7 @@ if (write_ices_file){
                    data_21, data_90, data_91, data_92)
   names(datalist) <- c("00", "03", "04", "10", "20", "21", "90", "91", "92")
   
-  string <- paste0("842_NIVA", current_year, "CF_%02i.rds")
+  string <- paste0("842_NIVA", selected_year, "CF_%02i.rds")
   fn_rds <- sprintf(string, version)
   
   saveRDS(datalist, paste0(save_folder_rds, "/", fn_rds))
@@ -3890,7 +3899,7 @@ if (write_ices_file){
 if (FALSE){
   
   library(writexl)
-  string <- paste0("842_NIVA", current_year, "CF_%02i.xlsx")
+  string <- paste0("842_NIVA", selected_year, "CF_%02i.xlsx")
   fn_xl <- sprintf(string, version)
   
   write_xlsx(datalist, paste0("Data/", fn_xl))
@@ -3938,9 +3947,9 @@ if (restore) {
   
   # Make file names
   
-  string <- paste0("842_NIVA", current_year, "CF_%02i.rds")
+  string <- paste0("842_NIVA", selected_year, "CF_%02i.rds")
   fn_rds <- sprintf(string, version)
-  string <- paste0("NIVA", current_year, "CF_%02i.NO")
+  string <- paste0("NIVA", selected_year, "CF_%02i.NO")
   fn <- sprintf(string, version)
   
   data <- readRDS(paste0(save_folder_rds, "/", fn_rds))
