@@ -93,7 +93,7 @@ read_file_part <- function(text_vector, recid, table_id, sep = ";"){
 
 # Read all parts of the file into a list of data frames
 read_ices_file <- function(fn, sep = ";"){
-  txtall <- readLines(fn)
+  txtall <- readLines(fn, encoding = "UTF-8")
   # Get RECID (first field)
   recid_all <- strsplit(txtall, sep) %>% map_chr(function(x) x[1])
   recids <- names(table(recid_all))
