@@ -558,6 +558,9 @@ if (FALSE){
   names(data_2018)
   data_2018[["10"]] %>% xtabs(~PARAM, .)
   
+  data_2018[["91"]] %>% xtabs(~STNNO, .)
+  data_2018[["91"]] %>% xtabs(~STATN, .)
+
 }
 
 ```
@@ -1756,15 +1759,41 @@ data_to_add <- data_conc_2 %>%
          METCU = "%")
 
 # Show data that will be added
-data_to_add %>%
-  select(STATION_CODE, SAMPLE_NO2, PARAM, VALUE_WW, UNIT)
+if (FALSE){
+  data_to_add %>%
+    select(STATION_CODE, SAMPLE_NO2, PARAM, VALUE_WW, UNIT)
+}
 
 # Add to data (if not already added)
-
 if (sum(data_conc_2$PARAM %in% "GOSOI") == 0){      # Make sure we add data only once
   data_conc <- bind_rows(data_conc_2, data_to_add)
 }
 
+```
+
+### a6-2. Remove EROD without GOSOI    
+- EROD withou GOSOI is an error in the OCES database ('Cross record/field check (condition not met)')    
+```{r}
+
+data_conc_back <- data_conc
+# data_conc <- data_conc_back
+
+data_conc <- data_conc %>%
+  left_join(
+    data_conc %>%
+      filter(PARAM %in% "GOSOI") %>%
+      select(STATION_CODE, SAMPLE_NO2, VALUE_WW) %>%
+      rename(GOSOI = VALUE_WW),
+    by = c("STATION_CODE", "SAMPLE_NO2")
+  ) %>%
+  filter(!(PARAM %in% "EROD" & is.na(GOSOI)))
+
+message(nrow(data_conc_back) - nrow(data_conc), " EROD observations without GOSOI deleted")
+
+```
+
+
+```{r}
 ```
 
 
@@ -3760,7 +3789,8 @@ if (FALSE){
 ```
 
 
-### Write ICES submission file
+### Write ICES submission file   
+- Set up to use UTF-8 when writing   
 ```{r}
 
 write_ices_file <- FALSE
