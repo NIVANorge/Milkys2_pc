@@ -2777,7 +2777,7 @@ xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
 
 ```
 
-### k9c. Change QFLAG from < to D   
+### k9c. Change QFLAG from < to Q     
 ```{r}
 
 sel_uncrt <- !is.na(data_10$QFLAG)
