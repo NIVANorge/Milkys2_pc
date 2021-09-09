@@ -1519,8 +1519,8 @@ df_amlnk$n <- NULL
 - C13D and N15D = isotope ratio δ13C:12C (https://vocab.ices.dk/?CodeID=197194) and isotope ratio δ15N:14N (https://vocab.ices.dk/?CodeID=197195)   
 ```{r}
 
-# params_new <- c("GOSOI", "INT%", "C13D", "N15D")
-params_new <- c("GOSOI", "INT%")
+params_new <- c("GOSOI", "INT%", "C13D", "N15D")
+# params_new <- c("GOSOI", "INT%")
 
 for (param in params_new){
   if (sum(df_amlnk$PARAM %in% param) == 0){
@@ -1556,7 +1556,7 @@ par_ices <- c(par_ices, "HCHA", "HCHG", "HCB") %>% unique() %>% sort()
 #
 # Should also have added "D4", "D5", "D6"
 # But siloxans are not in the ICES vocabulary!
- # (I also searched fro e.g. 'Decamethylcyclopentasiloxane' (= D5))
+# (I also searched fro e.g. 'Decamethylcyclopentasiloxane' (= D5))
 
 par_niva <- data_ind2 %>% filter(MYEAR %in% selected_year) %>% pull(PARAM) %>% unique() %>% sort()
 par_ices[!par_ices %in% par_niva]
@@ -1590,6 +1590,11 @@ data_conc_1$PARAM[sel] <- "PFDA"
 sel <- data_conc_1$PARAM %in% "TBT"; sum(sel)   # Note this is TBT cation weight = 2.44 * TBTIN (TBT tin weight)
 data_conc_1$PARAM[sel] <- "TBSN+"
 
+sel <- data_conc_1$PARAM %in% "Delta13C"; sum(sel)  
+data_conc_1$PARAM[sel] <- "C13D"
+sel <- data_conc_1$PARAM %in% "Delta15N"; sum(sel)  
+data_conc_1$PARAM[sel] <- "N15D"
+
 # This did NOT do in 2018:
 # Fat:
 sel <- data_conc_1$PARAM %in% "Fett"; sum(sel)
@@ -1618,8 +1623,21 @@ cat("\nCheck final parameters:\n")
 tab <- data_conc_2 %>% xtabs(~PARAM, .)
 tab
 
-cat("\n\nCheck excluded parameters:\n")
-data_conc_1 %>% filter(!PARAM %in% par_ices) %>% xtabs(~PARAM, .)
+# cat("\n\nCheck excluded parameters:\n")
+# data_conc_1 %>% filter(!PARAM %in% par_ices) %>% xtabs(~PARAM, .)
+
+# Parameters with data over LOQ that are excluded:
+cat("\n\nParameters with data over LOQ that are excluded:\n")
+tab <- data_conc_1 %>% 
+  filter(!PARAM %in% par_ices & is.na(FLAG1)) %>% 
+  xtabs(~PARAM, .) %>% 
+  sort(decreasing = TRUE)
+tab
+# dput(names(tab)) 
+
+```
+```{r}
+
 
 ```
 
