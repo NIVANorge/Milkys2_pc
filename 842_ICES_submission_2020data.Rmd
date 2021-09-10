@@ -2777,12 +2777,26 @@ xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
 
 ```
 
-### k9c. Change QFLAG from < to Q     
+### k9c. Clear DETLI for PAH metabolites   
+- We use QFLAG instead  
+```{r}
+
+sel <- data_10$PARAM %in% c("PA1OH", "PYR1OH", "BAP3OH")  
+sum(sel)
+
+data_10$DETLI[sel] <- NA
+
+```
+
+### k9c. Change QFLAG and set LMQNT  
+- Change QFLAG from < to Q   
 ```{r}
 
 sel_uncrt <- !is.na(data_10$QFLAG)
-sum(sel_uncrt)
-data_10$QFLAG[sel_uncrt] <- "D"
+message(sum(sel_uncrt), " values are under LOQ - we set QFLAG and LMQNT for these")  
+
+data_10$QFLAG[sel_uncrt] <- "Q"
+data_10$LMQNT[sel_uncrt] <- data_10$VALUE[sel_uncrt]
 
 ```
 
