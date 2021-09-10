@@ -31,8 +31,9 @@ get_nivabase_data(str)
 ## Where files will be saved  
 ```{r}
 
-save_folder_txt <- "Files_to_Jupyterhub_2020/842_ICES/Test"
-save_folder_rds <- "Files_to_Jupyterhub_2020/842_ICES/Rdata"
+save_folder_txt <- "Files_to_ICES/2020/Test"
+save_folder_rds <- "Files_to_ICES/2020/Rdata"
+save_folder_excel <- "Files_to_ICES/2020/Excel"
 
 ```
 
@@ -3922,6 +3923,13 @@ if (write_ices_file){
   
 }
 
+if (FALSE){
+  
+  # For reading file
+  datalist <- readRDS("Files_to_ICES/2020/Rdata/842_NIVA2020CF_09.rds")
+  
+}
+
 ```
 
 
@@ -3934,7 +3942,7 @@ if (FALSE){
   string <- paste0("842_NIVA", selected_year, "CF_%02i.xlsx")
   fn_xl <- sprintf(string, version)
   
-  write_xlsx(datalist, paste0("Data/", fn_xl))
+  write_xlsx(datalist, paste0(save_folder_excel, "/", fn_xl))
 
   cat("Version", version, "written as excel file at", as.character(Sys.time()), "\n")
   cat("Filename: ",  paste0(save_folder_rds, "/", fn_rds), "\n")
@@ -4002,6 +4010,31 @@ if (restore) {
 ```
 
 ## Checks of data  
+
+### Check positions     
+- ICES position strings getting the warning 'Station position appears to be on land'   
+- Checked using norgeskart.no  
+```{r}
+
+# Turns ICES position string into decimal longitude, latitude
+copy_decimal <- function(string){ 
+  str2 <- strsplit(string, ",")[[1]]
+  y1 <- strsplit(str2[1], " ")[[1]] %>% as.numeric()
+  y <- y1[1] + y1[2]/60
+  x1 <- strsplit(str2[2], " ")[[1]] %>% as.numeric()
+  x <- x1[1] + x1[2]/60
+  paste0(round(y, 5), ",", round(x,5)) %>% writeLines("clipboard")
+}
+
+# ICES position strings getting the warning 'Station position appears to be on land'   
+# Run line by line
+# For each line, paste into search box of norgeskart.no
+"+59 53.737,+05 6.514" %>% copy_decimal()
+"+69 39.180,+18 58.440" %>% copy_decimal()
+"+79 0.240,+12 6.600" %>% copy_decimal()
+
+```
+
 
 ### Check specific lines in data
 ```{r}
@@ -4137,16 +4170,80 @@ data[["10"]] %>%
 ```
 
 
-```{r}
-data_conc %>% 
-  # ilter(STATION_CODE == "53B" & PARAM %in% "PA1OH") %>%
-  filter(STATION_CODE == "53B" & SAMPLE_NO2 == 15) %>%
-  select(STATION_CODE, PARAM, TISSUE_NAME, SAMPLE_NO2, VALUE_WW)
+## Notes  
+
 
 ```
 
+"BDE119", "BDE138", "BDE156", "BDE17", "BDE184", "BDE191", "BDE196", 
+"BDE197", "BDE202", "BDE206", "BDE207", "BDE49", "BDE66", 
+"BDE71", "BDE77", "BDE85", 
+"CB105", "CB114", "CB122", "CB123", "CB128", "CB141", "CB149", "CB156", 
+"CB157", "CB167", "CB170", "CB18", "CB183", "CB187", "CB189", 
+"CB194", "CB206", "CB209", "CB31", "CB33", "CB37", "CB47", "CB66", 
+"CB74", "CB99", 
 
-```{r}
-data_10 %>% xtabs(~METCU, .)
+"MCCP eksl. LOQ" ~ "MCCP", 
+"SCCP eksl. LOQ" ~ "SCCP",
+"Dieldrin" ~ "DIELD", 
+"Mirex" = "MIREX", 
+"Oktaklorstyren (OCS)" ~ "OCS",
+"Oxyklordan" ~ "OCDAN", 
+
+"Nonaklor, trans-" ~ "TNONC",
+"alfa-Klordan (cis)" ~ "CCDAN"
+
+"DDTEP" ~ "DDTEP", 
+"DDTOP" ~ "DDTOP", 
+"PROTV" ~ "PROTV"
+
+"Tributyltinn (TBT)-Sn" ~ "TBTIN"
+"MBTIN" ~ "MBSN+",
+
+ 
+"D4", "D5", "D6", 
+D4: octamethylcyclotetrasiloxane	556-67-2	
+D5: decamethylcyclopentasiloxane	541-02-6	
+D6: dodecamethylcyclohexasiloxane	540-97-6	
+
+
+# "Heptaklor epoksid"
+# only cis-heptachlorepoxide "(alpha)" and trans-heptachlorepoxide "(beta)"	
+
+
+HCEPT 	 
+
+ 	trans-heptachlorepoxide "(beta)" 
+, "MCCP eksl. LOQ", 
+"Toksafen Parlar 50", "Toksafen Parlar 26", "Toksafen Parlar 62", - only TTOX, total toxaphene
+
+"DDDOP" - not existing 
+
+"Oxyklordan", "SCCP eksl. LOQ", "PROTV", "gamma-Klordan (trans)", 
+"CB105", "CB128", "CB156", "CB167", "CB187", "CB99", "Sum-HepCB", 
+"CB170", "CB74", "PeCB", "CB183", "Sum-HexCB", "BDE77", "CB209", 
+"CB157", "Sum-PenCB", "CB114", , "CB123", 
+"CB66", "Sum-TriCB", "BDE17", "KPAH", "P_S", "PAH16", "Sum-TetCB", 
+"CB141", "DDEOP", "CB189", "CB194", "CB206", "CB31", "CB47", 
+"Krysen", "MBTIN", "Monobutyltinn (MBT)-Sn", "CB149", "DBTIN", 
+"Dibutyltinn-Sn (DBT-Sn)", "PFHxS", "QCB", "TBA", 
+"TPTIN", "Trifenyltinn (TPhT)-Sn", "CB122", "BDE85", "Total PFOS/PFOA inkl. LOQ", 
+"CB33", "CB37", "CB18", "Endrin", "BDE184", "BDE71", "HCHB", 
+"INTF%")
+
+
+
+"P_S", "PAH16", "PeCB", "Perfluor-3,7-dimetyloktansyre (PF37DMOA)", 
+"Perfluorbutansyre (PFBA)", "Perfluordekansulfonat (PFDS)", "Perfluordodekansyre (PFDoA)", 
+"Perfluorheptansulfonat (PFHpS)", "Perfluorpentansyre (PFPeA)", 
+"Perfluortetradekansyre (PFTA)", "Perfluortridekansyre (PFTrA)", 
+"PFAS", "PFHxS", "PROTV", "QCB", "SCCP eksl. LOQ", "Sum-HepCB", 
+"Sum-HexCB", "Sum-PenCB", "Sum-TetCB", "Sum-TriCB", "TBA", "TCHT", 
+"Tetrabutyltinn (TTBT)-Sn", "Toksafen Parlar 26", "Toksafen Parlar 50", 
+"Toksafen Parlar 62", "Total PFOS/PFOA inkl. LOQ", "TPTIN", "trans-Heptaklorepoksid", 
+"Tributyltinn (TBT)-Sn", "Trifenyltinn (TPhT)-Sn", "Trisykloheksyltinn (TCHT)-Sn", 
+"TTBT")
+> 
+> cat("\n\nCheck excluded parameters:\n")
+
 ```
-
