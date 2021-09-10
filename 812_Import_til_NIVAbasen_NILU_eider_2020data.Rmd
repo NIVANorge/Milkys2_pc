@@ -116,6 +116,10 @@ From script 808 (2020 version)
     * Flag1  
 ```{r}
 
+# NOTE!! PCB data with negative values (actually data < LOQ) were not correcetd to 
+#   positive numbers with FLAG1 = "<"
+# Later corrected in the database, see part 90 in this script  
+
 dat_excel_1 <- readRDS("Data/808_dat_eiderduck_2020.rds") %>%
   mutate(TEXT_ID = sub("Nr. ", "NR-", Sample_no, fixed = TRUE)) %>%
   mutate(Specimen_label = as.numeric(Specimen_label))
@@ -1223,6 +1227,107 @@ df_chem %>%
   ggplot(aes(NAME, VALUE, color = TISSUE_NAME)) + 
   geom_jitter(width = 0.1) +
   theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+```
+
+## 80. Fix error in values 
+- PCB data were inserted with negative values, these are actually data <LOQ!  
+- Here we just modfy the values in place, using 
+
+### a. Get VALUE_ID start and stop  
+```{r}
+
+#
+# First, read 'df_chem' from file (part 70) 
+#
+
+# Data in 3 groups 
+# df_chem$VALUE_ID %>% sort() %>% plot()
+
+# Get all columns including ENTERED_BY and ENTERED_DATE   
+df_chem_full <- get_nivabase_selection(
+  "*",
+  "BIOTA_CHEMISTRY_VALUES",
+  "VALUE_ID",
+  df_chem$VALUE_ID
+)
+
+df_chem_full$ENTERED_BY %>% table()
+        #  DHJ      LABWARE NIVADATABASE 
+        # 2122          280          140 
+
+# Pick only those inserted by myself:
+df_chem_dhj <- df_chem_full %>% 
+  filter(ENTERED_BY == "DHJ")
+
+# Range of VALUE_ID
+df_chem_dhj$VALUE_ID %>% range()
+# 2004793 2006914
+
+# Check - line 1 should be line 2 minus 1
+a <- df_chem_dhj$VALUE_ID %>% range() %>% diff() # 15444
+b <- nrow(df_chem_dhj)  # 2542
+if (b == a+1){
+  message("VALUE_ID is a contiguous sequence and can be used to modify/remove data in the database")
+} else {
+  stop("VALUE_ID are not a contiguous sequence")
+}
+
+
+  
+
+
+```
+
+### b. Get data with errors  
+- used in (d)
+```{r}
+
+df_chem_error <- get_nivabase_selection(
+  "*",
+  "BIOTA_CHEMISTRY_VALUES",
+  "VALUE_ID",
+  2004793:2006914,
+  extra_where = " and VALUE < 0"
+)
+
+nrow(df_chem_dhj)
+nrow(df_chem_error)
+# [1] 2122
+# [1] 244
+
+```
+### c. Update syntax  
+- Copy-pasted into SQL developer
+```
+UPDATE NIVADATABASE.BIOTA_CHEMISTRY_VALUES
+SET FLAG1 = '<' WHERE VALUE_ID >= 2004793 and VALUE_ID <= 22006914 and VALUE < 0;
+
+UPDATE NIVADATABASE.BIOTA_CHEMISTRY_VALUES
+SET VALUE = (-VALUE) WHERE VALUE_ID >= 2004793 and VALUE_ID <= 22006914 and VALUE < 0;
+
+commit;
+
+```
+
+### d. Check again  
+```{r}
+
+df_check <- get_nivabase_selection(
+  "*",
+  "BIOTA_CHEMISTRY_VALUES",
+  "VALUE_ID",
+  2004793:2006914
+)
+
+df_check %>% filter(VALUE < 0)
+# nothing
+
+# Check first line in 'df_chem_error':  
+df_check %>% filter(VALUE_ID == 2006358)
+# has been corrected  
+
+
 
 ```
 

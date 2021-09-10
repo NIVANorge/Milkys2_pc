@@ -65,6 +65,13 @@ dat[[1]] <- read_excel_nilu1(fn, "PBDE",
   mutate(Group = "PBDE")
 # View(dat[[1]])
 
+#
+# NOTE!! for data below:
+#   PCB data with negative values are actually data <LOQ  
+#   I did not correct for this, so the data were read with negative concentrations
+#     and later corected in the datbase, see 812 part 90  
+#   Should have set 'lessthans_given_as_negative_number = TRUE'
+#
 # debugonce(read_excel_nilu1)
 dat[[2]] <- read_excel_nilu1(fn, "PCB",
                            lessthans_given_as_negative_number = FALSE,
@@ -505,8 +512,15 @@ xtabs(~is.na(METHOD_ID) + Group, dat_eiderduck)
 #
 # 9. Save ----
 #
+
+# NOTE!! PCB data with negative values (actually data < LOQ) were not correcetd to 
+#   positive numbers with FLAG1 = "<"
+# Later corrected in the database, see 812 part 90  
+
 saveRDS(dat_eiderduck, "Data/808_dat_eiderduck_2020.rds")
 
+
 # dat_eiderduck <- readRDS("Data/808_dat_eiderduck_2020.rds")
+# SEE NOTE ABOVE
 
 
