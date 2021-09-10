@@ -10,7 +10,7 @@ output:
 Make tables for inserting into NIVAbase   
   
 For eider duck data from NILU  
-- Note: source of files the same as for cod siloxans (script 210)  
+- Note: source of files the same as for cod siloxans (script 808)  
 
 NOTE: samples mostly exist in Nivabasen, but two samples MUST BE ADDED   
 
@@ -98,25 +98,25 @@ liver fraction). Samples are numbered corresponding to the muscle samples (as NI
 
 
 ### a. Read Eider duck NILU data   
-From script 210 (2020 version)  
+From script 808 (2020 version)  
 - Station-defining columns  
     * not given
 - Sample- (and specimen-)defining columns  
     * Sample_no_NILU - not used in this script     
     * Sample_no = NIVA sample number, containing TEXT_ID (example: `Nr. 2020-08432`)  - here used for all except siloxans  
-    * TEXT_ID (already added in script 210 - all except siloxans)
+    * TEXT_ID (already added in script 808 - all except siloxans)
     * TISSUE_NAME  
     * Specimen_label (1, 2, 3, .....) - here, only used for siloxans  
 - Parameter  
     * PARAM
-    * METHOD_ID (added in script 210 in this case)
+    * METHOD_ID (added in script 808 in this case)
     * UNIT
 - Measurements  
     * Value   
     * Flag1  
 ```{r}
 
-dat_excel_1 <- readRDS("Data/210_dat_eiderduck_2020.rds") %>%
+dat_excel_1 <- readRDS("Data/808_dat_eiderduck_2020.rds") %>%
   mutate(TEXT_ID = sub("Nr. ", "NR-", Sample_no, fixed = TRUE)) %>%
   mutate(Specimen_label = as.numeric(Specimen_label))
 

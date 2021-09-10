@@ -8,9 +8,9 @@
 
 # Data saved (and used in script 812)
 # Main data (eider duck) saved in part 9:
-# - 210_dat_eiderduck_2020.rds
+# - 808_dat_eiderduck_2020.rds
 # Cod siloxans (part of data set 7) saved in 2f:
-# - 210_dat_cod-siloxans_2020.rds
+# - 808_dat_cod-siloxans_2020.rds
 
 # Based on 'Milkys' project script '31_Read_excel_data_2019.R'  
 #
@@ -26,7 +26,7 @@ library(ggplot2)
 # install.packages("cellranger")
 library("readxl")
 
-source('210_Read_NILU_excel_data_functions.R')
+source('808_Read_NILU_excel_data_functions.R')
 
 # Dropoed in this version
 # source('01_Get_chemical_data_NIVAbasen_functions.R")  # for sum parameters
@@ -263,9 +263,9 @@ df_data <- df_data_txt %>%
 xtabs(~addNA(Tissue), df_data)
 
 # Save for later use
-# saveRDS(df_data, "Data/210_Siloxans_2020.rds")
+# saveRDS(df_data, "Data/808_Siloxans_2020.rds")
 # Read
-# df_data <- readRDS("Data/210_Siloxans_2020.rds")
+# df_data <- readRDS("Data/808_Siloxans_2020.rds")
 
 #
 # Get Eider duck data
@@ -291,7 +291,7 @@ dat_cod <- df_data %>%
   select(-Kommentar) %>%
   rename(SPECIMEN_NO = Specimen_label)   # when we made script 814, we used 'SPECIMEN_NO', so we stick to that
 
-saveRDS(dat_cod, "Data/210_dat_cod-siloxans_2020.rds")
+saveRDS(dat_cod, "Data/808_dat_cod-siloxans_2020.rds")
 
 #
 # 3. Checks before combining the separate NILU files to a single file ----
@@ -376,13 +376,13 @@ if (FALSE){
   df_methods_nilu <- get_nivabase_selection("*", "METHOD_DEFINITIONS", 
                                             "LABORATORY", "NILU", values_are_text = TRUE)
   
-  saveRDS(df_methods_nilu, "Data/210_df_methods_nilu_2020.rds")
+  saveRDS(df_methods_nilu, "Data/808_df_methods_nilu_2020.rds")
 
 }
 
 #
 # 
-df_methods_nilu <- readRDS("Data/210_df_methods_nilu_2020.rds") %>%
+df_methods_nilu <- readRDS("Data/808_df_methods_nilu_2020.rds") %>%
   filter(is.na(MATRIX) | (MATRIX %in% c("Biota","BIOTA")))
 
 
@@ -505,8 +505,8 @@ xtabs(~is.na(METHOD_ID) + Group, dat_eiderduck)
 #
 # 9. Save ----
 #
-saveRDS(dat_eiderduck, "Data/210_dat_eiderduck_2020.rds")
+saveRDS(dat_eiderduck, "Data/808_dat_eiderduck_2020.rds")
 
-# dat_eiderduck <- readRDS("Data/210_dat_eiderduck_2020.rds")
+# dat_eiderduck <- readRDS("Data/808_dat_eiderduck_2020.rds")
 
 
