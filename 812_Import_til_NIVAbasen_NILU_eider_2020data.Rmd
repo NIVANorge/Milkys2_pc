@@ -1232,7 +1232,7 @@ df_chem %>%
 
 ## 80. Fix error in values 
 - PCB data were inserted with negative values, these are actually data <LOQ!  
-- Here we just modfy the values in place, using 
+- Here we just modfy the values in place, using UPDATE in SQL
 
 ### a. Get VALUE_ID start and stop  
 ```{r}
@@ -1298,13 +1298,15 @@ nrow(df_chem_error)
 
 ```
 ### c. Update syntax  
-- Copy-pasted into SQL developer
+- Copy-pasted into SQL developer   
+- See SQL_scripts/Milkys_2020_Eider_fix_values.sql  
+
 ```
 UPDATE NIVADATABASE.BIOTA_CHEMISTRY_VALUES
-SET FLAG1 = '<' WHERE VALUE_ID >= 2004793 and VALUE_ID <= 22006914 and VALUE < 0;
+SET FLAG1 = '<' WHERE VALUE_ID >= 2004793 and VALUE_ID <= 2006914 and VALUE < 0;
 
 UPDATE NIVADATABASE.BIOTA_CHEMISTRY_VALUES
-SET VALUE = (-VALUE) WHERE VALUE_ID >= 2004793 and VALUE_ID <= 22006914 and VALUE < 0;
+SET VALUE = (-VALUE) WHERE VALUE_ID >= 2004793 and VALUE_ID <= 2006914 and VALUE < 0;
 
 commit;
 
