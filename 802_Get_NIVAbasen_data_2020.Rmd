@@ -135,11 +135,13 @@ filename <- paste0("Files_to_Jupyterhub_2020/01_df_2020_notstandard_", timestamp
 
 # Set to TRUE/FALSE depending on whether file should be saved or not  
 if (FALSE){
+
   saveRDS(df_2020, file = filename)
   cat("2020 data saved as rds,", sQuote(filename), "\n")
   filename_txt <- sub("rds", "csv", filename)
   write.csv(df_2020, file = filename_txt, fileEncoding = "UTF-8")
   cat("2020 data saved as csv,", sQuote(filename_txt), "\n")
+
 }
 
 # Set to TRUE/FALSE depending on whether file should be read or not  
