@@ -1,0 +1,15 @@
+ALA-D values:
+='Normalized ALA-D values'!J16
+=+G3/I3/H3
+  - Col I: 120
+  - Col H: (Protein content mg/ml)
+           ='P1 protein'!O49-O63, ='P2 protein'!O49-O63, etc. 
+           Note that P1/P2/P3 in this column doesn't match P1/P2/P3 in column D!    
+  - Col G: (ng/ml PBG) = +F2*1000 which depends on F and again on D, se below:
+    - Col F: =+D2*22 
+    - Col D: ='P1 29.04'!G57-G62, ='P2 29.04'!G57-62, etc. .... ='P4 29.04'!G60, ='P1 30.04'!G57-G62, etc. .... to ='P4 30.04'!G60
+  
+CV of Col H (Protein content mg/ml) is mostly under 10%
+CV of Col G (ng/ml PBG) is also mostly under 10%
+
+Ie CV = 20% for ALA-D (the ratio) seems relatively conservative

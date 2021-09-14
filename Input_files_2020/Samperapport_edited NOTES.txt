@@ -1,0 +1,10 @@
+Fett:
+- Fixed top row (variable names)
+PBDE:
+- Aligned columns in top and bottom parts according to decription in 'read_excel_nilu1' in script '210_Read_NILU_excel_data_functions.R'  
+PCB:
+- Aligned columns in top and bottom parts according to decription in 'read_excel_nilu1' in script '210_Read_NILU_excel_data_functions.R'  
+- Added 'Customers sample ID' for two samples (yellow). Compare with PBDE sheet.
+Siloksaner:
+- Columns 'TISSUE_NAME' and 'Specimen_label' added manually
+
