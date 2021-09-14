@@ -11,10 +11,12 @@ Make tables for inserting into NIVAbase
   
 For imposex (and intersex) in snails (Nucella + Littorina)  
 
-SKIPPING INTERSEX (71G) until later (cannot find code in METHODS)
+For the first time, Intersex was added (including adding it in METHODS)   
 
 
-## 0. Libraries and functions
+## 0. Setup
+
+### a. Libraries and functions
 ```{r}
 
 library(dplyr)
@@ -24,9 +26,11 @@ library(stringr)
 # library(ggplot2)
 library(niRvana)
 
+# If needed
+# remotes::install_github("https://github.com/moodymudskipper/safejoin")
 library(safejoin) # https://github.com/moodymudskipper/safejoin
 
-source("71_Import_til_NIVAbasen_functions.R")
+source("810_Import_til_NIVAbasen_functions.R")
 
 # "Restart" for lazy people that don't want to write the 
 #    database password again (deletes all objects except database password/username)
@@ -39,47 +43,141 @@ if (FALSE){
 
 ```
 
+### b. Creds for connectng to Nivabasen    
+Store your username and password to R (only once per R session)  
+```{r}
+
+set_credentials()
+
+# Check these codes (press F2) for reminder about what comes from which tables:
+# niRvana::get_biota_chemistry
+# niRvana::get_samples_from_sampleid
+
+```
+
+
 
 ## 1. Read data
 
 ### a. Year
 ```{r}
 
-selected_year <- 2019
+selected_year <- 2020
 
 ```
 
 
-### b. Data to insert in NIVAbase
+### b. Data to insert in NIVAbase   
 1. Eider duck data are from specimens/samples NOT in the NIVAbase  
 2. NILU cod data are from specimens that ARE in the NIVAbase, 
 but new samples (liver) are numbered corresponding to the muscle samples
 3. Biological effects in cod - existing specimens, new samples
 4. VDSI (imposex) in snails - existing 'individuals' (pooled samples) and samples
+  
+```{r, message=FALSE}
 
-```{r}
+folder_vdsi <- "K:/Prosjekter/Sjøvann/JAMP/2020/opparbeiding/Snegl"
 
-# Create medians from raw data  
-dat <- readRDS(file = "Input_data_2019/101_data_updated_2020-08-05.rds") %>%
-  filter(MYEAR == selected_year & PARAM %in% "VDSI" & !is.na(VALUE_WW)) %>%
-  group_by(MYEAR, STATION_CODE, LATIN_NAME, TISSUE_NAME, PARAM) %>%
-  summarise(VALUE = median(VALUE_WW)) %>%
-  mutate(STATION_CODE = case_when(
-    STATION_CODE == "227G" ~ "227G2",
-    TRUE ~ STATION_CODE)
-    )
+#
+# 1. Imposex in Littorina
+#
 
-dat %>%
-  select(MYEAR, STATION_CODE, LATIN_NAME, PARAM, VALUE)
-      
+fn <- dir(folder_vdsi, pattern = ".xlsx")
+fn <- fn[!grepl("AAMAL", fn)]
+fn <- fn[!grepl("LITTORINA", fn)]
+fn <- fn[!grepl("~", fn, fixed = TRUE)]
+
+# Names = Extract all characters to the left of the first underscore  
+names(fn) <- stringr::str_extract(fn, "[^_]+")
+names(fn)[names(fn) == "131"] <- "131G"
+# fn
+
+
+read_excel_snail <- function(fn){
+  df <- readxl::read_excel(paste0(folder_vdsi, "/", fn), skip = 6)
+  df <- df[1:6]
+  df <- df[!is.na(df$`Analysert av`),]
+  df
+  }
+
+dat_vdsi_list <- fn %>% map(read_excel_snail)
+
+# 15G has 51 rows:
+# dat_vdsi_list %>% map_int(nrow)
+
+# Check 15G
+# dat_vdsi_list[["15G"]] %>% View()
+# dat_vdsi_list[["36G"]] %>% View()
+dat_vdsi_list[["15G"]] <- dat_vdsi_list[["15G"]][1:50,]  # delete last line
+
+# Pick only number, sex and Imposex 
+# ...we will deal with length and penis length later  
+dat_vdsi <- dat_vdsi_list %>% 
+  map(~.[c(1,3,5)]) %>%
+  bind_rows(.id = "STATION_CODE") %>%
+  rename(VALUE_WW = VDSI, 
+         Sex = Kjønn) %>%
+  mutate(PARAM = "VDSI",
+         UNIT = "idx",
+         LATIN_NAME = "Nucella lapillus")
+
+# dat_vdsi
+
+cat("\n------------------------------------------\n")
+cat("Imposex data: \n------------------------------------------\n")
+xtabs(~is.na(VALUE_WW) + addNA(Sex), dat_vdsi)
+
+
+#
+# 2. Intersex
+#
+fn <- "71G_fugløy_intersex_LITTORINA_2020.xlsx"
+df <- readxl::read_excel(paste0(folder_vdsi, "/", fn), range = "A3:G53")
+
+dat_intersex <- df %>%
+  filter(F == 1) %>%
+  mutate(STATION_CODE = "71G", 
+         Sex = "f",
+         PARAM = "Intersex",
+         UNIT = "PERCENT",
+         LATIN_NAME = "Littorina littorea") %>%
+  mutate(VALUE_WW = `ISI   (intersex-stadie)`*100) %>%
+  select(STATION_CODE, Sex, VALUE_WW, PARAM, LATIN_NAME)
+
+#
+# 3. Combine and summarize   
+#
+
+dat <- bind_rows(dat_vdsi, dat_intersex) %>%
+  filter(Sex == "f") %>%
+  group_by(STATION_CODE, PARAM, LATIN_NAME) %>%
+  summarise(VALUE = mean(VALUE_WW), .groups = "drop")
+
+dat$MYEAR <- selected_year
+dat$TISSUE_NAME <- "Whole soft body"
+
+cat("\n------------------------------------------\n")
+cat("Combined data: \n------------------------------------------\n")
+xtabs(~PARAM, dat )
+
+# For 2019 data:
+# dat_2019 <- readRDS(file = "../Milkys/Input_data_2019/101_data_updated_2020-08-05.rds") %>%
+#   filter(MYEAR == selected_year & PARAM %in% "VDSI" & !is.na(VALUE_WW)) %>%
+#   group_by(MYEAR, STATION_CODE, LATIN_NAME, TISSUE_NAME, PARAM) %>%
+#   summarise(VALUE = median(VALUE_WW)) %>%
+#   mutate(STATION_CODE = case_when(
+#     STATION_CODE == "227G" ~ "227G2",
+#     TRUE ~ STATION_CODE)
+#     )
+
+
 ```
 
-
-### c. Get samples in Labware file     
+### c1. Get samples in Labware file     
 ```{r}
 
 #
-# 2019 data  
+# For data the same year    
 #
 
 # March-December data
@@ -88,7 +186,7 @@ sql <- paste(
   "where extract(YEAR from SAMPLED_DATE) =", selected_year, 
   "and extract(MONTH from SAMPLED_DATE) >= 3", 
   "and UPPER(PROSJEKT) like '%MILKYS%';")
-sql
+# sql
 df_labware_01 <- get_nivabase_data(sql)
 
 # January-February next year data
@@ -104,9 +202,42 @@ df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
 
 ```
 
+### c2. Check that we have all stations  
+
+```{r}
+
+a <- dat$STATION_CODE
+b <- df_samples$AQUAMONITOR_CODE
+check <- a[!a %in% b]
+
+if (length(check) == 0){
+  message("'df_samples' contains all stations we need")
+} else {
+  stop("'df_samples' does NOT contain all stations we need!")
+}
+
+```
+
+
 ### d. Add dates to data    
 ```{r}
 
+check <- df_samples %>%
+  add_count(AQUAMONITOR_CODE) %>%
+  filter(n > 1)
+
+if (nrow(check) > 0){
+  stop("'df_samples' have > 1 lines per station. Check 'check'")
+}
+
+# In this case, two records of 71G, both with same date
+# Delete the "extra" one
+nrow(df_samples)
+df_samples <- df_samples %>%
+  filter(!grepl("Snegl - Ekstra", DESCRIPTION))
+nrow(df_samples)
+
+# Merge
 dat <- dat %>%
   safe_left_join(df_samples, 
                  na_matches = "never",
@@ -119,16 +250,6 @@ dat <- dat %>%
 
 ## 2.Connection to NIVAbasen  
 
-### Store your username and password to R (only once per R session):
-```{r}
-
-set_credentials()
-
-# Check these codes (press F2) for reminder about what comes from which tables:
-# niRvana::get_biota_chemistry
-# niRvana::get_samples_from_sampleid
-
-```
 ### Get some generic lookup tables  
 ```{r}
 
@@ -159,9 +280,12 @@ df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
 
 
 ## 3. Check parameter   
+
+### Check in METHOD_DEFINITIONS  
 Mostly used: VDSI (METHOD_ID = 15631)  
 - exception: 2015 used VDSI with METHOD_ID = 28589  
 - has been submitted on an individual basis up to 2009, then as average values in 2015 and 2018    
+- Intersex does not exist
 ```{r}
 
 pars <- c("Imposex", "VDSI", "Intersex")
@@ -201,169 +325,59 @@ df_methods
 pars <- df_methods$NAME
 
 ```
+### b. Add Intersex method  
+```{r}
+
+# check1 <- get_nivabase_selection("NAME, LABORATORY, DESCR", "METHOD_DEFINITIONS", "UNIT", '%', values_are_text = TRUE)
+# # 167
+# check2 <- get_nivabase_selection("NAME, LABORATORY, DESCR", "METHOD_DEFINITIONS", "UNIT", 'PERCENT', values_are_text = TRUE)
+# 32, Nivabasen chemistry  
+
+  # name <- df[i, 'NAME']
+  # unit <- df[i, 'UNIT']
+  # lab <- df[i, 'LABORATORY']
+  # method_ref <- df[i, 'METHOD_REF']
+  # matrix <- df[i, 'MATRIX']
+  # cas <- df[i, 'CAS']
+
+df_intersex <- data.frame(
+  NAME = "Intersex",
+  UNIT = "PERCENT",
+  LABORATORY = "NIVA",
+  METHOD_REF = NA,
+  MATRIX = "Biota",
+  CAS = NA,
+  MATRIX_ID = 1
+)
+
+make_sql_methods(1, df_intersex) %>% writeLines("clipboard")
+
+# see Milkys_Methods_add_intersex.sql  
+
+```
+
+### Add Intersex to df_methods   
+```{r}
+
+# Get the added Intersex method  
+df_methods_to_add <- get_nivabase_data(
+  "select * from NIVADATABASE.METHOD_DEFINITIONS where TRUNC(ENTERED_DATE) = TO_DATE('2021-09-10', 'yyyy-mm-dd') and ENTERED_BY = 'DHJ';")
+
+
+
+if (!"Intersex" %in% df_methods$NAME){
+  # Pick methods
+  df_methods <- bind_rows(df_methods, df_methods_to_add)
+}
+
+
+
+```
+
 
 ## 4. Check existing data, former years  
 THIS WHOLE THING CAN BE SKIPPED (I think)
 Starting from VDSI, via samples  
-```{r}
-# df2 <- get_nivabase_selection("*", "BIOTA_SAMPLES", "SAMPLE_ID", df1$SAMPLE_ID)
-
-df3 <- get_nivabase_selection("SAMPLE_ID, SPECIMEN_ID",
-                              "BIOTA_SAMPLES_SPECIMENS",
-                              "SAMPLE_ID",
-                              unique(df2$SAMPLE_ID))
-
-df4 <- get_nivabase_selection("STATION_ID, SPECIMEN_ID, SPECIMEN_NO, DATE_CAUGHT, TAXONOMY_CODE_ID",
-                              "BIOTA_SINGLE_SPECIMENS",
-                              "SPECIMEN_ID",
-                              unique(df3$SPECIMEN_ID))
-
-nrow(df1)
-nrow(df2)
-nrow(df3)
-nrow(df4)
-
-# Checl 11G 
-df4 %>%
-  filter(STATION_ID == 47219) %>%  # 47219 = 11G
-  arrange(SPECIMEN_NO)
-# 2010  - a bunch
-# 2015 - only 1
-```
-
-
-### Joining tables, starting from sample  
-```{r}
-
-df5 <- df1 %>%
-  select(SAMPLE_ID, METHOD_ID, VALUE, FLAG1, DETECTION_LIMIT, QUANTIFICATION_LIMIT) %>%
-  safe_left_join(df2, na_matches = "never", check = "v")
-
-df3 %>%
-  count(SAMPLE_ID, SPECIMEN_ID) %>%
-  filter(n > 1)  # zero
-
-# Most (491) samples have one specimen, but 8 samples have 20-30 specimens
-df3 %>%
-  count(SAMPLE_ID) %>%
-  count(n)
-
-# Pick one of those 8 samples
-spec_check <- df3 %>%
-  filter(SAMPLE_ID == 57374) %>% # View("df3")
-  pull(SPECIMEN_ID)
-
-# Checking specimens + stations - no station codes found
-df4 %>%
-  filter(SPECIMEN_ID %in% spec_check) %>%
-  safe_left_join(
-    get_nivabase_selection(
-      "STATION_ID, STATION_CODE, STATION_NAME", "PROJECTS_STATIONS",
-      "STATION_ID", .$SPECIMEN_ID), 
-    na_matches = "never"
-    ) # %>%  View("df4")
-
-
-```
-
-
-
-
-
-### Stations found  
-```{r}
-tab <- table(df4$STATION_ID)
-length(tab)
-tab[tab > 1]
-
-# QUery PROJECTS_STATIONS for stations
-vdsi_stations_all <- get_nivabase_selection(
-  "STATION_ID, STATION_CODE, STATION_NAME", "PROJECTS_STATIONS",
-  "STATION_ID", names(tab))
-# Includes a bunch of Scottish stations
-
-```
-
-
-### Add year, stations + species    
-```{r}
-vdsi_stations <- vdsi_stations_all %>%
-  filter(STATION_CODE %in% unique(dat$STATION_CODE)) %>%
-  group_by(STATION_ID, STATION_CODE) %>%
-  summarise(STATION_NAME = first(STATION_NAME))   # several 
-
-df4 <- df4 %>%
-  mutate(Year = year(DATE_CAUGHT)) %>%
-  safe_left_join(vdsi_stations , check = "V")
-
-# Add species
-df_species_tax <- df4$TAXONOMY_CODE_ID %>%
-  unique() %>%
-  map_df(taxid_to_latin)
-
-df4 <- df4 %>%
-  safe_left_join(df_species_tax, check = "V")
-
-# Check 11G 
-df4 %>%
-  filter(STATION_ID == 47219) %>%  # 47219 = 11G
-  arrange(SPECIMEN_NO)
-
-```
-
-### Present MILKYS stations 
-```{r}
-
-vdsi_stations %>%
-  arrange(STATION_ID)
-
-```
-
-### Tabulate year x stations
-```{r}
-df4 %>%
-  filter(STATION_CODE %in% unique(dat$STATION_CODE)) %>%  # only MILKYS
-  xtabs(~Year + STATION_CODE, .)
-
-```
-
-### Tabulate species x stations
-```{r}
-df4 %>%
-  filter(STATION_CODE %in% unique(dat$STATION_CODE)) %>%
-  xtabs(~LATIN_NAME + STATION_CODE, .)
-
-```
-
-### Example 2010      
-47219 = 11G in 2010  
-Many specimens per sample
-```{r}
-df4_sel <- df4 %>%
-  filter(Year %in% 2010 & STATION_CODE %in% "11G") %>% 
-  arrange(SPECIMEN_NO)
-df4_sel
-
-df3_sel <- df3 %>%
-  filter(SPECIMEN_ID %in% df4_sel$SPECIMEN_ID)
-df3_sel %>%
-  xtabs(~SAMPLE_ID, .)
-
-df2_sel <- df2 %>%
-  filter(SAMPLE_ID %in% unique(df3_sel$SAMPLE_ID))
-df2_sel  
-
-df1_sel <- get_nivabase_selection("SAMPLE_ID, METHOD_ID, VALUE, FLAG1",
-                                  "BIOTA_CHEMISTRY_VALUES",
-                                  "SAMPLE_ID", df2_sel$SAMPLE_ID)
-df1_sel
-
-df0_sel <- get_nivabase_selection("METHOD_ID, NAME, UNIT",
-                                  "METHOD_DEFINITIONS",
-                                  "METHOD_ID", df1_sel$METHOD_ID)
-df0_sel
-```
-
 
 ## 6. Check TBT data for the selected year    
 
@@ -382,7 +396,8 @@ df_snailchem <- get_biota_chemistry(
 
 cat("\nDownloaded", nrow(df_snailchem), "records\n")
 
-xtabs(~NAME + STATION_CODE, df_snailchem)
+# Show top of table  
+xtabs(~NAME + STATION_CODE, df_snailchem)[1:8,]
 
 ```
 
@@ -407,9 +422,14 @@ xtabs(~PARAM, dat)
 dat_summ <- dat %>%
   filter(PARAM %in% c("VDSI", "Intersex")) %>%
   mutate(
-    METHOD_ID = df_methods$METHOD_ID[1],
     FLAG1 = as.character(NA)
+  ) %>%
+  left_join(
+    df_methods %>% select(NAME, METHOD_ID),
+    by = c("PARAM" = "NAME")
   )
+
+xtabs(~addNA(METHOD_ID), dat_summ)
 
 ```
 
@@ -419,23 +439,44 @@ Which is all we need (see code for 'make_sql_chemistry_values' in '71...function
 
 cn1 <- dat_summ %>% colnames()
 
+n1 <- nrow(dat_summ)
+
 # Add SAMPLE_ID to chemistry_values data
 if (!("SAMPLE_ID" %in% cn1)){    # checks that SAMPLE_ID has not already been added
   dat_summ <- dat_summ %>%
-    safe_left_join(station_sampleid,
-                   by = "STATION_CODE",
-                   na_matches = "never",
-                   check = "MV")
+    left_join(station_sampleid,
+              by = "STATION_CODE",
+              na_matches = "never")
+}
+
+n2 <- nrow(dat_summ)
+
+if (n2 > n1){
+  stop("Right-hand table not unique!")
+} else {
+  message("Left join ok, using unique values")
+}
+
+if (sum(is.na(dat_summ$SAMPLE_ID)) > 0){
+  stop("Some SAMPLE_ID lacking!")
+} else {
+  message("No SAMPLE_ID lacking")
 }
 
 
+  # dat_summ <- dat_summ %>%
+  #   safe_left_join(station_sampleid,
+  #                  by = "STATION_CODE",
+  #                  na_matches = "never",
+  #                  check = "MV")
+  # 
 ```
-
 
 ### c. Make SQLs  
 PASTE INTO SQL DEVELOPER TO ADD THE RECORDS   
 Note to DHJ: use "SQL developer (latest version)" from desktop. Don't use the start menu.  
-- remember `commit;` after running the insert sentences  
+- remember `commit;` after running the insert sentences   
+- See 'Milkys_2020_Intersex_Biota_chemistry_values.sql' in folder 'SQL_scripts'
 ```{r}
 # make_sql_chemistry_values(1, data = dat_summ)
 
@@ -477,9 +518,11 @@ xtabs(~NAME + STATION_CODE, df_snailchem)
 Very boring plot
 ```{r, fig.width=5, fig.height=2}
 
+library(ggplot2)
+
 df_snailchem %>%
-  filter(NAME == "VDSI") %>%
-  ggplot(aes(STATION_CODE, VALUE)) + 
+  filter(NAME %in% c("VDSI", "Intersex")) %>%
+  ggplot(aes(STATION_CODE, VALUE, color = NAME)) + 
   geom_point()
 
 ```
