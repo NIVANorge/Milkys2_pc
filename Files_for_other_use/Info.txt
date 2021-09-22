@@ -1,0 +1,8 @@
+Files created by script 862:
+- Milkys_individual_data_selection.csv
+- Milkys_median_data_selection.csv
+
+Read using 'row.names = 1' (row
+  test1 <- read.csv("Files_for_other_use/Milkys_individual_data_selection.csv")
+  test2 <- read.csv("Files_for_other_use/Milkys_median_data_selection.csv")
+

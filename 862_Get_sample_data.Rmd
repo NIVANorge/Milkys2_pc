@@ -1,0 +1,157 @@
+---
+title: "862_Get_sample_data"
+author: "DHJ"
+date: "21 9 2021"
+output: html_document
+---
+
+## 1. Libraries
+```{r}
+
+library(dplyr)
+library(ggplot2)
+
+```
+## 2. Data  
+```{r}
+
+dat <- readRDS("Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
+
+# For coordinates   
+dat_stations <- readxl::read_excel("Files_to_Jupyterhub_2019/Kartbase_edit.xlsx")
+
+# dat_bigexcel <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver02.rds")
+
+```
+
+
+## 3. Select subsets   
+
+### Individual level  
+```{r}
+
+nrow(dat)
+
+# Select time series with data in 2020   
+dat_sel1 <- dat %>%
+  group_by(STATION_CODE, TISSUE_NAME, PARAM) %>%
+  mutate(Last_year = max(MYEAR)) %>%
+  filter(Last_year >= 2020) %>%
+  ungroup()
+
+nrow(dat_sel1)
+
+# xtabs(~PARAM, dat_sel1)  
+
+if (FALSE){
+  
+  # use to selact parameters
+  param_pah <- c("ACNLE", "ACNE", "FLE", "PA", "ANT", "FLU", "PYR", "BAA", "CHR", 
+                 "BBJF", "BKF", "BAP", "DBA3A", "BGHIP", "ICDP", "BBJKF")
+  dat_sel1 %>%
+    # filter(substr(PARAM,1,2) == "BD" & MYEAR >= 2010) %>%
+    # filter(substr(PARAM,1,2) == "CB" & MYEAR >= 2010) %>%
+    # filter(PARAM %in% param_pah & MYEAR >= 2010) %>%
+    filter(nchar(PARAM) == 2 & MYEAR >= 2010) %>%
+    group_by(PARAM) %>%
+    summarise(Median = median(VALUE_WW)) %>%
+    arrange(desc(Median))
+  
+}
+
+# Select some parameters
+param_sel2 <- c(
+  "BDE28", "BDE47", "BDE49", "BDE100", "BDE154", 
+  "PA", "FLU", "PYR", "BAA", "CHR", "BBJF", "BAP",
+  "CB28", "CB52", "CB101", "CB118","CB138", "CB153", "CB180",   
+  "ZN", "CU", "CR", "NI", "CD", "HG")
+
+# Select parameters (as above) + stations with >= 10 years  
+dat_sel2 <- dat_sel1 %>%
+  filter(PARAM %in% param_sel2) %>%
+  group_by(STATION_CODE) %>%
+  mutate(n_year = length(unique(MYEAR))) %>%
+  filter(n_year >= 10) %>%
+  select(STATION_CODE, LATIN_NAME, TISSUE_NAME, SAMPLE_NO2, PARAM, MYEAR, VALUE_WW, FLAG1, LNMEA) %>%
+  rename(
+    Station_code = STATION_CODE,
+    Species = LATIN_NAME,
+    Tissue = TISSUE_NAME,
+    Substance = PARAM,
+         Year = MYEAR,
+         Sample_no = SAMPLE_NO2,
+         Conc = VALUE_WW, 
+         Body_length = LNMEA) %>%
+  mutate(
+    Limit_of_quantification = ifelse(is.na(FLAG1), "Over LOQ", "Under LOQ")
+  ) %>%
+  left_join(dat_stations, by = c("Station_code" = "STATION_CODE")) %>%
+  mutate(
+    Lat = round(Lat, 4),
+    Lat = round(Long, 4)) %>%
+  filter(!is.na(Station_name)) %>%
+  ungroup() %>%
+  select(Station_code, Station_name, Lat, Long, Species, Tissue, Sample_no, 
+         Substance, Year, Conc, Limit_of_quantification, Body_length)
+
+nrow(dat_sel2)
+# table(dat_sel2$STATION_CODE)
+
+
+```
+
+### Medians per year  
+```{r}
+
+dat_median <- dat_sel2 %>%
+  group_by(Station_code, Station_name, Lat, Long, Species, Tissue, Substance, Year) %>%
+  summarise(
+    Conc = median(Conc),
+    Limit_of_quantification = ifelse(mean(Limit_of_quantification == "Over LOQ") > 0.5, 
+                                     "Over LOQ", "Under LOQ"),
+    Body_length = median(Body_length),
+    .groups = "drop"
+    )
+  
+nrow(dat_median)
+
+```
+
+## 4. Test plots    
+
+### Individual data - mercury concentration vs. body length   
+```{r}
+
+ggplot(dat_sel2 %>% filter(Substance == "HG" & Species == "Gadus morhua" & Station_code == "30B"), 
+       aes(Body_length, Conc, color = Limit_of_quantification)) +
+  geom_point() +
+  facet_wrap(vars(Year)) +
+  labs(title = "Mercury concentration vs. body length")
+
+```
+### Median concentrations (per station/year)  
+```{r}
+
+param <- "CB118"
+ggplot(dat_median %>% filter(Substance == param & Species == "Mytilus edulis"), 
+       aes(Year, Conc, color = Limit_of_quantification)) +
+  geom_point() +
+  facet_wrap(vars(Station_code)) +
+  labs(title = paste(param, "in blue mussel"))
+
+
+```
+
+## 5. Save as text files  
+```{r}
+
+write.csv(dat_sel2, "Files_for_other_use/Milkys_individual_data_selection.csv", row.names = FALSE)
+write.csv(dat_median, "Files_for_other_use/Milkys_median_data_selection.csv", row.names = FALSE)
+
+if (FALSE){
+  test1 <- read.csv("Files_for_other_use/Milkys_individual_data_selection.csv")
+  test2 <- read.csv("Files_for_other_use/Milkys_median_data_selection.csv")
+}
+
+```
+
