@@ -5,6 +5,8 @@ date: "21 9 2021"
 output: html_document
 ---
 
+Make a couple of csv files for the R Markdown / Git course
+
 ## 1. Libraries
 ```{r}
 
@@ -145,12 +147,14 @@ ggplot(dat_median %>% filter(Substance == param & Species == "Mytilus edulis"),
 ## 5. Save as text files  
 ```{r}
 
-write.csv(dat_sel2, "Files_for_other_use/Milkys_individual_data_selection.csv", row.names = FALSE)
-write.csv(dat_median, "Files_for_other_use/Milkys_median_data_selection.csv", row.names = FALSE)
+write.csv(dat_sel2, "Files_for_other_use/Milkys_individual_data_selection.csv", 
+          row.names = FALSE, fileEncoding = "UTF-8")
+write.csv(dat_median, "Files_for_other_use/Milkys_median_data_selection.csv", 
+          row.names = FALSE, fileEncoding = "UTF-8")
 
 if (FALSE){
-  test1 <- read.csv("Files_for_other_use/Milkys_individual_data_selection.csv")
-  test2 <- read.csv("Files_for_other_use/Milkys_median_data_selection.csv")
+  dat_sel2 <- read.csv("Files_for_other_use/Milkys_individual_data_selection.csv", encoding = "UTF-8")
+  dat_median <- read.csv("Files_for_other_use/Milkys_median_data_selection.csv", encoding = "UTF-8")
 }
 
 ```
