@@ -1,0 +1,91 @@
+---
+title: "862_Get_sample_data"
+author: "DHJ"
+date: "21 9 2021"
+output: html_document
+---
+
+Extract isotope data for Anders Ruus
+
+## 1. Libraries etc
+
+### Libraries
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(writexl)
+
+```
+
+### Year  
+```{r}
+
+selected_year <- 2020
+
+```
+
+## 2. Data  
+```{r}
+
+dat <- readRDS("Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
+
+# For coordinates   
+dat_stations <- readxl::read_excel("Files_to_Jupyterhub_2019/Kartbase_edit.xlsx")
+
+# dat_bigexcel <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver02.rds")
+
+```
+
+## 3. Table of all 
+```{r}
+
+selected_param <- c("Delta13C", "Delta15N", "PYR1OH", "PA1OH", "BAP3OH")
+selected_param <- c("Delta13C", "Delta15N", "1-OH-pyren", "1-OH-fenantren", "3-OH-benzo[a]pyren")
+selected_param <- c("Delta13C", "Delta15N")
+
+#
+# Including tissue name (also includes eider duck)
+#
+# dat_all_biol <- dat %>%
+#   filter(MYEAR == selected_year & PARAM %in% selected_param) %>%
+#   select(STATION_CODE, MYEAR, LATIN_NAME, TISSUE_NAME, LNMEA, PARAM, SAMPLE_NO2, VALUE_WW) %>%
+#   tidyr::pivot_wider(names_from = PARAM, values_from = VALUE_WW) %>%
+#   arrange(LATIN_NAME, TISSUE_NAME, STATION_CODE, SAMPLE_NO2)
+
+#
+# Cod only - not including tissue name
+#
+dat_isotopes <- dat %>%
+  filter(MYEAR == selected_year & PARAM %in% selected_param) %>%
+  select(STATION_CODE, MYEAR, LATIN_NAME, TISSUE_NAME, LNMEA, PARAM, SAMPLE_NO2, VALUE_WW) %>%
+  tidyr::pivot_wider(names_from = PARAM, values_from = VALUE_WW) %>%
+  arrange(LATIN_NAME, STATION_CODE, TISSUE_NAME, SAMPLE_NO2)
+
+
+```
+
+## 4. Plot  
+```{r}
+
+ggplot(dat_isotopes, aes(Delta13C, Delta15N, color = STATION_CODE)) +
+  geom_point() 
+
+ggplot(dat_isotopes, aes(Delta13C, Delta15N, color = LATIN_NAME)) +
+  geom_point() 
+
+```
+
+
+## 5. Save as text files  
+```{r}
+
+writexl::write_xlsx(
+  list(
+    data = dat_isotopes, 
+    info = data.frame(Info = "Extracted using '864_Isotope_data.Rmd'")),
+  "Files_for_other_use/Milkys_isotopes.xlsx")
+
+```
+
