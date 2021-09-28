@@ -1,0 +1,72 @@
+---
+title: "862_Get_sample_data"
+author: "DHJ"
+date: "21 9 2021"
+output: html_document
+---
+
+Make station list for Jan Karud - for majing the maps at the end of the NIVA report 
+
+## 1. Libraries
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(writexls)
+
+```
+## 2. Data  
+```{r}
+
+dat <- readRDS("Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
+
+# For coordinates   
+dat_stations <- readxl::read_excel("Files_to_Jupyterhub_2019/Kartbase_edit.xlsx")
+
+# dat_bigexcel <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver02.rds")
+
+```
+
+## 3. Table of all 
+```{r}
+
+tab <- dat %>%
+  left_join(dat_stations) %>%
+  filter(MYEAR >= 2019) %>%
+  xtabs(~STATION_CODE + MYEAR, .)
+
+# tab
+
+difference <- xor(tab[,1]>0, tab[,2]>0)
+tab[difference,]
+
+# help("&")
+
+```
+
+```{r}
+
+df_obs_per_stations_since_2016 <- dat %>%
+  filter(MYEAR >= 2016) %>%
+  count(STATION_CODE, MYEAR) %>%
+  left_join(dat_stations) %>%
+  tidyr::pivot_wider(names_from = MYEAR, values_from = n) %>%
+  arrange(Lat)
+
+df_obs_per_stations_since_2016
+
+```
+
+## 5. Save as excel file  
+```{r}
+
+writexl::write_xlsx(
+  list(
+    data = df_obs_per_stations_since_2016, 
+    info = data.frame(Info = "Extracted using '863_Station_list_for_maps.Rmd'")),
+  "Files_for_other_use/Milkys_stasjoner_for_kart.xlsx")
+
+
+```
+
