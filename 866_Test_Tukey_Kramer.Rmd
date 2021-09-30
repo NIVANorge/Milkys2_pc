@@ -1,0 +1,115 @@
+---
+title: "866_Test_Tukey_Kramer"
+author: "DHJ"
+date: "30 9 2021"
+output: html_document
+---
+
+
+## 1. Libraries etc
+
+### Libraries
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+
+# library(ggpubr)       # doesn't have multiple comparison tests
+# library(ggstatsplot)  # doesn't have Tukey multiple comparison test
+
+# install.packages("agricolae")
+library(agricolae)
+
+```
+
+### Year  
+```{r}
+
+selected_year <- 2020
+
+```
+
+## 2. Data  
+```{r}
+
+dat <- readRDS("Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
+
+# For coordinates   
+dat_stations <- readxl::read_excel("Files_to_Jupyterhub_2019/Kartbase_edit.xlsx")
+
+# dat_bigexcel <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver02.rds")
+
+```
+
+```{r}
+
+
+# param_meta$Substance.Group %>% unique() %>% dput()
+
+group_seq <- c("Metals and metalloids", "Chlorobiphenyls", 
+  "Polycyclic aromatic hydrocarbons (PAHs)", 
+  "Organobromines", 
+  "Dichloro-diphenyl-trichloroethane (DDTs)", "Organochlorines (general)",
+  "Chlorinated paraffins", "Organofluorines", "Phenols/chlorophenols", 
+  "Organo-metallic compounds", 
+  "Chlorinated flame retardants",
+  "Biological effects: molecular/biochemical/cellular/assays", 
+  "Organic esters", "Isotopes",  
+  "Cyclodienes", "Dioxins", "Biomarkers", "Phthalates", 
+  "Phosphorus flame retardant (PFR)", "Major inorganic constituents", 
+  "Support parameters", "Hexachlorocyclohexanes", "Triazines", 
+  "Siloxanes", 
+  ""
+)
+
+param_meta <- read.csv2("Files_to_Jupyterhub_2019/Lookup for big excel - param.csv") %>%
+  select(Parameter.Code, Substance.Group) %>%
+  mutate(Substance.Group = factor(Substance.Group, levels = group_seq))
+
+parameters <- dat2 %>%
+    filter(MYEAR == 2020) %>%
+    distinct(PARAM) %>%
+    left_join(param_meta, by = c("PARAM" = "Parameter.Code")) %>%
+    arrange(Substance.Group, PARAM) %>%
+    pull(PARAM)
+
+
+```
+
+```{r}
+dat2 <- dat %>%
+    filter(MYEAR == 2020) %>%
+    left_join(dat_stations) %>%
+    mutate(
+        log_Conc = log10(VALUE_WW + 0.1),
+        Station = paste(STATION_CODE, substr(STATION_NAME, 1, 15))
+    )
+
+with(dat2, unique(paste0(LATIN_NAME, ", ", TISSUE_NAME)))
+
+```
+
+
+```{r}
+
+dat_select <- dat2 %>%
+  filter(PARAM %in% "HG" & TISSUE_NAME %in% "Muskel")
+
+ggplot(dat_select, aes(Station, log_Conc)) +
+  geom_jitter(color = "red", width = 0.1, height = 0) +
+  # geom_violin() +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+model <- aov(log_Conc ~ Station, data = dat_select)
+outHSD <-  HSD.test(model, "Station", alpha = )
+# plot(outHSD)
+# plot(outHSD, horiz=TRUE, variation="SD", las=1)
+par(mfrow=c(1,1), mar=c(3,10,2,3))
+plot(outHSD, horiz=TRUE, las = 1, cex.names = 0.8)
+
+#?plot.group
+# ?barplot
+
+```
+
