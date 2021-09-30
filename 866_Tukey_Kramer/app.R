@@ -23,7 +23,8 @@ dat2 <- dat %>%
     mutate(
         Matrix = paste0(LATIN_NAME, ", ", TISSUE_NAME),
         log_Conc = log10(VALUE_WW + 0.1),
-        Station = paste(STATION_CODE, substr(STATION_NAME, 1, 15))
+        Station = paste(STATION_CODE, substr(STATION_NAME, 1, 15)),
+        LOQ = ifelse(is.na(FLAG1), "Over LOQ", "Under LOQ")
     ) %>%
     filter(!is.na(log_Conc))
 
@@ -105,8 +106,9 @@ server <- function(input, output) {
     })
 
     output$ggplot <- renderPlot({
-        ggplot(dat_select(), aes(Station, VALUE_WW)) +
-            geom_jitter(color = "red3", width = 0.1, height = 0) +
+        ggplot(dat_select(), aes(Station, VALUE_WW, color = LOQ)) +
+            geom_jitter(width = 0.1, height = 0, size = rel(1.6)) +
+            scale_color_manual(values = c("Under LOQ" = "red2", "Over LOQ" = "black")) +
             scale_y_log10() +
             theme(axis.text.x = element_text(angle = -45, hjust = 0, size = rel(1.5)))
     })
