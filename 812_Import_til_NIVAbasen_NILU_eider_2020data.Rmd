@@ -11,8 +11,17 @@ Make tables for inserting into NIVAbase
   
 For eider duck data from NILU  
 - Note: source of files the same as for cod siloxans (script 808)  
+- Samples mostly exist in Nivabasen, but two samples MUST BE ADDED   
 
-NOTE: samples mostly exist in Nivabasen, but two samples MUST BE ADDED   
+For coupling excel data of Labware data, we
+
+- Create the sample table 'df_lookup_samples'  
+- Coupling to excel data:
+    - using TEXT_ID for all except siloxans (part a)  
+    - Using TISSUE_NAME + SPECIMEN_NO for siloxans (part b)  
+
+- In addition to lacking : Two samples (blod 10 + 11) have siloxan data but lack in Labware    
+   - These two samples MUST BE ADDED    
 
 
 ## 0. Libraries and functions
@@ -659,7 +668,7 @@ cat("\nShould be the same as number of SQLs above! \n")
 
 get_nivabase_data("select count(*) from NIVADATABASE.BIOTA_SAMPLES")  #  60112
 
-# DELETE from NIVADATABASE.BIOTA_SAMPLES where TRUNC(ENTERED_DATE) = TO_DATE('2021-08-18', 'yyyy-mm-dd') and ENTERED_BY = 'DHJ';
+# DELETE from NIVADATABASE.BIOTA_SAMPLES where TRUNC(ENTERED_DATE) = TO_DATE('2021-09-30', 'yyyy-mm-dd') and ENTERED_BY = 'DHJ';
 # commit;
 
 ```
@@ -1030,7 +1039,7 @@ nrow(existing_samples)   # note: now 32, used to be 30 (until we added the two e
 
 ## 60. BIOTA_CHEMISTRY_VALUES
 
-### a1. Add SAMPLE_ID to excel data     
+  ### a1. Add SAMPLE_ID to excel data     
 - Same as making 'check_excel' in part 5 except that we use 'df_lookup_samples_new' instead of 'df_lookup_samples'  
 - Using TEXT_ID for all except siloxans (part a)  
 - Using TISSUE_NAME + SPECIMEN_NO for siloxans (part b)  
@@ -1089,6 +1098,8 @@ View(check)
 ### a3. Make lookup table for METHOD_ID   
 NOT NEEDED HERE
 df_lookup_methodid   
+
+
 
 ### b. Start `biota_chemistry_values_eider`   
 By selecting columns and adding `METHOD_ID`   
@@ -1182,7 +1193,7 @@ tail(sql_list, 1)
 
 
 
-## 70. Check  
+## 70. Reread and check data  
 
 ### a. Reread data 
 ```{r}
@@ -1333,3 +1344,35 @@ df_check %>% filter(VALUE_ID == 2006358)
 
 ```
 
+
+## 81. Add PBDE (BDE) data for eider duck blood   
+- These were not in the excel file when I inserted the data  
+  
+1. Run 1-2 above (dat_excel_1)  
+2. Run 3-4 above (df_samples_labware)  
+3. Then run a. below  
+4. Then run part 60 above
+- the resulting sql script was 'Milkys_2020_Eider_add_BDE_in_blood.sql')
+
+
+### a. Filter 'dat_excel_1' 
+- so it only contains data we want to add   
+- also, create 'df_lookup_samples_new'  
+```{r}
+
+if (FALSE){
+  
+  # BACKUP
+  # dat_excel_1_back <- dat_excel_1
+  # Restore
+  # dat_excel_1 <- dat_excel_1_back
+  
+  dat_excel_1 <- dat_excel_1 %>%
+    filter(Group %in% "PBDE" & TISSUE_NAME %in% "Blod")
+  
+  df_lookup_samples_new <- df_lookup_samples
+  
+}
+
+
+```
