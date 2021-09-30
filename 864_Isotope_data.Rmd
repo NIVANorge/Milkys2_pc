@@ -44,6 +44,7 @@ dat_stations <- readxl::read_excel("Files_to_Jupyterhub_2019/Kartbase_edit.xlsx"
 selected_param <- c("Delta13C", "Delta15N", "PYR1OH", "PA1OH", "BAP3OH")
 selected_param <- c("Delta13C", "Delta15N", "1-OH-pyren", "1-OH-fenantren", "3-OH-benzo[a]pyren")
 selected_param <- c("Delta13C", "Delta15N")
+selected_param <- c("Delta13C", "Delta15N", "HG")
 
 #
 # Including tissue name (also includes eider duck)
@@ -73,6 +74,9 @@ ggplot(dat_isotopes, aes(Delta13C, Delta15N, color = STATION_CODE)) +
   geom_point() 
 
 ggplot(dat_isotopes, aes(Delta13C, Delta15N, color = LATIN_NAME)) +
+  geom_point() 
+
+ggplot(dat_isotopes, aes(Delta15N, HG, color = LATIN_NAME)) +
   geom_point() 
 
 ```
