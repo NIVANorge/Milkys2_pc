@@ -49,6 +49,7 @@ source('808_Read_NILU_excel_data_functions.R')
 
 
 fn <- "Input_files_2020/Samperapport_edited.xlsx"
+fn <- "Input_files_2020/Samperapport 210621_edited.xlsx"
 excel_sheets(fn)
 # 1] "Fett"       "CP"         "HBCD"       "PBDE"       "PCB"        "Siloksaner" "Metaller"  
 
@@ -65,20 +66,18 @@ dat[[1]] <- read_excel_nilu1(fn, "PBDE",
   mutate(Group = "PBDE")
 # View(dat[[1]])
 
-#
-# NOTE!! for data below:
-#   PCB data with negative values are actually data <LOQ  
-#   I did not correct for this, so the data were read with negative concentrations
-#     and later corected in the datbase, see 812 part 90  
-#   Should have set 'lessthans_given_as_negative_number = TRUE'
-#
+xtabs(~dat[[1]]$Tissue)
+
+
 # debugonce(read_excel_nilu1)
+
 dat[[2]] <- read_excel_nilu1(fn, "PCB",
-                           lessthans_given_as_negative_number = FALSE,
+                           lessthans_given_as_negative_number = TRUE,
                            name_Sample_amount = "Analysed sample amount:",
                            ) %>%
   mutate(Group = "PCB")
 # View(dat[[2]])
+
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 # . b Data 3, HBCD - manually ----   
@@ -96,7 +95,7 @@ df_meta <- read_excel(fn, sheet = "HBCD", n_max = 10, col_names = FALSE) %>%
   t() %>%
   .[-1,]
 sample_numbers_nilu <- df_meta[cols_conc, 2]
-tissue <- df_meta[cols_conc, 7]
+# tissue <- df_meta[cols_conc, 7]
 
 # Data including less-thans
 df2a <- read_excel(fn, sheet = "HBCD", skip = 13, n_max = 3, col_names = FALSE) %>%
@@ -110,12 +109,13 @@ colnames(df2b) <- df2a[1,]
 # Concentrations
 df_data_broad <- df2b[cols_conc,]
 df_data_broad$Sample_no_NILU <- sample_numbers_nilu
-df_data_broad$Tissue <- tissue
+# df_data_broad$Tissue <- tissue   # will be added later
+
 # Less-thans
 df_data_broad_lt <- df2b[cols_lessthans,]
 df_data_broad_lt$Sample_no_NILU <- sample_numbers_nilu
 
-# Prepare  NIVA sample numbers + tissue form the other data
+# Prepare  NIVA sample numbers + tissue from data set number 1 (Fett)
 df_sampleno_niva <- dat[[1]] %>%
   distinct(Sample_no_NILU, Sample_no, Tissue)
 
@@ -125,7 +125,7 @@ df_data_lt <- df_data_broad_lt %>%
 
 # Finish data
 df_data <- df_data_broad %>%
-  pivot_longer(c(-Sample_no_NILU, -Tissue), names_to = "Parameter", values_to = "Value") %>%  # Concentrations, long (tidy) form
+  pivot_longer(c(-Sample_no_NILU), names_to = "Parameter", values_to = "Value") %>%  # Concentrations, long (tidy) form
   mutate(
     Value = as.numeric(Value),
     Sample_no_NILU = sub("20", "21", Sample_no_NILU)
@@ -140,7 +140,7 @@ df_data <- df_data_broad %>%
 
 dat[[3]] <- df_data
 
-table(dat[[3]]$Parameter)
+xtabs(~addNA(Parameter) + addNA(Tissue), dat[[3]])
 
 # View(dat[[3]])
 # str(dat[[3]])
@@ -183,6 +183,10 @@ dat[[4]] <- df_data
 # . d Data 5 (metals) data type 2 (read_excel_nilu2) ----  
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
+# You will get these two warnings, that is OK:
+# warning for NA in `Sample_amount`
+# warning for NA in `Value`
+
 dat[[5]] <- read_excel_nilu2(fn, "Metaller",
                        lessthans_given_as_negative_number = TRUE, 
                        contains_sample_amount = TRUE,
@@ -192,6 +196,18 @@ dat[[5]] <- read_excel_nilu2(fn, "Metaller",
     Parameter = stringr::str_extract(Parameter, "(?<=\\s)[^\\s]+(?=\\s)"),  
     Group = "Metaller"
     )
+
+# xtabs(~addNA(Sample_no) + addNA(Parameter), dat[[5]])
+
+tab <- xtabs(~Sample_no, dat[[5]])
+cat("Number of measurements per sample: ", 
+    paste(unique(tab), collapse = ","), "\n\n")
+
+if (length(unique(tab)) > 1)
+  warning("Different number of measurements per sample")
+
+dat[[5]] <- dat[[5]] %>%
+  filter(!is.na(Sample_no))
 
 # unique(dat[[5]]$Parameter) %>% stringr::str_extract("(?<=\\s)[^\\s]+(?=\\s)")
 
@@ -213,6 +229,8 @@ df <- df %>%
 dat[[6]] <- df %>% 
   select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Parameter, IPUAC_no, Value, Unit, Flag1) %>% # line copied from read_excel_nilu1 or .2
   mutate(Group = "Fat")
+
+# View(dat[[6]])
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 # . f Data 7 (siloxans) - manually ----  
@@ -267,7 +285,7 @@ df_data <- df_data_txt %>%
 # View(df_data)
 
 # Check Tissue  
-xtabs(~addNA(Tissue), df_data)
+xtabs(~addNA(Tissue) + addNA(Parameter), df_data)
 
 # Save for later use
 # saveRDS(df_data, "Data/808_Siloxans_2020.rds")
@@ -299,6 +317,8 @@ dat_cod <- df_data %>%
   rename(SPECIMEN_NO = Specimen_label)   # when we made script 814, we used 'SPECIMEN_NO', so we stick to that
 
 saveRDS(dat_cod, "Data/808_dat_cod-siloxans_2020.rds")
+
+View(dat_cod)
 
 #
 # 3. Checks before combining the separate NILU files to a single file ----
@@ -504,7 +524,12 @@ xtabs(~Sample_no + Group, dat_eiderduck)
 #     All OK
 #
 
-xtabs(~is.na(METHOD_ID) + Group, dat_eiderduck)
+if (sum(is.na(dat_eiderduck$METHOD_ID)) > 0){
+  stop("All data must have METHOD_ID!")
+}
+
+# Summary
+xtabs(~addNA(TISSUE_NAME) + Group + is.na(METHOD_ID), dat_eiderduck)
 
 # long output:
 # xtabs(~METHOD_ID + Group, dat_eiderduck)
@@ -517,8 +542,10 @@ xtabs(~is.na(METHOD_ID) + Group, dat_eiderduck)
 #   positive numbers with FLAG1 = "<"
 # Later corrected in the database, see 812 part 90  
 
-saveRDS(dat_eiderduck, "Data/808_dat_eiderduck_2020.rds")
+# Version 1 - did not have  
+# file.copy("Data/808_dat_eiderduck_2020.rds", "Data/808_dat_eiderduck_2020_ver01.rds")
 
+saveRDS(dat_eiderduck, "Data/808_dat_eiderduck_2020.rds")
 
 # dat_eiderduck <- readRDS("Data/808_dat_eiderduck_2020.rds")
 # SEE NOTE ABOVE
