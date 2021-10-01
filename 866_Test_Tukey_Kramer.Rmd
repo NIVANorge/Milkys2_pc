@@ -146,13 +146,20 @@ plot(multcomp, horiz=TRUE, las = 1, cex.names = 0.8, xlim = c(-1,0))
 ### Get letters from 'multcomp'  
 ```{r}
 
-str(multcomp)
+# str(multcomp)
+
+df_summ <- multcomp$means %>%
+  mutate(Station = rownames(multcomp$means)
+  ) 
 
 # For plotting
 df_groups <- data.frame(
   Station = rownames(multcomp$groups),
   Station_group = multcomp$groups$groups) %>%
-  left_join(df_summ, by = "Station") 
+  left_join(df_summ, by = "Station") %>%
+  rename(
+    Mean = log_Conc,
+    Median = Q50)
 
 # For plotting mean and median
 df_groups2 <- df_groups %>%
@@ -162,13 +169,15 @@ df_groups2 <- df_groups %>%
 ggplot(df_groups2, aes(Station)) +
   geom_linerange(data = df_groups, aes(ymin = Min, ymax = Max)) +
   geom_linerange(data = df_groups, aes(ymin = Q25, ymax = Q75), size = 1.25) +
-  geom_point(aes(y = Value, shape = Type), color = "blue3", size = 2) +
+  geom_point(aes(y = Value, shape = Type), color = "white", fill = "red2", size = 2.5) +
+  scale_shape_manual(values = c(22, 23)) +
   geom_text(data = df_groups, 
             aes(
               y = Max + diff(range(dat_select$log_Conc))*0.07, 
               label = Station_group,
               color = Station_group)) +
-  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+  theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
+  labs(y = "log10(Concentration + 0.1)")
 
 ```
 
