@@ -34,6 +34,8 @@ matrices <- dat2 %>%
     arrange(desc(n)) %>%
     pull(Matrix)
 
+years <- sort(unique(dat2$MYEAR))
+
 group_seq <- c("Metals and metalloids", "Chlorobiphenyls", 
                "Polycyclic aromatic hydrocarbons (PAHs)", 
                "Organobromines", 
@@ -60,9 +62,6 @@ parameters <- dat2 %>%
     left_join(param_meta, by = c("PARAM" = "Parameter.Code")) %>%
     arrange(Substance.Group, PARAM) %>%
     pull(PARAM)
-
-
-years <- sort(unique(dat2$MYEAR))
 
 
 # Define UI for application that draws a histogram

@@ -30,7 +30,9 @@ selected_year <- 2020
 
 ```
 
-## 2. Data  
+## 2. Data   
+
+### Read 
 ```{r}
 
 dat <- readRDS("Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
@@ -42,6 +44,37 @@ dat_stations <- readxl::read_excel("Files_to_Jupyterhub_2019/Kartbase_edit.xlsx"
 
 ```
 
+### Join to stations  
+```{r}
+
+dat2 <- dat %>%
+    filter(VALUE_WW > 0.1) %>%
+    left_join(dat_stations, by = "STATION_CODE") %>%
+    mutate(
+        Matrix = paste0(LATIN_NAME, ", ", TISSUE_NAME),
+        log_Conc = log10(VALUE_WW + 0.1),
+        Station = paste(STATION_CODE, substr(STATION_NAME, 1, 15)),
+        LOQ = ifelse(is.na(FLAG1), "Over LOQ", "Under LOQ")
+    ) %>%
+    filter(!is.na(log_Conc))
+
+
+```
+
+### Matrices and years  
+```{r}
+
+matrices <- dat2 %>%
+    filter(MYEAR == 2020) %>%
+    count(Matrix) %>%
+    arrange(desc(n)) %>%
+    pull(Matrix)
+
+years <- sort(unique(dat2$MYEAR))
+
+```
+
+### Parameters  
 ```{r}
 
 
@@ -75,41 +108,67 @@ parameters <- dat2 %>%
     pull(PARAM)
 
 
-```
-
-```{r}
-dat2 <- dat %>%
-    filter(MYEAR == 2020) %>%
-    left_join(dat_stations) %>%
-    mutate(
-        log_Conc = log10(VALUE_WW + 0.1),
-        Station = paste(STATION_CODE, substr(STATION_NAME, 1, 15))
-    )
-
-with(dat2, unique(paste0(LATIN_NAME, ", ", TISSUE_NAME)))
 
 ```
 
+## Plots  
 
-```{r}
+### Plot 1
+
+```{r, fig.width=9, fig.height=6}}
+
+year <- 2020
 
 dat_select <- dat2 %>%
-  filter(PARAM %in% "HG" & TISSUE_NAME %in% "Muskel")
+  filter(PARAM %in% "HG" & TISSUE_NAME %in% "Muskel" & MYEAR == year)
 
 ggplot(dat_select, aes(Station, log_Conc)) +
   geom_jitter(color = "red", width = 0.1, height = 0) +
   # geom_violin() +
   theme(axis.text.x = element_text(angle = -45, hjust = 0))
 
-model <- aov(log_Conc ~ Station, data = dat_select)
-outHSD <-  HSD.test(model, "Station", alpha = )
-# plot(outHSD)
-# plot(outHSD, horiz=TRUE, variation="SD", las=1)
-par(mfrow=c(1,1), mar=c(3,10,2,3))
-plot(outHSD, horiz=TRUE, las = 1, cex.names = 0.8)
-
 #?plot.group
 # ?barplot
+
+```
+
+### Plot 2
+```{r, fig.width=9, fig.height=5}
+
+model <- aov(log_Conc ~ Station, data = dat_select)
+multcomp <-  HSD.test(model, "Station", alpha = )
+# plot(multcomp)
+# plot(multcomp, horiz=TRUE, variation="SD", las=1)
+par(mfrow=c(1,1), mar=c(3,10,2,3))
+plot(multcomp, horiz=TRUE, las = 1, cex.names = 0.8, xlim = c(-1,0))
+
+```
+### Get letters from 'multcomp'  
+```{r}
+
+str(multcomp)
+
+# For plotting
+df_groups <- data.frame(
+  Station = rownames(multcomp$groups),
+  Station_group = multcomp$groups$groups) %>%
+  left_join(df_summ, by = "Station") 
+
+# For plotting mean and median
+df_groups2 <- df_groups %>%
+  select(Station, Mean, Median) %>%
+  tidyr::pivot_longer(-Station, names_to = "Type", values_to = "Value")
+
+ggplot(df_groups2, aes(Station)) +
+  geom_linerange(data = df_groups, aes(ymin = Min, ymax = Max)) +
+  geom_linerange(data = df_groups, aes(ymin = Q25, ymax = Q75), size = 1.25) +
+  geom_point(aes(y = Value, shape = Type), color = "blue3", size = 2) +
+  geom_text(data = df_groups, 
+            aes(
+              y = Max + diff(range(dat_select$log_Conc))*0.07, 
+              label = Station_group,
+              color = Station_group)) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
 
 ```
 
