@@ -10,7 +10,8 @@
 library(shiny)
 library(ggplot2)
 library(dplyr)
-library(agricolae)
+# library(agricolae)
+source("app_functions.R")
 
 # Data and station metadata
 dat <- readRDS("../Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
