@@ -79,6 +79,9 @@ dat[[2]] <- read_excel_nilu1(fn, "PCB",
 # View(dat[[2]])
 
 
+check_data(dat[[2]])
+
+
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 # . b Data 3, HBCD - manually ----   
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
@@ -86,8 +89,9 @@ dat[[2]] <- read_excel_nilu1(fn, "PCB",
 # File type 1, but with the variation that "<" is in a separate column....
 
 # Define columns with concentrations (NOT counting the first "Component" column)
-cols_conc <- seq(2,30,by = 2)
-cols_lessthans <- seq(1,30,by = 2)
+# NOTE: '60' is a HARD-CODED NUMBER - if fewer/more samples, adjust!
+cols_conc <- seq(2,60,by = 2)        
+cols_lessthans <- seq(1,60,by = 2)
 
 # Metadata
 df_meta <- read_excel(fn, sheet = "HBCD", n_max = 10, col_names = FALSE) %>%
