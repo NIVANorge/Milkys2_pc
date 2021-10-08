@@ -12,17 +12,18 @@ Make tables for inserting into NIVAbase
 For eider duck data from NILU  
 - Note: source of files the same as for cod siloxans (script 808)  
 - Samples mostly exist in Nivabasen, but two samples MUST BE ADDED   
+  
+NOTE: If just some extra data (from existing samples) shall be added, nost of this can be skipped - see part 81!  
 
-For coupling excel data of Labware data, we
+For coupling excel data of Labware data, we:
 
-- Create the sample table 'df_lookup_samples'  
-- Coupling to excel data:
-    - using TEXT_ID for all except siloxans (part a)  
-    - Using TISSUE_NAME + SPECIMEN_NO for siloxans (part b)  
-
-- In addition to lacking : Two samples (blod 10 + 11) have siloxan data but lack in Labware    
-   - These two samples MUST BE ADDED    
-
+1. Create the sample table 'df_lookup_samples'  
+    - see explanation of this file in the [README](README.html)!
+2. Coupling existing samples in Nivabase to excel data in the following ways (see part 60):
+    - using TEXT_ID for all parameters except siloxans ('dat_insert_a' in 60a)  
+    - Using TISSUE_NAME + SPECIMEN_NO for siloxans ('dat_insert_b' in 60a)  
+3. In addition: Two samples (blod 10 + 11) have siloxan data but lack in Labware    
+   - These two samples MUST BE ADDED (see 5c and entire part 20)    
 
 ## 0. Libraries and functions
 ```{r}
@@ -1039,7 +1040,7 @@ nrow(existing_samples)   # note: now 32, used to be 30 (until we added the two e
 
 ## 60. BIOTA_CHEMISTRY_VALUES
 
-  ### a1. Add SAMPLE_ID to excel data     
+### a1. Add SAMPLE_ID to excel data     
 - Same as making 'check_excel' in part 5 except that we use 'df_lookup_samples_new' instead of 'df_lookup_samples'  
 - Using TEXT_ID for all except siloxans (part a)  
 - Using TISSUE_NAME + SPECIMEN_NO for siloxans (part b)  
@@ -1140,11 +1141,13 @@ biota_chemistry_values2 <- biota_chemistry_values1 %>%
 
 ```
 
-### c. Add SAMPLE_ID  
-NOT NEEDED HERE  (did that in a1)
+### c. Add/check SAMPLE_ID  
+
 ```{r}
 
 if (FALSE){
+  
+  # this part is NOT NEEDED HERE  (did that in a1)
 
   biota_chemistry_values2 <- biota_chemistry_values1 %>%
     safe_left_join(df_lookup_sample_id, by = c("TISSUE_NAME", "SAMPLE_NO"), 
@@ -1356,8 +1359,10 @@ df_check %>% filter(VALUE_ID == 2006358)
 
 
 ### a. Filter 'dat_excel_1' 
-- so it only contains data we want to add   
-- also, create 'df_lookup_samples_new'  
+- Before the part below, run 1-4 above
+- Below, 'dat_excel_1' is filtered to only contain data we want to add   
+- Also, we create 'df_lookup_samples_new'  
+- After this, run part 60 ('BIOTA_CHEMISTRY_VALUES')  
 ```{r}
 
 if (FALSE){
@@ -1369,6 +1374,34 @@ if (FALSE){
   
   dat_excel_1 <- dat_excel_1 %>%
     filter(Group %in% "PBDE" & TISSUE_NAME %in% "Blod")
+  
+  df_lookup_samples_new <- df_lookup_samples
+  
+}
+
+
+```
+
+## 82. Add HBCD data for eider duck blood   
+- These were not in the excel file when I inserted the data  
+- NOTE: Follow "manual" given above the chunk below     
+
+### a. Filter 'dat_excel_1'  
+- NOTE: Before the part below, run 1-4 above
+- Below, 'dat_excel_1' is filtered to only contain data we want to add   
+- Also, we create 'df_lookup_samples_new'  
+- After this, run part 60 ('BIOTA_CHEMISTRY_VALUES')  
+```{r}
+
+if (FALSE){
+  
+  # BACKUP
+  # dat_excel_1_back <- dat_excel_1
+  # Restore
+  # dat_excel_1 <- dat_excel_1_back
+  
+  dat_excel_1 <- dat_excel_1 %>%
+    filter(Group %in% "HBCD" & TISSUE_NAME %in% "Blod")
   
   df_lookup_samples_new <- df_lookup_samples
   
