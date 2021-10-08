@@ -41,7 +41,10 @@ R scripts and Excel templates for (1) fetching data to use in Milkys2 on Jupyter
 - Downloading data: 801  
 - Used in 811, 812, 813, 814, 815   
 
-## Coupling data frome excel to existing samples in Nivabase  
+## Coupling data from excel to existing samples in Nivabase   
+
+(from DHJ's powerpoint 'CEMP database structures.pptx')  
+
 ![Overview of the table df_lookup_sample][pic1]
 
 [pic1]: Info/df_lookup_sample.png "df_lookup_sample (from ppt 'CEMP database structures.pptx')"
