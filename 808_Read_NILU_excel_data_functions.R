@@ -74,7 +74,7 @@ read_excel_nilu1 <- function(filename, sheetname,
   
   # Swap rows and columns
   dat_meta <- dat_upper[,-2] %>% as.matrix() %>% t() %>% .[-1,]
-  # dat_meta <- dat_upper %>% select(-X__2) %>% as.matrix() %>% t() %>% .[-1,]
+  # dat_meta <- dat_upper %>% dplyr::select(-X__2) %>% as.matrix() %>% t() %>% .[-1,]
   dat_meta <- data.frame(dat_meta, stringsAsFactors = FALSE)
   colnames(dat_meta) <- as.data.frame(dat_upper)[,1]
   
@@ -101,7 +101,7 @@ read_excel_nilu1 <- function(filename, sheetname,
   colnames(dat_lower)[3:ncol(dat_lower)] <- sample_no
   
   dat_meta <- dat_meta %>%
-    select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Unit)
+    dplyr::select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Unit)
   
   # Delete columns with no NIVA sample number
   sel <- !is.na(colnames(dat_lower))
@@ -133,7 +133,7 @@ read_excel_nilu1 <- function(filename, sheetname,
   cat("Returning", nrow(dat_result), "rows of data\n")
   dat_result %>% 
     mutate(Sample_amount = as.numeric(Sample_amount)) %>%
-    select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Parameter, IPUAC_no, Value, Unit, Flag1)
+    dplyr::select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Parameter, IPUAC_no, Value, Unit, Flag1)
   } 
 
 # TEST
@@ -207,7 +207,7 @@ read_excel_nilu2 <- function(filename, sheetname,
     left_join(dat_unit, by = "Parameter") %>%
     mutate(IPUAC_no = as.numeric(NA))
   cat("\nReturning", nrow(dat_result), "rows of data\n")
-  dat_result %>% select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Parameter, IPUAC_no, Value, Unit, Flag1)
+  dat_result %>% dplyr::select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Parameter, IPUAC_no, Value, Unit, Flag1)
 }
 
 # TEST
@@ -291,5 +291,5 @@ nilu_param <- function(df){
   df %>% 
     left_join(df_param_lookup) %>%                             # Add PARAM_new
     mutate(PARAM = ifelse(PARAM == "", PARAM_new, PARAM)) %>%  # replace PARAM with PARAM_new where there is no PARAM data
-    select(- PARAM_new)     
+    dplyr::select(- PARAM_new)     
 }

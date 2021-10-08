@@ -6,10 +6,10 @@
 #   read_excel_nilu1 (data 1,2) and read_excel_nilu2 (5), some which are read 'manually' (the rest)
 # 
 
-# Data saved (and used in script 812)
-# Main data (eider duck) saved in part 9:
+# Eider duck data saved (and used in script 812) in part 9:
 # - 808_dat_eiderduck_2020.rds
-# Cod siloxans (part of data set 7) saved in 2f:
+#
+# Cod siloxans (part of data set 7) saved in part 2f:
 # - 808_dat_cod-siloxans_2020.rds
 
 # Based on 'Milkys' project script '31_Read_excel_data_2019.R'  
@@ -234,11 +234,15 @@ dat[[6]] <- df %>%
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 # . f Data 7 (siloxans) - manually ----  
+#
+# NOTE: This sheet also contains cod - saved as separate file in this section      
+#
 # Differs from 1-6 by not using sample ID, but sample numbers (1-15 and 90-95)
 # - just using a new variable for this  
+#
 # Also contains LOD and LOQ 
 # - Note that in the "edited" version of the excel file, I have reshuffled these columns
-# NOTE: This sheet also contains cod   
+#
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 x <- c("D4", "D5", "D6")
