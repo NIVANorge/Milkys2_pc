@@ -43,7 +43,7 @@ R scripts and Excel templates for (1) fetching data to use in Milkys2 on Jupyter
 
 ## Coupling data from excel to existing samples in Nivabase   
 
-(from DHJ's powerpoint 'CEMP database structures.pptx')  
+(from DHJ's powerpoint 'CEMP database structures.pptx', see [here](/Info))  
 
 ![Overview of the table df_lookup_sample][pic1]
 
