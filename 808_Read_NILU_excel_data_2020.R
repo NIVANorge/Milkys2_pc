@@ -5,13 +5,15 @@
 # - Several different formats, some of which can be read using the functions
 #   read_excel_nilu1 (data 1,2) and read_excel_nilu2 (5), some which are read 'manually' (the rest)
 # 
-
+#
 # Eider duck data saved (and used in script 812) in part 9:
-# - 808_dat_eiderduck_2020.rds
+# - 808_dat_eiderduck_2020.rds  
+# - used in script 812
 #
 # Cod siloxans (part of data set 7) saved in part 2f:
 # - 808_dat_cod-siloxans_2020.rds
-
+# - used in script 814
+#
 # Based on 'Milkys' project script '31_Read_excel_data_2019.R'  
 #
 
@@ -67,6 +69,8 @@ dat[[1]] <- read_excel_nilu1(fn, "PBDE",
 # View(dat[[1]])
 
 xtabs(~dat[[1]]$Tissue)
+
+check_data(dat[[1]])
 
 
 # debugonce(read_excel_nilu1)
@@ -149,6 +153,9 @@ xtabs(~addNA(Parameter) + addNA(Tissue), dat[[3]])
 # View(dat[[3]])
 # str(dat[[3]])
 
+check_data(dat[[3]])
+
+
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 # . c Data 4 (CP) - manually ---- 
 # Almost type 2, but "<" is given as separate column
@@ -180,6 +187,10 @@ df_data <- df1 %>%
   select(-Matrix)
 
 dat[[4]] <- df_data
+
+xtabs(~addNA(Parameter) + addNA(Tissue), dat[[4]])
+
+check_data(dat[[4]])
 
 # View(dat[[4]])
 
@@ -213,6 +224,10 @@ if (length(unique(tab)) > 1)
 dat[[5]] <- dat[[5]] %>%
   filter(!is.na(Sample_no))
 
+xtabs(~addNA(Parameter) + addNA(Tissue), dat[[5]])
+
+check_data(dat[[5]])
+
 # unique(dat[[5]]$Parameter) %>% stringr::str_extract("(?<=\\s)[^\\s]+(?=\\s)")
 
 # View(dat[[5]])
@@ -233,6 +248,8 @@ df <- df %>%
 dat[[6]] <- df %>% 
   select(Sample_no_NILU, Sample_no, Tissue, Sample_amount, Parameter, IPUAC_no, Value, Unit, Flag1) %>% # line copied from read_excel_nilu1 or .2
   mutate(Group = "Fat")
+
+check_data(dat[[6]])
 
 # View(dat[[6]])
 
@@ -304,10 +321,12 @@ xtabs(~addNA(Tissue) + addNA(Parameter), df_data)
 # Get Eider duck data
 # - added to 'dat'
 #
-dat[[7]] <- df_data %>%
+dat[[7]]$ <- df_data %>%
   filter(Tissue %in% c("Egg","Blod")) %>%
   mutate(Group = "Siloxans") %>%
   select(-Kommentar)
+
+check_data(dat[[7]], sample_identifier = "Specimen_label")
 
 #
 # Get cod data
@@ -326,7 +345,7 @@ dat_cod <- df_data %>%
 
 saveRDS(dat_cod, "Data/808_dat_cod-siloxans_2020.rds")
 
-View(dat_cod)
+# View(dat_cod)
 
 #
 # 3. Checks before combining the separate NILU files to a single file ----
@@ -550,12 +569,23 @@ xtabs(~addNA(TISSUE_NAME) + Group + is.na(METHOD_ID), dat_eiderduck)
 #   positive numbers with FLAG1 = "<"
 # Later corrected in the database, see 812 part 90  
 
-# Version 1 - did not have  
+#
+# OLD VERSIONS
+#
+# Version 1 - did not have PBDE data (or HBCD) for blood   
 # file.copy("Data/808_dat_eiderduck_2020.rds", "Data/808_dat_eiderduck_2020_ver01.rds")
+#
+# Version 2 - PBDE data for blood added, but not HBCD data for blood      
+# file.copy("Data/808_dat_eiderduck_2020.rds", "Data/808_dat_eiderduck_2020_ver02.rds")
 
 saveRDS(dat_eiderduck, "Data/808_dat_eiderduck_2020.rds")
 
 # dat_eiderduck <- readRDS("Data/808_dat_eiderduck_2020.rds")
+#
+# dat_eiderduck_old <- readRDS("Data/808_dat_eiderduck_2020_ver02.rds")
+# xtabs(~addNA(TISSUE_NAME) + Group + is.na(METHOD_ID), dat_eiderduck_old)
+# xtabs(~addNA(TISSUE_NAME) + Group + is.na(METHOD_ID), dat_eiderduck)
+
 # SEE NOTE ABOVE
 
 
