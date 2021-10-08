@@ -293,3 +293,56 @@ nilu_param <- function(df){
     mutate(PARAM = ifelse(PARAM == "", PARAM_new, PARAM)) %>%  # replace PARAM with PARAM_new where there is no PARAM data
     dplyr::select(- PARAM_new)     
 }
+
+
+#
+# Checking data set
+#
+# Needs to have variables 'Parameter', 'Tissue' and (by default) 'Sample_no'
+#
+check_data <- function(data, sample_identifier = "Sample_no"){
+  if (sum(is.na(dat[[2]]$Parameter))>0){
+    stop("'Parameter' has missing values for ", sum(is.na(data$Parameter)), "cases")
+  } else {
+    cat("No missing values in 'Parameter'  \n")
+  }
+  if (sum(is.na(dat[[2]]$Tissue))>0){
+    stop("'Tissue' has missing values for ", sum(is.na(data$Tissue)), "cases")
+  } else {
+    cat("No missing values in 'Tissue'  \n\n")
+  }
+  tab <- table(data[["Parameter"]], data[[sample_identifier]])
+  # tab <- xtabs(~Parameter + Sample_no, data)
+  cat(nrow(tab), "parameters:  \n")
+  print(rownames(tab))
+  # cat(paste(rownames(tab), collapse = "\t "))
+
+  cat("\n\n", ncol(tab), "samples  \n\n")
+  
+  cat("======================================================================== \n")
+  cat("Tissue table (note: variations accepted, see checks below): \n")
+  cat("------------------------------------------------------------------------ \n")
+  print(xtabs(~Tissue, data))
+  cat("======================================================================== \n\n")
+  
+  s1 <- grepl("blod", data$Tissue, ignore.case = TRUE)
+  s2 <- grepl("egg", data$Tissue, ignore.case = TRUE)
+  cat(sum(s1), "rows from blood samples  \n")
+  cat(sum(s2), "rows from egg samples  \n")
+  cat(sum(!(s1 | s2)), "rows from samples containing neither 'blod' nor 'egg'  \n")
+  cat(sum((s1 & s2)), "rows from samples containing both 'blod' and 'egg'  \n\n")
+  
+  tab2 <- apply(tab < 1, 1, sum)
+  if (sum(tab2>0) > 0){
+    warning(sum(tab2>0), " parameters are lacking for one or more samples")
+  } else {
+    cat("No parameters are lacking for any samples  \n")
+  }
+  
+  tab3 <- apply(tab < 1, 2, sum)
+  if (sum(tab2>0) > 0){
+    warning(sum(tab2>0), " samples are lacking for one or more parameters")
+  } else {
+    cat("No samples are lacking for any parameters  \n")
+  }
+}
