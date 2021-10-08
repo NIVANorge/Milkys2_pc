@@ -146,7 +146,8 @@ if (FALSE){
 
 # Set to TRUE/FALSE depending on whether file should be read or not  
 if (FALSE){
-  df_2020 <- readRDS(filename)
+  # df_2020 <- readRDS(filename)
+  df_2020 <- readRDS("Files_to_Jupyterhub_2020/01_df_2020_notstandard_2021-09-30.rds")
 }
 
 ```
