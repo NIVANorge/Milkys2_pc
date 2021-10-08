@@ -111,9 +111,9 @@ parameters <- dat2 %>%
 
 ```
 
-## Plots  
+## 3. Plots  
 
-### Plot 1
+### Plot single observations  
 
 ```{r, fig.width=9, fig.height=6}}
 
@@ -132,7 +132,7 @@ ggplot(dat_select, aes(Station, log_Conc)) +
 
 ```
 
-### Plot 2
+### ANOVA and default Tukey-Kramer plot  
 ```{r, fig.width=9, fig.height=5}
 
 model <- aov(log_Conc ~ Station, data = dat_select)
@@ -143,7 +143,9 @@ par(mfrow=c(1,1), mar=c(3,10,2,3))
 plot(multcomp, horiz=TRUE, las = 1, cex.names = 0.8, xlim = c(-1,0))
 
 ```
-### Get letters from 'multcomp'  
+
+## 4. Tukey-Kramer plot  
+- Get letters from 'multcomp'  
 ```{r}
 
 # str(multcomp)
@@ -180,4 +182,85 @@ ggplot(df_groups2, aes(Station)) +
   labs(y = "log10(Concentration + 0.1)")
 
 ```
+
+## 5. ANOVA summary and assumptions
+
+### Summary 
+```{r}
+
+summary(model)
+
+```
+
+### Homogeneity of variances   
+
+- Bartlett Test of Homogeneity of Variances (parametric)  
+- Figner-Killeen Test of Homogeneity of Variances (non-parametric)
+- Graphic test of homogeneity of variances based on Brown-Forsyth   
+```{r, results='hold'}
+
+# Add count per station  
+dat_select <- dat_select %>%
+  add_count(Station)
+
+# Bartlett Test of Homogeneity of Variances (parametric)
+bartlett.test(log_Conc ~ Station, data = dat_select %>% filter(n >= 2))
+
+# Figner-Killeen Test of Homogeneity of Variances (non-parametric)
+fligner.test(log_Conc ~ Station, data = dat_select %>% filter(n >= 2))
+
+# Homogeneity of Variance Plot
+# install.packages("HH")
+library(HH)
+hov(log_Conc ~ Station, 
+    data = dat_select %>% filter(n >= 2) %>% mutate(Station = factor(Station)))
+hovPlot(log_Conc ~ Station,  
+    data = dat_select %>% filter(n >= 2) %>% mutate(Station = factor(Station)))
+
+```
+
+### Robust types of ANOVA     
+- Kruskal-Wallis test (non-parametric)
+```{r}
+
+# install.packages("onewaytests")
+library(onewaytests)
+
+kw_result <- kw.test(log_Conc ~ Station, data = dat_select %>% filter(n >= 2))
+# pair_results <- paircomp(kw_result, adjust.method = "bonferroni", )  
+# table(pair_results$`  No difference`)
+# pair_results[pair_results$`  No difference`  == "Reject",]
+ 
+welch.test(log_Conc ~ Station, data = dat_select %>% filter(n >= 2))
+
+
+
+```
+
+### Dunnett's Modified Tukey-Kramer Pairwise Multiple Comparison Test  
+
+- Conducts a pairwise multiple comparison test (using the C procedure) for mean differences with unequal sample sizes and no assumption of equal population variances. 
+
+- Produces slightly wider (i.e. more conservative) confidence intervals than the Tukey-Kramer procedure
+
+```{r}
+
+# install.packages("DTK")
+library(DTK)
+# Dunnett's Modified Tukey-Kramer Pairwise Multiple Comparison Test
+# Conducts a pairwise multiple comparison test (using the C procedure) for mean differences with unequal sample sizes and no assumption of equal population variances. 
+# produces slightly wider (i.e. more conservative) confidence intervals than the Tukey-Kramer procedure
+
+table(factor(subset(dat_select, n >= 2)$Station))
+
+n_minimum <- 4
+DTK.result <- DTK.test(
+  x = subset(dat_select, n >= n_minimum)$log_Conc,
+  f = factor(subset(dat_select, n >= n_minimum)$Station), 
+  a = 0.05)
+DTK.result
+# DTK.plot(DTK.result)
+
+```
+
 
