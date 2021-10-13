@@ -114,7 +114,7 @@ data_all <- readRDS(fn) %>%
     PARAM = case_when(
       PARAM %in% "1-OH-fenantren" ~ "PA1OH",
       PARAM %in% "1-OH-pyren" ~ "PYR1OH",
-      PARAM %in%"3-OH-benzo[a]pyren" ~ "BAP3OH",
+      PARAM %in% "3-OH-benzo[a]pyren" ~ "BAP3OH",
       TRUE ~ PARAM),
     UNCRT = round(UNCRT, 3)
   )
