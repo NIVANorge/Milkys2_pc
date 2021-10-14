@@ -7,22 +7,23 @@
 #    http://shiny.rstudio.com/
 #
 
+source("functions/function_HSDtest.R")
 library(shiny)
 library(ggplot2)
 library(dplyr)
-# library(agricolae)
-source("app_functions.R")
 
 # Data and station metadata
-dat <- readRDS("../Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
-dat_stations <- readxl::read_excel("../Files_to_Jupyterhub_2019/Kartbase_edit.xlsx")
+dat <- readRDS("../Data/109_adjusted_data_2021-09-15.rds")
+dat_stations <- readxl::read_excel("../Input_data/Kartbase_edit.xlsx")
+
+c <- 0.1
 
 dat2 <- dat %>%
-    filter(VALUE_WW > 0.1) %>%
+    filter((VALUE_WW + c) > 0) %>%
     left_join(dat_stations, by = "STATION_CODE") %>%
     mutate(
         Matrix = paste0(LATIN_NAME, ", ", TISSUE_NAME),
-        log_Conc = log10(VALUE_WW + 0.1),
+        log_Conc = log10(VALUE_WW + c),
         Station = paste(STATION_CODE, substr(STATION_NAME, 1, 15)),
         LOQ = ifelse(is.na(FLAG1), "Over LOQ", "Under LOQ")
     ) %>%
@@ -52,7 +53,7 @@ group_seq <- c("Metals and metalloids", "Chlorobiphenyls",
                ""
 )
 
-param_meta <- read.csv2("../Files_to_Jupyterhub_2019/Lookup for big excel - param.csv") %>%
+param_meta <- read.csv2("../Input_data/Lookup for big excel - param.csv") %>%
     select(Parameter.Code, Substance.Group) %>%
     mutate(Substance.Group = factor(Substance.Group, levels = group_seq))
 
@@ -66,10 +67,10 @@ parameters <- dat2 %>%
 
 # Define UI for application that draws a histogram
 ui <- fluidPage(
-
+    
     # Application title
     titlePanel("Milkys - sammenligning mellom stasjoner samme år"),
-
+    
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
         sidebarPanel(
@@ -79,11 +80,11 @@ ui <- fluidPage(
         ),
         
         
-
+        
         # Show a plot of the generated distribution
         mainPanel(
-           plotOutput("ggplot"),
-           plotOutput("multcomp_plot")
+            plotOutput("ggplot"),
+            plotOutput("multcomp_plot")
         )
     )
 )
@@ -159,9 +160,10 @@ server <- function(input, output) {
                           label = Station_group,
                           color = Station_group)) +
             labs(title = "Tukey-Kramer HSD post-hoc test", 
+                 subtitle = "Lines show min-max (thin lines) and 25th-75th percentile (thick lines)",
                  y = "log10(Concentration + 0.1)", x = "") +
             theme(axis.text.x = element_text(angle = -45, hjust = 0, size = rel(1.5)))
-            
+        
     })
     
     
