@@ -1,0 +1,284 @@
+---
+title: "862_Get_sample_data"
+author: "DHJ"
+date: "21 9 2021"
+output: html_document
+---
+
+Various checks of the raw data from Juyterhub
+
+- NOTE: can also be used for data 'straight from NIVAbasen'  
+    1. first run the first lines of '802_Get_NIVAbasen_data_2020.Rmd' (until 'Get the data itself')   
+    2. Run the part inside the 'FALSE' if loop in 2b
+    3. Set 'from_jupyterhub' to TRUE or FALSE depending on what you want to plot  
+
+## 1. Libraries
+```{r}
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(ggeasy)
+
+```
+## 2. Data  
+
+### a. Data from Jupyterhub   
+```{r}
+
+dat <- readRDS("Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
+
+# For coordinates   
+dat_stations <- readxl::read_excel("Files_to_Jupyterhub_2019/Kartbase_edit.xlsx")
+
+# dat_bigexcel <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver02.rds")
+
+```
+
+### b. Select time series with data in 2020
+- Define dat_sel1a, and if we also check data straight from NIVAbasen, dat_sel1b
+```{r}
+
+# Select time series with data in 2020   
+dat_sel1a <- dat %>%
+  group_by(STATION_CODE, TISSUE_NAME, PARAM) %>%
+  mutate(Last_year = max(MYEAR)) %>%
+  filter(Last_year >= 2020) %>%
+  ungroup() %>%
+  mutate(LOQ = ifelse(is.na(FLAG1),"Over LOQ", "Under LOQ"))  
+
+from_jupyterhub <- TRUE
+
+if (FALSE){
+  #
+  # IF we want to check data straight from NIVAbasen
+  # To do this, you must first run the first lines of '802_Get_NIVAbasen_data_2020.Rmd'  
+  #   (until 'Get the data itself')
+  #
+  # We call this 'dat_sel1b' instaed of 'dat_sel1a'
+  #
+  dat_sel1b <- df_2020 %>%
+    mutate(
+      LOQ = ifelse(is.na(FLAG1),"Over LOQ", "Under LOQ"),
+      PARAM = NAME,
+      MYEAR = 2020,
+      VALUE_WW = VALUE)  
+  
+  from_jupyterhub <- FALSE
+  
+}
+
+```
+
+
+## 3. Silver measurements in blue mussel      
+
+### All silver in blue mussel     
+```{r, fig.width=9, fig.height=7}
+
+param <- "AG"
+
+# If we want to check data straight from NIVAbasen:
+# param <- "Sølv"
+
+# Select parameters (as above) + stations with >= 10 years
+
+if (from_jupyterhub){
+  dat_sel2 <- dat_sel1a %>%
+    filter(PARAM %in% param)
+} else {
+  dat_sel2 <- dat_sel1b %>%
+    filter(PARAM %in% param)
+}
+  
+ggplot(dat_sel2 %>% filter(LATIN_NAME == "Mytilus edulis"), 
+       aes(MYEAR, VALUE_WW, color = LOQ)) +
+  geom_point(pch = 4) +
+  scale_color_manual(values = c("black", "red2")) +
+  facet_wrap(vars(STATION_CODE)) +
+  labs(title = paste(param, "in blue mussel")) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+
+```
+
+### Other metals on 26A2 in 2020  
+```{r, fig.width=9, fig.height=7}
+
+station_code <- "26A2"
+
+if (from_jupyterhub){
+  dat_sel3 <- dat_sel1a %>% 
+         filter(LATIN_NAME == "Mytilus edulis" & nchar(PARAM) == 2 & STATION_CODE == station_code)
+} else {
+  pars <- c("Sølv", "Arsen", "Kobber", "Kobolt", "Krom", "Kadmium", "Kvikksølv", "Nikkel",
+            "Bly", "Selen", "Sink")
+  dat_sel3 <- dat_sel1b %>% 
+         filter(LATIN_NAME == "Mytilus edulis" & PARAM %in% pars & STATION_CODE == station_code)
+}
+
+ggplot(dat_sel3, aes(MYEAR, VALUE_WW)) +
+  geom_smooth() +
+  geom_point(aes(color = LOQ), pch = 4) +
+  scale_color_manual(values = c("black", "red2")) +
+  facet_wrap(vars(PARAM), scales = "free_y") +
+  labs(title = paste("Metals in blue mussel at", station_code)) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+
+```
+
+## 4. PFDcA in cod liver        
+
+Check 53B in 2020   
+- Values under LOQ that are not given with less-than  
+- Also same thing in 13B last year  
+```{r, fig.width=9, fig.height=7}
+
+species <- "Gadus morhua"
+
+#
+# Select parameters (as above) + stations with >= 10 years  
+#
+
+if (from_jupyterhub){
+  param <- "PFDcA"
+  dat_sel2 <- dat_sel1a %>%
+    filter(PARAM %in% param)
+} else {
+  param <- "Perfluordekansyre (PFDcA)"
+  dat_sel2 <- dat_sel1b %>%
+    filter(PARAM %in% param)
+}
+
+ggplot(dat_sel2 %>% filter(LATIN_NAME == species) , 
+       aes(MYEAR, VALUE_WW, color = LOQ)) +
+  geom_point(pch = 4) +
+  scale_color_manual(values = c("black", "red2")) +
+  facet_wrap(vars(STATION_CODE)) +
+  labs(title = paste(param, "in", species)) +
+  theme(axis.text.x = element_text(angle = -45, hjust = 0))
+
+
+```
+
+## 5. LOQ levels of PCBs, 2010-2020    
+
+### PCB7 components, LOQ levels in fish liver and blue mussel  
+
+```{r, fig.width = 9, fig.height=4}
+
+params <- c("CB28", "CB52", "CB101", "CB118", "CB138", "CB153", "CB180")
+
+dat %>%
+  filter(PARAM %in% params & FLAG1 == "<" & MYEAR >= 2010) %>%
+  filter(TISSUE_NAME %in% c("Lever", "Whole soft body")) %>%
+  group_by(PARAM, TISSUE_NAME, MYEAR) %>%
+  summarise(LOQ_median = median(VALUE_WW)) %>%
+  mutate(PARAM = factor(PARAM, levels = params)) %>%
+  ggplot(aes(MYEAR, LOQ_median)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(TISSUE_NAME), vars(PARAM), scales = "free_y") +
+  scale_x_continuous(breaks = c(2010, 2015, 2020)) +
+  ggeasy::easy_rotate_labels(which = "x", angle = -45)
+
+```
+
+#### - same, blue mussel only  
+
+```{r, fig.width = 9, fig.height=2.5}
+
+params <- c("CB28", "CB52", "CB101", "CB118", "CB138", "CB153", "CB180")
+
+dat %>%
+  filter(PARAM %in% params & FLAG1 == "<" & MYEAR >= 2010) %>%
+  filter(TISSUE_NAME %in% "Whole soft body") %>%
+  group_by(PARAM, TISSUE_NAME, MYEAR) %>%
+  summarise(LOQ_median = median(VALUE_WW)) %>%
+  mutate(PARAM = factor(PARAM, levels = params)) %>%
+  ggplot(aes(MYEAR, LOQ_median)) +
+  geom_line() +
+  geom_point() +
+  facet_grid(vars(TISSUE_NAME), vars(PARAM), scales = "free_y") +
+  scale_x_continuous(breaks = c(2010, 2015, 2020)) +
+  ggeasy::easy_rotate_labels(which = "x", angle = -45)
+
+```
+
+### PCB7 components, proprtion of data over LOQ  
+
+#### Cod liver  
+```{r, fig.width = 9, fig.height=6}
+
+params <- c("CB28", "CB52", "CB101", "CB118", "CB138", "CB153", "CB180")
+
+dat %>%
+  filter(PARAM %in% params & MYEAR >= 2010) %>%
+  filter(TISSUE_NAME %in% "Lever") %>%
+  group_by(STATION_CODE) %>%
+  mutate(N_years = length(unique(MYEAR))) %>%
+  ungroup() %>% # View()
+  filter(N_years >= 9) %>%
+  group_by(PARAM, STATION_CODE, MYEAR) %>%
+  summarise(Percent_over_LOQ = mean(is.na(FLAG1))) %>%
+  mutate(PARAM = factor(PARAM, levels = params)) %>%
+  ggplot(aes(MYEAR, Percent_over_LOQ)) +
+  geom_line() +
+  facet_grid(vars(STATION_CODE), vars(PARAM), scales = "free_y") +
+  scale_x_continuous(breaks = c(2010, 2015, 2020)) +
+  ggeasy::easy_rotate_labels(which = "x", angle = -45)
+
+```
+
+#### Blue mussel  
+```{r, fig.width = 9, fig.height=8}
+
+params <- c("CB28", "CB52", "CB101", "CB118", "CB138", "CB153", "CB180")
+
+dat %>%
+  filter(PARAM %in% params & MYEAR >= 2010) %>%
+  filter(TISSUE_NAME %in% "Whole soft body") %>%
+  group_by(STATION_CODE) %>%
+  mutate(N_years = length(unique(MYEAR)), last_year = max(MYEAR)) %>%
+  ungroup() %>% # View()
+  filter(N_years >= 7 & last_year >= 2020) %>%
+  group_by(PARAM, STATION_CODE, MYEAR) %>%
+  summarise(Percent_over_LOQ = 100*mean(is.na(FLAG1))) %>%
+  mutate(PARAM = factor(PARAM, levels = params)) %>%
+  ggplot(aes(MYEAR, Percent_over_LOQ)) +
+  geom_line() +
+  facet_grid(vars(STATION_CODE), vars(PARAM), scales = "free_y") +
+  scale_y_continuous(breaks = c(0,50,100)) +
+  scale_x_continuous(breaks = c(2010, 2015, 2020)) +
+  ggeasy::easy_rotate_labels(which = "x", angle = -45)
+
+```
+
+
+
+#### Blue mussel, proportions of CB_S7   
+```{r, fig.width = 9, fig.height=8}
+
+params <- c("CB28", "CB52", "CB101", "CB118", "CB138", "CB153", "CB180")
+
+dat %>%
+  filter(PARAM %in% params & MYEAR >= 2010) %>%
+  filter(TISSUE_NAME %in% "Whole soft body") %>%
+  group_by(STATION_CODE) %>%
+  mutate(N_years = length(unique(MYEAR)), last_year = max(MYEAR)) %>%
+  ungroup() %>% # View()
+  filter(N_years >= 7 & last_year >= 2020) %>%
+  group_by(STATION_CODE, MYEAR, PARAM) %>%
+  summarise(Mean_value = 100*mean(VALUE_WW), .groups = "drop_last") %>%
+  mutate(Sum = sum(Mean_value),
+         Percentage_of_sum = 100*Mean_value/Sum) %>%
+  mutate(PARAM = factor(PARAM, levels = params)) %>%
+  ggplot(aes(MYEAR, Percentage_of_sum)) +
+  geom_line() +
+  facet_grid(vars(STATION_CODE), vars(PARAM), scales = "free_y") +
+  scale_x_continuous(breaks = c(2010, 2015, 2020)) +
+  ggeasy::easy_rotate_labels(which = "x", angle = -45)
+
+```
+
