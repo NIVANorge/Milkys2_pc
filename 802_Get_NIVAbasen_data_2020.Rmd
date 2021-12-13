@@ -160,22 +160,33 @@ df_specimens <- get_specimens_from_stationdata(df_stations)
 
 taxoncode_id <- unique(df_specimens$TAXONOMY_CODE_ID)
 
-df1 <- get_nivabase_selection(
-  "TAXONOMY_CODE_ID, CODE, NIVA_TAXON_ID",
-  "TAXONOMY_CODES",
-  "TAXONOMY_CODE_ID",
-  taxoncode_id
-)
+#
+# OLD VERSION (join tables in R)
+#
+# df1 <- get_nivabase_selection(
+#   "TAXONOMY_CODE_ID, CODE, NIVA_TAXON_ID",
+#   "TAXONOMY_CODES",
+#   "TAXONOMY_CODE_ID",
+#   taxoncode_id
+# )
+# 
+# df2 <- get_nivabase_selection(
+#   "NIVA_TAXON_ID, LATIN_NAME",
+#   "TAXONOMY",
+#   "NIVA_TAXON_ID",
+#   df1$NIVA_TAXON_ID
+# )
+# 
+# df_species <- left_join(df1, df2, by = "NIVA_TAXON_ID") %>% 
+#   select(TAXONOMY_CODE_ID, LATIN_NAME)
 
-df2 <- get_nivabase_selection(
-  "NIVA_TAXON_ID, LATIN_NAME",
-  "TAXONOMY",
-  "NIVA_TAXON_ID",
-  df1$NIVA_TAXON_ID
-)
+df_species2 <- get_nivabase_data(paste(
+  "select a.TAXONOMY_CODE_ID, b.LATIN_NAME",
+  "from NIVADATABASE.TAXONOMY_CODES a LEFT JOIN NIVADATABASE.TAXONOMY b ON a.NIVA_TAXON_ID = b.NIVA_TAXON_ID",
+  "where TAXONOMY_CODE_ID in",
+  "(", paste(taxoncode_id, collapse=","), ");"
+))
 
-df_species <- left_join(df1, df2, by = "NIVA_TAXON_ID") %>% 
-  select(TAXONOMY_CODE_ID, LATIN_NAME)
 
 ```
 
