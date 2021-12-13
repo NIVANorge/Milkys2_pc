@@ -19,16 +19,18 @@ source("802_Get_NIVAbasen_data_functions.R")
 ```
 
 
-## Get new(er) data
+## Modify niRvana functions  
 
-### Give your username and password to R (only once per R session):
-```{r}
-set_credentials()
-```
-### Add encoding to 'get_nivabase_data' function  - until we have fisxed in in niRvana package - see issue there (https://github.com/NIVANorge/niRvana/issues/9)  
+### New version of get_nivabase_data   
+- until we have fixed in in niRvana package   
+    - issue 1: add encoding when creating connection https://github.com/NIVANorge/niRvana/issues/9)   
+    - issue 2: switch to using 64-bit!
+
+1) Add encoding to 'get_nivabase_data' function    
 ```{r}
 
-get_nivabase_data <- function (sql = NULL, source = "NIVABASE") {
+# The old solution for 32-bit Oracle server
+get_nivabase_data_SOCKETSERVER <- function (sql = NULL, source = "NIVABASE") {
   library(svSocket)
   sock_port <- 8642L
   sock_con <- "sv_con"
@@ -55,6 +57,87 @@ get_nivabase_data <- function (sql = NULL, source = "NIVABASE") {
   fact2char_df(dataframe_temporary)
 }
 
+
+# New solution, assumes you have 64-bit Oracle server installed  
+# Software Center -> "Oracle Client19x64 installer"   
+get_nivabase_data <- function (sql = NULL, source = "NIVABASE") {
+  pwd <- unserialize(sodium::simple_decrypt(db_pwd, db_privkey))
+  con <- DBI::dbConnect(odbc::odbc(), source, UID = db_username, PWD = pwd, encoding = 'ISO-8859-1')   
+  dataframe_temporary <- DBI::dbGetQuery(con, sql)
+  DBI::dbDisconnect(con)
+  fact2char_df(dataframe_temporary)
+}
+
+```
+
+```{r}
+
+# Version without testing
+set_credentials <- function (test = TRUE){
+  passphrase <- "My passphrase"
+  db_username <<- svDialogs::dlg_input("Please write your username (capital letters)", 
+                                       Sys.info()["user"])$res
+  db_privkey <<- sodium::keygen()
+  db_pubkey <<- sodium::pubkey(db_privkey)
+  db_pwd <<- sodium::simple_encrypt(serialize(getPass::getPass(paste0("Please write the password for user ", 
+                                                                      db_username, ": ")), NULL), db_pubkey)
+  if (test){
+    x <- try(get_nivabase_data("select * from NIVADATABASE.STATION_TYPES where rownum = 1"))
+    if (class(x) %in% "data.frame") {
+      cat("Username/password successfully set for the rest of this R session\n")
+    }
+    else {
+      cat("====================================================================================================\n")
+      cat("Username/password is not correct. Please try again. The password may differ from your NIVA password\n")
+      cat("====================================================================================================\n")
+    }
+  } else {
+    cat("Username/password set for the rest of this R session (not tested)\n")
+  }
+  invisible(NULL)
+}
+
+# set_credentials(test = FALSE)
+# set_credentials(test = TRUE)
+
+
+```
+### New version of 'get_samples_from_sampleid'  
+- does not get data from NIVADATABASE.SPECIES (which has been deleted)  
+```{r}
+
+get_samples_from_sampleid <- function (sample_id, add_species_and_tissue = TRUE, report = FALSE) {
+    df <- get_nivabase_selection("*", "BIOTA_SAMPLES", 
+        "SAMPLE_ID", sample_id)
+    if (add_species_and_tissue) {
+        df_tissue <- get_nivabase_data("select TISSUE_ID,TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
+        # DOESN'T EXIST ANYMORE:
+        # df_species <- get_nivabase_data("select SPECIES_ID,LATIN_NAME from NIVADATABASE.SPECIES")
+        df <- merge(df, df_tissue, by = "TISSUE_ID", all.x = TRUE, 
+            all.y = FALSE)
+    }
+    df <- dplyr::rename(df, REMARK_sample = REMARK)
+    if (report) {
+        n <- sum(is.na(df$TISSUE_ID))
+        p <- round(mean(is.na(df$TISSUE_ID)) * 100, 1)
+        cat("TISSUE_ID lacking for", n, "cases, i.e.", 
+            p, "percent\n")
+        n <- sum(!is.na(df$TISSUE_ID) & is.na(df$TISSUE_NAME))
+        p <- round(mean(!is.na(df$TISSUE_ID) & is.na(df$TISSUE_NAME)) * 
+            100, 1)
+        cat("TISSUE_NAME lacking for additional", n, "cases, i.e.", 
+            p, "percent\n")
+    }
+    df
+}
+
+```
+
+## Get new(er) data
+
+### Give your username and password to R (only once per R session):
+```{r}
+set_credentials()
 ```
 
 ### Get the list of projects
@@ -99,6 +182,9 @@ df_species <- left_join(df1, df2, by = "NIVA_TAXON_ID") %>%
 ## Get the data itself  
 Get data frame of chemical data for all samples from the measurement year 2016 (30 seconds or so)
 ```{r, results = FALSE}
+
+debugonce(get_biota_chemistry)
+debugonce(get_samples_from_sampleid)
 
 df_2020_temp <- get_biota_chemistry(
   years = 2020:2021,              # in case some specimens wrongly  
