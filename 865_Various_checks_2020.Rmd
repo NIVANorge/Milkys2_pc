@@ -2,15 +2,20 @@
 title: "862_Get_sample_data"
 author: "DHJ"
 date: "21 9 2021"
-output: html_document
+output: 
+  html_document:
+    toc: true
+    toc_float: 
 ---
 
-Various checks of the raw data from Juyterhub
+Various checks of the raw data from Jupyterhub
 
 - NOTE: can also be used for data 'straight from NIVAbasen'  
     1. first run the first lines of '802_Get_NIVAbasen_data_2020.Rmd' (until 'Get the data itself')   
     2. Run the part inside the 'FALSE' if loop in 2b
     3. Set 'from_jupyterhub' to TRUE or FALSE depending on what you want to plot  
+    
+    
 
 ## 1. Libraries
 ```{r}
