@@ -160,27 +160,7 @@ df_specimens <- get_specimens_from_stationdata(df_stations)
 
 taxoncode_id <- unique(df_specimens$TAXONOMY_CODE_ID)
 
-#
-# OLD VERSION (join tables in R)
-#
-# df1 <- get_nivabase_selection(
-#   "TAXONOMY_CODE_ID, CODE, NIVA_TAXON_ID",
-#   "TAXONOMY_CODES",
-#   "TAXONOMY_CODE_ID",
-#   taxoncode_id
-# )
-# 
-# df2 <- get_nivabase_selection(
-#   "NIVA_TAXON_ID, LATIN_NAME",
-#   "TAXONOMY",
-#   "NIVA_TAXON_ID",
-#   df1$NIVA_TAXON_ID
-# )
-# 
-# df_species <- left_join(df1, df2, by = "NIVA_TAXON_ID") %>% 
-#   select(TAXONOMY_CODE_ID, LATIN_NAME)
-
-df_species2 <- get_nivabase_data(paste(
+df_species <- get_nivabase_data(paste(
   "select a.TAXONOMY_CODE_ID, b.LATIN_NAME",
   "from NIVADATABASE.TAXONOMY_CODES a LEFT JOIN NIVADATABASE.TAXONOMY b ON a.NIVA_TAXON_ID = b.NIVA_TAXON_ID",
   "where TAXONOMY_CODE_ID in",
@@ -190,26 +170,40 @@ df_species2 <- get_nivabase_data(paste(
 
 ```
 
+### Plot sample dates   
+```{r, fig.height=6, fig.width=7}
+
+df_specimens %>%
+  left_join(df_species, by = "TAXONOMY_CODE_ID") %>%
+  filter(year(DATE_CAUGHT) >= 2020) %>%
+  ggplot(aes(DATE_CAUGHT)) +
+  geom_histogram(binwidth = 3600*24*10) +   # 10 days
+  scale_x_datetime(date_breaks = "1 month", date_labels = "%m %Y") +
+  facet_wrap(vars(LATIN_NAME), ncol = 1, scales = "free_y")
+
+```
+
+
+
 ## Get the data itself  
 Get data frame of chemical data for all samples from the measurement year 2016 (30 seconds or so)
 ```{r, results = FALSE}
 
-debugonce(get_biota_chemistry)
-debugonce(get_samples_from_sampleid)
+# debugonce(get_biota_chemistry)
+# debugonce(get_samples_from_sampleid)
 
 df_2020_temp <- get_biota_chemistry(
   years = 2020:2021,              # in case some specimens wrongly  
                                   #    have date_caught = 2020
   specimendata = df_specimens, 
   stationdata = df_stations,
-  report_samples = TRUE) %>%
-  select(-LATIN_NAME)             # we remove the 'LATIN_NAME', which comes from the BIOTA_SAMPES table
-                                  #   and is empty
+  report_samples = TRUE)
 
 df_2020 <- df_2020_temp %>%
   left_join(df_species, by = "TAXONOMY_CODE_ID")
 
 ```
+
 ### Check species  
 ```{r}
 
