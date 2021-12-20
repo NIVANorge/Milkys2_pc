@@ -1,0 +1,186 @@
+---
+title: "822_Check_labware_tables"
+author: "DHJ"
+date: "20 12 2021"
+output: html_document
+---
+
+
+## Libraries
+```{r setup, include=FALSE}
+# install.packages("niRvana")
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# And then the niRvana package. If you need to install it, then run thee next line also:
+# devtools::install_github("NIVANorge/niRvana")
+library(niRvana)
+
+source("802_Get_NIVAbasen_data_functions.R")
+
+```
+
+### Give your username and password to R (only once per R session):
+```{r}
+
+set_credentials()
+
+```
+
+
+### Get list of projects
+
+```{r}
+
+df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+
+```
+
+## Get sample data    
+
+### Milkys, number of samples   
+```{r}
+
+cat("2020:")
+get_nivabase_data(paste(
+  "select count(*) as N from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT like '%MILKYS%'",
+  "and extract(YEAR from SAMPLED_DATE) = 2020")) %>%
+  pull(N)
+
+cat("2021:")
+get_nivabase_data(paste(
+  "select count(*) as N from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT like '%MILKYS%'",
+  "and extract(YEAR from SAMPLED_DATE) = 2021")) %>%
+  pull(N)
+
+```
+
+### Milkys 2020  
+```{r}
+
+df1 <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT like '%MILKYS%'",
+  "and extract(YEAR from SAMPLED_DATE) = 2020"))
+nrow(df1) # 197
+
+# df1 %>%
+#   filter(STATUS == "Midlertidig") %>%
+#   count(SAMPLE_TYPE, PROSJEKT) %>%
+#   View("Midlertidig")
+
+
+```
+
+### All 2021 samples   
+```{r}
+
+if (FALSE){
+  df_2021 <- get_nivabase_data(paste(
+    "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where ",
+    "extract(YEAR from SAMPLED_DATE) = 2021"))
+  nrow(df_2021) # 197
+  
+  saveRDS(df_2021, "822_sampledata_df_2021.rds")
+
+}
+
+df_2021 <- readRDS("822_sampledata_df_2021.rds")
+
+table(df_2021$STATUS)
+
+
+```
+
+## Get measurement data    
+
+### Økokyst    
+```{r}
+
+labware_data1 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 180034 ØKOKYST-Klimaundersøkelse'")
+
+nrow(labware_data1) # 1393
+
+
+```
+
+### One station     
+```{r}
+
+labware_data2 <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_IMPORT where AQUAMONITOR_CODE = 'VT71'",
+  "and REPORTED_NAME = 'Fosfat'"))
+
+nrow(labware_data2) # 333  
+
+```
+
+### One freshwater station, all 'Midlertidig'     
+```{r}
+
+check <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_IMPORT where AQUAMONITOR_CODE = 'LAE01'",
+  "and STATUSX = 'Midlertidig'"))
+
+table(addNA(check$UNITS))
+table(addNA(check$STATUS))
+
+
+```
+### One freshwater station and parameter       
+```{r}
+
+station_code <- 'LAE01'
+param <- "TOC"
+
+labware_data <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_IMPORT where AQUAMONITOR_CODE =", sQuote(station_code),
+  "and PARAM =", sQuote(param)
+  ))
+
+most_common_unit <- table(addNA(labware_data$UNITS)) %>% sort() %>% rev() %>% names() %>% .[1]
+
+```
+
+### Plot parameter estimates  
+```{r}
+
+df <- labware_data %>% 
+  filter(UNITS %in% most_common_unit) %>%
+  mutate(
+    LOQ = case_when(
+      is.na(ENTRY_QUALIFIER) ~ "Over LOQ",
+      ENTRY_QUALIFIER %in% ">" ~ "Over LOQ",
+      ENTRY_QUALIFIER %in% "<" ~ "Over LOQ"),
+    NUMERIC_ENTRY = as.numeric(NUMERIC_ENTRY)
+  ) 
+
+table(df$LOQ)
+
+gg <- ggplot(df, aes(SAMPLED_DATE, NUMERIC_ENTRY)) + # geom_point()
+  geom_point(aes(color = STATUSX, shape = LOQ)) +
+  scale_shape_manual(values = c("Under LOQ"=6, "Over LOQ"=19)) +
+  scale_color_manual(values = c("Ferdig"="blue4", "Midlertidig"="red2")) +
+  labs(
+    title = paste(station_code, "-", param),
+    y = paste0(param, " (", most_common_unit, ")")
+  )
+
+gg
+
+```
+
+### Check status U and I    
+```{r}
+
+get_nivabase_data(paste(
+  "select count(*) as N from NIVADATABASE.LABWARE_IMPORT where STATUS = 'U'"
+  )) %>% pull(N)
+
+get_nivabase_data(paste(
+  "select count(*) as N from NIVADATABASE.LABWARE_IMPORT where STATUS = 'I'"
+  )) %>% pull(N)
+
+```
+
