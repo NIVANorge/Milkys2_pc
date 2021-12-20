@@ -301,6 +301,7 @@ convert_preferred_unit_check <- function(
     mutate(VALUE_preferred = VALUE*Multiplier)
 }
 
+  
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
@@ -308,11 +309,18 @@ convert_preferred_unit_check <- function(
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
+
 #
-# SQL used in 'get_samples_by_stationcode_all' and 'get_samples_by_stationcode'
-#   (from script 77 in project 'Milkys')
+# NOTE: FALSEd out as this (except make_lookup_samples) now has been added
+# to niRvana!
 #
-sql_samples <- "select 
+if (FALSE){
+  
+  #
+  # SQL used in 'get_samples_by_stationcode_all' and 'get_samples_by_stationcode'
+  #   (from script 77 in project 'Milkys')
+  #
+  sql_samples <- "select 
  b.sample_id 
 , b.station_id, b.sample_date, b.sample_no, b.repno
 , c.project_id, c.station_code, c.station_name
@@ -329,77 +337,87 @@ left join nivadatabase.taxonomy_codes i on i.taxonomy_code_id=b.taxonomy_code_id
 left join nivadatabase.biota_samples_specimens k on k.sample_id=b.sample_id
 left join nivadatabase.biota_single_specimens l on K.SPECIMEN_ID=L.SPECIMEN_ID
 left join NIVADATABASE.PROJECTS m on m.project_id=c.project_id"
+  
+  # uncomment in order to give your credentials to R :
+  # niRvana::set_credentials()
+  
+  
 
-# uncomment in order to give your credentials to R :
-# niRvana::set_credentials()
-
-#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
-# get_samples_by_stationcode_all  - each sample occurs more than once (>1 project per sample)
-#                                   helper function for 'get_samples_by_stationcode'
-# get_samples_by_stationcode      - each sample occurs only once
-#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
-
-#
-get_samples_by_stationcode_all <- function(stationcode){
-  sql_where <- paste("where STATION_CODE =", sQuote(stationcode))
-  get_nivabase_data(paste(sql_samples, sql_where))
-}
-
-if (FALSE){
-  dftest <- get_samples_by_stationcode_all("BL6")
-}
-
-
-get_samples_by_stationcode <- function(stationcode){
-  df_all <- get_samples_by_stationcode_all(stationcode)
-  result <- df_all %>%
-    group_by(SAMPLE_ID) %>%
-    mutate(
-      Year = lubridate::year(DATE_CAUGHT),
-      N_projects = length(unique(PROJECT_ID)),
-      PROJECT_ID = paste(unique(PROJECT_ID), collapse = ";")) %>%
-    summarise(across(.fn = first))
-  cat("\nDownloaded", nrow(result), "samples from the following projects:\n")
-  print(
-    df_all %>%
+  
+  #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+  # get_samples_by_stationcode_all  - each sample occurs more than once (>1 project per sample)
+  #                                   helper function for 'get_samples_by_stationcode'
+  # get_samples_by_stationcode      - each sample occurs only once
+  #                                 - note that some station codes (e.g., "B1")
+  #                                   occurs many places 
+  #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+  
+  #
+  get_samples_by_stationcode_all <- function(stationcode){
+    sql_where <- paste("where STATION_CODE =", sQuote(stationcode))
+    get_nivabase_data(paste(sql_samples, sql_where))
+  }
+  
+  if (FALSE){
+    dftest <- get_samples_by_stationcode_all("BL6")
+  }
+  
+  
+  get_samples_by_stationcode <- function(stationcode){
+    df_all <- get_samples_by_stationcode_all(stationcode)
+    result <- df_all %>%
+      group_by(SAMPLE_ID) %>%
       mutate(
-        Project = paste(PROJECT_ID, PROJECT_NAME),
-        Year = lubridate::year(DATE_CAUGHT)) %>%
-      xtabs(~ Project + Year, .) 
-      )
-  cat("\nNumber of samples*projects:", nrow(df_all), "\n\n")
-  proj_tab <- xtabs(~SAMPLE_ID + PROJECT_ID, df_all)
-  `Number of projects (top row) per sample (bottom row: number of samples)` <- apply(proj_tab > 0, 1, sum)
-  print(table(`Number of projects (top row) per sample (bottom row: number of samples)`))
-  result
-}
-
-if (FALSE){
-  dftest <- get_samples_by_stationcode("BL6")  # sediment
-  head(dftest) <- get_samples_by_stationcode("23B")  # Milkys cod ++  
-}
-
-
-
-
-#
-# Only started coding!
-# Based on code in script '812_Import_til_NIVAbasen_NILU_eider_2020data.Rmd'
-#
-make_lookup_samples <- function(stationcode){
+        Year = lubridate::year(DATE_CAUGHT),
+        N_projects = length(unique(PROJECT_ID)),
+        PROJECT_ID = paste(unique(PROJECT_ID), collapse = ";")) %>%
+      summarise(across(.fn = first))
+    cat("\nDownloaded", nrow(result), "samples from the following projects:\n")
+    print(
+      df_all %>%
+        mutate(
+          Project = paste(PROJECT_ID, PROJECT_NAME),
+          Year = lubridate::year(DATE_CAUGHT)) %>%
+        xtabs(~ Project + Year, .) 
+    )
+    cat("\nNumber of samples*projects:", nrow(df_all), "\n\n")
+    proj_tab <- xtabs(~SAMPLE_ID + PROJECT_ID, df_all)
+    `Number of projects (top row) per sample (bottom row: number of samples)` <- apply(proj_tab > 0, 1, sum)
+    print(table(`Number of projects (top row) per sample (bottom row: number of samples)`))
+    result
+  }
   
-  # Get the link (tissue, SAMPLE_NO) -> SAMPLE_ID by "extracting" from Nivabasen
-  # df_for_join <- df_chem %>%
-  #   # Get the sample IDs by "extracting" from Nivabasen
-  #   distinct(SAMPLE_NO, TISSUE_NAME, SAMPLE_ID) %>%
-  #   arrange(TISSUE_NAME, SAMPLE_NO)
-  df_for_join <- get_samples_by_stationcode(stationcode)
+  if (FALSE){
+    dftest <- get_samples_by_stationcode("BL6")  # sediment
+    dftest <- get_samples_by_stationcode("B1")   # various projects and places
+    dftest <- get_samples_by_stationcode("23B")  # Milkys cod ++  
+  }
   
-  # Start with labware samples, then add SAMPLE_ID 
-  df_lookup_samples <- df_samples_labware %>%
-    select(AQUAMONITOR_CODE, TISSUE_NAME, BIOTA_SAMPLENO, X_BULK_BIO, TEXT_ID, Specimen_label) %>%
-    # ...adding SAMPLE_ID:
-    left_join(df_for_join, 
-              by = c("TISSUE_NAME", "BIOTA_SAMPLENO" = "SAMPLE_NO"))
+  
+  
+  
+  #
+  # Only started coding!
+  # Based on code in script '812_Import_til_NIVAbasen_NILU_eider_2020data.Rmd'
+  #
+  make_lookup_samples <- function(stationcode){
+    
+    # Get the link (tissue, SAMPLE_NO) -> SAMPLE_ID by "extracting" from Nivabasen
+    # df_for_join <- df_chem %>%
+    #   # Get the sample IDs by "extracting" from Nivabasen
+    #   distinct(SAMPLE_NO, TISSUE_NAME, SAMPLE_ID) %>%
+    #   arrange(TISSUE_NAME, SAMPLE_NO)
+    df_for_join <- get_samples_by_stationcode(stationcode)
+    
+    # Start with labware samples, then add SAMPLE_ID 
+    df_lookup_samples <- df_samples_labware %>%
+      select(AQUAMONITOR_CODE, TISSUE_NAME, BIOTA_SAMPLENO, X_BULK_BIO, TEXT_ID, Specimen_label) %>%
+      # ...adding SAMPLE_ID:
+      left_join(df_for_join, 
+                by = c("TISSUE_NAME", "BIOTA_SAMPLENO" = "SAMPLE_NO"))
+    
+  }
+  
+  
   
 }
