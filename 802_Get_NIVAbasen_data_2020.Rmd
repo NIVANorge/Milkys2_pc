@@ -21,87 +21,6 @@ source("802_Get_NIVAbasen_data_functions.R")
 
 ## Modify niRvana functions  
 
-### New version of get_nivabase_data   
-- until we have fixed in in niRvana package   
-    - issue 1: add encoding when creating connection https://github.com/NIVANorge/niRvana/issues/9)   
-    - issue 2: switch to using 64-bit!
-
-1) Add encoding to 'get_nivabase_data' function    
-```{r}
-
-# The old solution for 32-bit Oracle server
-get_nivabase_data_SOCKETSERVER <- function (sql = NULL, source = "NIVABASE") {
-  library(svSocket)
-  sock_port <- 8642L
-  sock_con <- "sv_con"
-  dataframe_temporary <<- data.frame()
-  table_out <- "dataframe_temporary"
-  pwd <- unserialize(sodium::simple_decrypt(db_pwd, db_privkey))
-  startSocketServer(port = sock_port, server.name = "oracle_query_32", 
-                    local = TRUE)
-  expr <- "library(svSocket)"
-  expr <- c(expr, sprintf("con <- DBI::dbConnect(odbc::odbc(), '%3$s', UID='%1$s', PWD='%2$s', encoding = 'ISO-8859-1')", 
-                          db_username, pwd, source))
-  expr <- c(expr, sprintf("%1$s <- DBI::dbGetQuery(con, \"%2$s\")", 
-                          table_out, sql))
-  expr <- c(expr, sprintf("%s <- socketConnection(port=%i)", 
-                          sock_con, sock_port))
-  expr <- c(expr, sprintf("evalServer(%s, %s, %s)", sock_con, 
-                          table_out, table_out))
-  expr <- c(expr, sprintf("close(%s)", sock_con))
-  expr <- paste(expr, collapse = ";")
-  prog <- file.path(R.home(), "bin", "i386", "Rscript.exe")
-  system2(prog, args = c("-e", shQuote(expr)), stdout = NULL, 
-          wait = TRUE, invisible = TRUE)
-  stopSocketServer(port = sock_port)
-  fact2char_df(dataframe_temporary)
-}
-
-
-# New solution, assumes you have 64-bit Oracle server installed  
-# Software Center -> "Oracle Client19x64 installer"   
-get_nivabase_data <- function (sql = NULL, source = "NIVABASE") {
-  pwd <- unserialize(sodium::simple_decrypt(db_pwd, db_privkey))
-  con <- DBI::dbConnect(odbc::odbc(), source, UID = db_username, PWD = pwd, encoding = 'ISO-8859-1')   
-  dataframe_temporary <- DBI::dbGetQuery(con, sql)
-  DBI::dbDisconnect(con)
-  fact2char_df(dataframe_temporary)
-}
-
-```
-
-```{r}
-
-# Version without testing
-set_credentials <- function (test = TRUE){
-  passphrase <- "My passphrase"
-  db_username <<- svDialogs::dlg_input("Please write your username (capital letters)", 
-                                       Sys.info()["user"])$res
-  db_privkey <<- sodium::keygen()
-  db_pubkey <<- sodium::pubkey(db_privkey)
-  db_pwd <<- sodium::simple_encrypt(serialize(getPass::getPass(paste0("Please write the password for user ", 
-                                                                      db_username, ": ")), NULL), db_pubkey)
-  if (test){
-    x <- try(get_nivabase_data("select * from NIVADATABASE.STATION_TYPES where rownum = 1"))
-    if (class(x) %in% "data.frame") {
-      cat("Username/password successfully set for the rest of this R session\n")
-    }
-    else {
-      cat("====================================================================================================\n")
-      cat("Username/password is not correct. Please try again. The password may differ from your NIVA password\n")
-      cat("====================================================================================================\n")
-    }
-  } else {
-    cat("Username/password set for the rest of this R session (not tested)\n")
-  }
-  invisible(NULL)
-}
-
-# set_credentials(test = FALSE)
-# set_credentials(test = TRUE)
-
-
-```
 ### New version of 'get_samples_from_sampleid'  
 - does not get data from NIVADATABASE.SPECIES (which has been deleted)  
 ```{r}
@@ -141,18 +60,27 @@ set_credentials()
 ```
 
 ### Get the list of projects
+
 ```{r}
+
 df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+
 ```
 
 ### Get a list of the stations in the CEMP_Biota project
+
 ```{r}
+
 df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+
 ```
 
 ### Get all specimens collected at these stations (20 seconds or so)
+
 ```{r}
+
 df_specimens <- get_specimens_from_stationdata(df_stations)
+
 ```
 
 ### Get species  
@@ -170,7 +98,7 @@ df_species <- get_nivabase_data(paste(
 
 ```
 
-### Plot sample dates   
+### Plot sample dates in 2020 (or later)    
 ```{r, fig.height=6, fig.width=7}
 
 df_specimens %>%
@@ -199,6 +127,7 @@ df_2020_temp <- get_biota_chemistry(
   stationdata = df_stations,
   report_samples = TRUE)
 
+# Add LATIN_NAME (using species)
 df_2020 <- df_2020_temp %>%
   left_join(df_species, by = "TAXONOMY_CODE_ID")
 
