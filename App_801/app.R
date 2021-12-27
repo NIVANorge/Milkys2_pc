@@ -1,10 +1,9 @@
 #
-# This is a Shiny web application. You can run the application by clicking
-# the 'Run App' button above.
+# App_801 - Plot medians from Jupyterhub   
 #
-# Find out more about building applications with Shiny here:
+
 #
-#    http://shiny.rstudio.com/
+# Code to perform when app is starting
 #
 
 library(shiny)
@@ -27,7 +26,9 @@ basis_avaliable <- dat_med %>%
   distinct(Basis) %>%
   pull(Basis)
 
-# Define UI for application that draws a histogram
+#
+# User interface  
+#
 ui <- fluidPage(
 
     # Application title
@@ -60,7 +61,9 @@ ui <- fluidPage(
     )
 )
 
-# Define server logic required to draw a histogram
+#
+# Server code  
+#
 server <- function(input, output) {
   
   stations_avaliable <- reactive({
@@ -84,11 +87,10 @@ server <- function(input, output) {
   })
   
   output$timeseriesplot <- renderPlot({
-    dat_select1 <- dat_med %>%
+    dat_plot <- dat_med %>%
       filter(PARAM %in% input$params_selected,
-             Basis == input$basis_selected)
-    dat_plot <- dat_select1 %>%
-      filter(STATION_CODE %in% input$stations_selected) %>%
+             Basis == input$basis_selected,
+             STATION_CODE %in% input$stations_selected) %>%
       mutate(
         Over_LOQ_perc = round(Over_LOQ/N_median*100,0),
         Over_LOQ_med = ifelse(Over_LOQ_perc >= 50, ">=50% over LOQ", "<50% over LOQ")
