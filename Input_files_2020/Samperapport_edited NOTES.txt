@@ -1,10 +1,28 @@
+From
+'K:\Prosjekter\Sjøvann\JAMP\2020\analyser\analyserapporter\NILU ærfugl og siloksaner torsk'  
+
+1st version based on 'Samperapport.xlsx'
+2nd version based on 'Samperapport 210621.xlsx'
+
+
 Fett:
 - Fixed top row (variable names)
+HBCD:
+- Move row titles (column B upper part) to column A
+- Corrected 2 cells (yellow) from 'Ærfugl,' to 'Ærfugl, blod'
 PBDE:
 - Aligned columns in top and bottom parts according to decription in 'read_excel_nilu1' in script '210_Read_NILU_excel_data_functions.R'  
+- Also there were two 'Nr. 2020-0454', the first one correcetd to 'Nr. 2020-0453' (yellow cell, also see PCB data)
 PCB:
 - Aligned columns in top and bottom parts according to decription in 'read_excel_nilu1' in script '210_Read_NILU_excel_data_functions.R'  
+- Data to start in column C
+- Move row titles in upper part to column A
+- Also needed to align 'row titles' (column A in the upper part, i.e. A4:A11) to each row of sample metadata. Especially 'Customers sample ID'
 - Added 'Customers sample ID' for two samples (yellow). Compare with PBDE sheet.
 Siloksaner:
 - Columns 'TISSUE_NAME' and 'Specimen_label' added manually
+Metaller:
+- Delete column A
+- Delete 'Oppdragsnummer' column 
+'
 

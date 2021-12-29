@@ -42,7 +42,7 @@ library(ggplot2)
 
 library(safejoin) # https://github.com/moodymudskipper/safejoin
 
-source("71_Import_til_NIVAbasen_functions.R")
+source("810_Import_til_NIVAbasen_functions.R")
 
 # "Restart" for lazy people that don't want to write the 
 #  password again (deletes all objects except database password/username)

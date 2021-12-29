@@ -1456,5 +1456,50 @@ df3b <- get_nivabase_selection(
   69750,
   extra_where = " and extract(YEAR from SAMPLE_DATE) = 2020")
 
+
+
+```
+
+
+```{r}
+
+#
+# Biological effect data in old nivadatabase data  
+#
+
+df <- get_biota_chemistry(
+  years = 2015,              # in case some specimens wrongly  
+                                  #    have date_caught = 2020
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE) %>%
+  select(-LATIN_NAME)        
+
+tab <- df %>% filter(STATION_CODE == "23B") %>% xtabs(~NAME + TISSUE_NAME, .)
+
+# Blod  
+tab[tab[,1] > 0,1]
+# ALAD PROTV 
+#   15    15 
+
+# Liver - microsome: 
+tab[tab[,4] > 0,4]
+# EROD PROTV 
+#   13    13 
+   
+tab[tab[,2] > 0,2]
+# AY380 BAP3OH  PA1OH PYR1OH 
+#    15     15     15     15 
+
+df_meth <- get_nivabase_selection(
+  "*",
+  "METHOD_DEFINITIONS",
+  "NAME",
+  "PROTV", values_are_text = TRUE)
+# DESCR empty
+# UNIT = mg/mL
+# METHOD_ID: 28575
+
+    
 ```
 

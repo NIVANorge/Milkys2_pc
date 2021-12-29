@@ -2,6 +2,8 @@
 # Modified from
 # https://community.rstudio.com/t/updateselectizeinput-causes-double-run/13345
 #
+# Used as model for App_801
+#
 
 library(shiny)
 library(ggplot2) # use mpg dataset in ggplot2
