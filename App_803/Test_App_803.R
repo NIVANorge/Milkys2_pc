@@ -2,6 +2,10 @@
 #
 # Code for testing App_803
 #
+# NOTE: this also has code for creating the files read by he app (part 2 below)
+# - the sources for these files are also 
+# 
+#
 
 # Set working directory before reunning code
 setwd(here::here("App_803"))
@@ -32,6 +36,10 @@ library(forcats)
 # . 2a. Raw data ----
 #
 
+#
+# NOTE: The files used (and made below) are too big to put on Github
+# NIVA people can find them here: 'K:\Avdeling\214-Oseanografi\DHJ\Data\Milkys_Access_files'
+#  
 dat_loc <- read_csv2("../../../CEMP/2016_Milkys/dbo_locality_ny.txt") %>%
   mutate(
     Station_name = paste(jmpst, stnam)

@@ -1,6 +1,7 @@
 
 #
 # Code for testing App_802
+# NOTE: this also has code for creating the files read by he app (part 2 below)
 #
 
 # Set working directory before rerunning code
@@ -35,6 +36,10 @@ library(forcats)
 #  App reads from file made below
 #
 
+#
+# NOTE: The files used (and made below) are too big to put on Github
+# NIVA people can find them here: 'K:\Avdeling\214-Oseanografi\DHJ\Data\Milkys_ICES_files'
+#  
 dat_orig <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway.csv") %>%
   rename(
     LATIN_NAME = species,

@@ -8,6 +8,10 @@ library(ggplot2)
 library(readr)
 library(forcats)
 
+#
+# These files are too big to put on Github
+# NIVA people can find them here: 'K:\Avdeling\214-Oseanografi\DHJ\Data\Milkys_ICES_files'
+#  
 dat <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_added_columns.csv")
 dat_summ <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_summ.csv")
 

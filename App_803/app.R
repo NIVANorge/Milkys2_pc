@@ -15,6 +15,10 @@ library(ggplot2)
 library(readr)
 library(forcats)
 
+#
+# NOTE: The files used (and made below) are too big to put on Github
+# NIVA people can find them here: 'K:\Avdeling\214-Oseanografi\DHJ\Data\Milkys_Access_files'
+#  
 dat <- read_csv("dat.csv")
 dat_summ <- read_csv("dat_summ.csv")
 
