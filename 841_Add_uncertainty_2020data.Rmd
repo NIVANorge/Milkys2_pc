@@ -54,8 +54,9 @@ We only keep data from the last year
 # dir("Data")
 # Data at sample level (chemical data, biological efect parameters and VDSI)
 # Also in "../Milkys2/Data/101_data_updated_2020-08-05.rds"
-
-fn <- "Files_from_Jupyterhub_2020/Raw_data/101_dat_new_2021-09-01.rds"
+ 
+fn <- "Files_from_Jupyterhub_2020/Raw_data/101_dat_new_2021-09-01.rds"     # data FROM Milkys2 on Jupyterhub
+fn <- "../Milkys2/Data/101_dat_new_2021-12-30.rds"                         # data FROM Milkys2 on PC 
 
 dat_all_allyears <- readRDS(fn)
 
@@ -98,8 +99,10 @@ if (FALSE){
 
 ```
 ### Plot raw data   
-- Discovered further down that especially some PFDcA values from Sørfjorden are very low  
-- Also some PFUdA from and Bergen Havn Sørfjorden are very low  
+- In earlier veriosn of the data, some PFDcA values from Sørfjorden are very low  
+- the same for some PFUdA data 
+- PCBs are also very low for 19B, but this is correct (methods are adjusted for this station)   
+
 ```{r}
 
 plot_raw_data_liver_highlight <- function(param, 
@@ -137,6 +140,7 @@ plot_raw_data_liver_highlight("PFUdA")
 plot_raw_data_liver_highlight("PFNA")
 
 plot_raw_data_liver_highlight("CB180", highlight = "19B", highlight_text = "Svalbard", log = TRUE)
+plot_raw_data_liver_highlight("CB101", highlight = "19B", highlight_text = "Svalbard", log = TRUE)
 
 ```
 ### Fix PFDcA and PFUdA in cod liver    
