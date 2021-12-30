@@ -105,6 +105,11 @@ We only keep the 2019 data
 
 fn <- "Data/841_dat_all_2020"
 
+cat("----------------------------------------\n")
+cat("file written at:\n")
+file.info(fn)$mtime
+cat("----------------------------------------\n")
+
 data_all <- readRDS(fn) %>%
   mutate(
     TISSUE_NAME = case_when(
@@ -157,15 +162,41 @@ if (FALSE){
       "PA1OH", "PA1O", "1-OH-fenantren", "PYR1OH",  "PYR1O", "1-OH-pyren", 
       "BAP3OH", "BAP3O", "3-OH-benzo[a]pyren")) %>%
     xtabs(~PARAM, .)
+
+  data_ind2 %>%
+    filter(PARAM %in% c("VDSI", "Intersex")) %>%
+    xtabs(~PARAM + STATION_CODE, .)
   
 }
 
 
 ```
 
+### a2-0. Change Intersex to code `INTF%`  
+- https://vocab.ices.dk/?CodeID=53682  
+- VDSI is OK   
+
+```{r}
+
+sel <- data_ind2$PARAM %in% "Intersex"
+data_ind2$PARAM[sel] <- "INTF%"
+
+cat("Intersex changed to code INTF% for", sum(sel), "records")
+
+
+```
+
+
 ### a2-1. Get VDSI + intersex data   
-- Intersex should have code `INTF%` (https://vocab.ices.dk/?CodeID=53682)  
+- Intersex should have code `INTF%` (https://vocab.ices.dk/?CodeID=53682)   
+- NOT NEEDED anymore  
 ```{r, message=FALSE}
+
+#
+# NOT NEEDED (data has been added to database
+#
+
+if (FALSE){
 
 folder_vdsi <- "K:/Prosjekter/Sjøvann/JAMP/2020/opparbeiding/Snegl"
 
@@ -250,12 +281,22 @@ cat("\n------------------------------------------\n")
 cat("Combined data: \n------------------------------------------\n")
 xtabs(~PARAM, dat_snail_sex )
 
+}
+
 
 ```
 
 ### a2-2. Add VDSI + intersex data   
+- NOT NEEDED anymore  
+
 ```{r}
 
+#
+# NOT NEEDED (data has been added to database
+#
+
+if (FALSE){
+  
 check1 <- data_ind2 %>%
   filter(STATION_CODE %in% dat_snail_sex$STATION_CODE)
 
@@ -294,7 +335,10 @@ if (nrow(check_existing) == 0){
 n2 <- nrow(data_ind2)
 
 message(n2-n1, " rows added to the data")
-  
+
+}
+
+
 ```
 
 
