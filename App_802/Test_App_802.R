@@ -45,7 +45,7 @@ dat_orig <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Nor
     LATIN_NAME = species,
     TISSUE_NAME = matrix,
     PARAM = determinand,
-    Year = year
+    MYEAR = year
   ) %>%
   mutate(
     Station_name = case_when(
@@ -60,7 +60,7 @@ dat_orig <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Nor
 # Get rid of duplicates (see section '3B Check duplicates' below)
 #
 dat_orig_with_count <- dat_orig %>%
-  add_count(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample)
+  add_count(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample)
 table(dat_orig_with_count$n)
 #      1      2 
 # 545988   1420
@@ -68,7 +68,7 @@ table(dat_orig_with_count$n)
 # For duplicates: take the mean  the 
 dat_orig_with_dupl <- dat_orig_with_count %>%
   filter(n > 1) %>%
-  group_by(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+  group_by(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
   arrange(is.na(uncertainty)) %>%                   # sort so the values WITH uncertainty comes first (only makes a difference for DRYWT 2017)
   mutate(value = mean(value, na.rm = TRUE)) %>%     # mean of the two values for the same sample 
   summarise(across(.fn = first), .groups = "drop")
@@ -86,13 +86,13 @@ dat_duplicates_removed <- bind_rows(
 #
 dat_lipid <- dat_duplicates_removed %>% 
   filter(PARAM %in% c("FATWT%", "EXLIP%")) %>%
-  select(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample, value) %>%
+  select(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample, value) %>%
   rename(Fat_perc = value) %>%
   select(-PARAM)
 
 dat_dryweight <- dat_duplicates_removed %>% 
   filter(PARAM %in% c("DRYWT%")) %>%
-  select(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample, value) %>%
+  select(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample, value) %>%
   rename(Dry_perc = value) %>%
   select(-PARAM)
 
@@ -104,22 +104,22 @@ dat_dryweight <- dat_duplicates_removed %>%
 dat <- dat_duplicates_removed %>%
   left_join(dat_lipid) %>%
   left_join(dat_dryweight) %>%
-  rename(Value_orig = value) %>%
+  rename(VALUE_ORIG = value) %>%
   mutate(
-    Value_wet = case_when(
-      Basis == "W" | PARAM %in% c("FATWT%", "EXLIP%","DRYWT%") ~ Value_orig,
-      Basis == "D" ~ Value_orig*(Dry_perc/100),
-      Basis == "F" ~ Value_orig/(Fat_perc/100)
+    VALUE_WW = case_when(
+      Basis == "W" | PARAM %in% c("FATWT%", "EXLIP%","DRYWT%") ~ VALUE_ORIG,
+      Basis == "D" ~ VALUE_ORIG*(Dry_perc/100),
+      Basis == "F" ~ VALUE_ORIG/(Fat_perc/100)
     ),
-    Value_dry = case_when(
-      Basis == "W" ~ Value_orig/(Dry_perc/100),
-      Basis == "D" ~ Value_orig,
-      Basis == "F" ~ Value_orig*(Fat_perc/100)/(Dry_perc/100)
+    VALUE_DW = case_when(
+      Basis == "W" ~ VALUE_ORIG/(Dry_perc/100),
+      Basis == "D" ~ VALUE_ORIG,
+      Basis == "F" ~ VALUE_ORIG*(Fat_perc/100)/(Dry_perc/100)
       ),
-    Value_lip = case_when(
-      Basis == "W" ~ Value_orig/(Fat_perc/100),
-      Basis == "D" ~ Value_orig*(Dry_perc/100)/(Fat_perc/100),
-      Basis == "F" ~ Value_orig
+    VALUE_FB = case_when(
+      Basis == "W" ~ VALUE_ORIG/(Fat_perc/100),
+      Basis == "D" ~ VALUE_ORIG*(Dry_perc/100)/(Fat_perc/100),
+      Basis == "F" ~ VALUE_ORIG
     )
   )
 
@@ -147,15 +147,15 @@ if (!file.exists(fn_summ) | update_summary_table){
   dat_dt <- lazy_dt(dat)
   
   dat_summ <- dat %>%
-    group_by(PARAM, Basis, Station_name, TISSUE_NAME, Year) %>%
+    group_by(PARAM, Basis, Station_name, TISSUE_NAME, MYEAR) %>%
     summarize(
       N = n(),
       Over_LOQ = sum(is.na(qflag)),
       Prop_over_LOQ = Over_LOQ/N,
-      Value_orig_median = median(Value_orig),
-      Value_wet_median = median(Value_wet),
-      Value_dry_median = median(Value_dry),
-      Value_lip_median = median(Value_lip)
+      Value_orig_median = median(VALUE_ORIG),
+      Value_wet_median = median(VALUE_WW),
+      Value_dry_median = median(VALUE_DW),
+      Value_lip_median = median(VALUE_FB)
     ) %>%
     mutate(
       Station_name = factor(Station_name),
@@ -174,7 +174,7 @@ if (!file.exists(fn_summ) | update_summary_table){
     group_by(PARAM, Basis, Station_name) %>%
     mutate(
       No_years = n(),
-      Last_year = max(Year)
+      Last_year = max(MYEAR)
     )
   
   write_csv(dat_summ, fn_summ)
@@ -198,27 +198,27 @@ if (FALSE){
   
   
   dat %>%
-    filter(Year == 2020) %>%
+    filter(MYEAR == 2020) %>%
     View()
   
   dat %>%
-    filter(Year == 2000 & Station_name == "36B Færder area" & PARAM == "EXLIP%") %>% nrow()
+    filter(MYEAR == 2000 & Station_name == "36B Færder area" & PARAM == "EXLIP%") %>% nrow()
   
   dat_lipid %>%
-    filter(Year == 2000 & Station_name == "36B Færder area") %>% #View()
+    filter(MYEAR == 2000 & Station_name == "36B Færder area") %>% #View()
     xtabs(~smpno + subno, .)
   dat_lipid %>%
-    filter(Year == 2000 & Station_name == "36B Færder area") %>% #View()
+    filter(MYEAR == 2000 & Station_name == "36B Færder area") %>% #View()
     xtabs(~replicate, .)
   dat_orig %>%
-    filter(Year == 2000 & Station_name == "36B Færder area" & PARAM == "HCHA") %>% # View()
+    filter(MYEAR == 2000 & Station_name == "36B Færder area" & PARAM == "HCHA") %>% # View()
     xtabs(~smpno + subno, .)
   dat_orig %>%
-    filter(Year == 2000 & Station_name == "36B Færder area" & PARAM == "HCHA") %>% # View()
+    filter(MYEAR == 2000 & Station_name == "36B Færder area" & PARAM == "HCHA") %>% # View()
     xtabs(~replicate, .)
   
   dat_orig %>%
-    filter(Year == 2000 & Station_name == "36B Færder area" & PARAM %in% c("HCHA","EXLIP%")) %>% View()
+    filter(MYEAR == 2000 & Station_name == "36B Færder area" & PARAM %in% c("HCHA","EXLIP%")) %>% View()
   
   
   # Basis
@@ -251,9 +251,9 @@ if (FALSE){
   params <- dat %>% xtabs(~PARAM, .) %>% names()
   grep("fat", params, ignore.case = TRUE, value = TRUE)
   grep("lip", params, ignore.case = TRUE, value = TRUE)
-  xtabs(~Year + PARAM, dat %>% filter(PARAM %in% c("FATWT%", "EXLIP%")))
+  xtabs(~MYEAR + PARAM, dat %>% filter(PARAM %in% c("FATWT%", "EXLIP%")))
   dat %>% 
-    filter(Year == 2020 & PARAM %in% c("FATWT%", "EXLIP%")) %>% View()
+    filter(MYEAR == 2020 & PARAM %in% c("FATWT%", "EXLIP%")) %>% View()
   
   # Dry weight  
   grep("dry", params, ignore.case = TRUE, value = TRUE)
@@ -279,19 +279,19 @@ if (FALSE){
   # smpno and subno isn't enough
   if (FALSE)
     dat_orig %>%
-    count(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno) %>%
+    count(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno) %>%
     filter(n > 1) %>%
-    xtabs(~Year, .)
-  # Year
+    xtabs(~MYEAR, .)
+  # MYEAR
   # 1983 1985 1986 1987 2008 2015 2017 
   #   90   12   27   21   25   69  631
   
   # adding sub.sample still isn't enough
   if (FALSE)
     dat_orig %>%
-    count(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+    count(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
     filter(n > 1) %>%
-    xtabs(~Year, .)
+    xtabs(~MYEAR, .)
   # 1983 1985 1986 1987 2008 2017 
   #   90   12   27   21   25  535 
   
@@ -299,28 +299,28 @@ if (FALSE){
   # The problem with 2017 data is duplicates of DRYWT%
   #
   dat_orig %>%
-    filter(Year %in% 2017) %>%
-    count(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+    filter(MYEAR %in% 2017) %>%
+    count(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
     filter(n > 1) %>%
     xtabs(~PARAM + Station_name, .)
   # ... the two values are always the same
   dat_orig %>%
-    filter(Year %in% 2017 & PARAM %in% "DRYWT%") %>%
-    group_by(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+    filter(MYEAR %in% 2017 & PARAM %in% "DRYWT%") %>%
+    group_by(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
     summarise(Value_diff = diff(range(value))) %>%
     # View()
     filter(Value_diff > 0) %>%
     nrow()
   # But only one has limit_detection and uncertainty given ()
   dat_orig %>%
-    filter(Year %in% 2017 & Station_name == "10A2 Skallneset" & PARAM %in% c("CD", "DRYWT%")) %>%
-    add_count(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>% 
+    filter(MYEAR %in% 2017 & Station_name == "10A2 Skallneset" & PARAM %in% c("CD", "DRYWT%")) %>%
+    add_count(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>% 
     arrange(smpno, subno, sub.sample, PARAM) %>% 
     View("2017 example")
   # (same, shown for all values)
   dat_orig %>%
-    filter(Year %in% 2017 & PARAM %in% "DRYWT%") %>%
-    group_by(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+    filter(MYEAR %in% 2017 & PARAM %in% "DRYWT%") %>%
+    group_by(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
     summarise(N_limit_detection = sum(!is.na(uncertainty))) %>%
     # View()
     xtabs(~N_limit_detection, .)
@@ -329,8 +329,8 @@ if (FALSE){
   # - or take the mean 
   
   dat_orig_with_dupl %>% # names()
-    filter(Year %in% 2017 & PARAM %in% "DRYWT%") %>%
-    select(Year, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM, TISSUE_NAME, Basis, value, uncertainty) %>% View("EROD 2008")
+    filter(MYEAR %in% 2017 & PARAM %in% "DRYWT%") %>%
+    select(MYEAR, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM, TISSUE_NAME, Basis, value, uncertainty) %>% View("EROD 2008")
   
   
   
@@ -338,22 +338,22 @@ if (FALSE){
   # The problem with 2008 data is duplicates of EROD in 30B Oslo City area
   #
   dat_orig %>%
-    filter(Year %in% 2008) %>%
-    count(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+    filter(MYEAR %in% 2008) %>%
+    count(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
     filter(n > 1) %>%
     xtabs(~PARAM + Station_name, .)
   # ... the two values are always the same
   dat_orig %>%
-    filter(Year %in% 2008 & PARAM %in% "EROD") %>%
-    group_by(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+    filter(MYEAR %in% 2008 & PARAM %in% "EROD") %>%
+    group_by(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
     summarise(Value_diff = diff(range(value))) %>%
     # View()
     filter(Value_diff > 0) %>%
     nrow()
   # Example (limit_detection and uncertainty not given)  
   dat_orig %>%
-    filter(Year %in% 2008 & PARAM %in% "EROD") %>%
-    add_count(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>% 
+    filter(MYEAR %in% 2008 & PARAM %in% "EROD") %>%
+    add_count(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>% 
     filter(n > 1) %>%
     arrange(smpno, subno, sub.sample, PARAM) %>% 
     View("EROD 2008 example")
@@ -363,8 +363,8 @@ if (FALSE){
   # - or take the mean
   
   dat_orig_with_dupl %>% # names()
-    filter(Year %in% 2008 & PARAM %in% "EROD") %>%
-    select(Year, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM, TISSUE_NAME, Basis, value) %>% View("EROD 2008")
+    filter(MYEAR %in% 2008 & PARAM %in% "EROD") %>%
+    select(MYEAR, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM, TISSUE_NAME, Basis, value) %>% View("EROD 2008")
   
   
   #
@@ -374,8 +374,8 @@ if (FALSE){
     cat("======", yr, "======\n")
     print(
       dat_orig %>%
-        filter(Year %in% yr) %>%
-        count(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+        filter(MYEAR %in% yr) %>%
+        count(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
         filter(n > 1) %>% 
         xtabs(~PARAM + Station_name, .) 
     )
@@ -383,8 +383,8 @@ if (FALSE){
   
   # ... the two values are NOT always the same (example year)
   dat_orig %>%
-    filter(Year %in% 1987) %>%
-    group_by(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+    filter(MYEAR %in% 1987) %>%
+    group_by(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
     summarise(N = n(), Value_diff = diff(range(value))) %>%
     # View()
     filter(Value_diff > 0) %>%
@@ -392,18 +392,18 @@ if (FALSE){
   
   # ... the two values are NOT always the same (example)
   dat_orig %>% # names()
-    filter(Year %in% 1987 & PARAM %in% "CD") %>%
-    group_by(Year, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
+    filter(MYEAR %in% 1987 & PARAM %in% "CD") %>%
+    group_by(MYEAR, PARAM, Station_name, TISSUE_NAME, smpno, subno, sub.sample) %>%
     mutate(N = n(), Value_diff = diff(range(value))) %>%
     filter(N > 1) %>%
-    arrange(Year, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM) %>%
-    select(Year, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM, TISSUE_NAME, Basis, value)
+    arrange(MYEAR, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM) %>%
+    select(MYEAR, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM, TISSUE_NAME, Basis, value)
   
   # SOLUTION: take the mean
   
   dat_orig_with_dupl %>% # names()
-    filter(Year %in% 1987 & PARAM %in% "CD") %>%
-    select(Year, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM, TISSUE_NAME, Basis, value)
+    filter(MYEAR %in% 1987 & PARAM %in% "CD") %>%
+    select(MYEAR, Station_name, TISSUE_NAME, smpno, subno, sub.sample, PARAM, TISSUE_NAME, Basis, value)
   
   
   
@@ -495,7 +495,7 @@ gg <- dat_plot1 %>%
   mutate(Station_name = fct_rev(Station_name)) %>%
   filter(No_years >= input$min_no_years,
          Last_year >= series_lasting_until) %>%
-  ggplot(aes(Year, Station_name)) +
+  ggplot(aes(MYEAR, Station_name)) +
   geom_raster(aes(fill = log10(Value_plot))) +
   scale_fill_viridis_c("log10(concentration)") +
   geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
@@ -544,19 +544,19 @@ dat_plot2 <- dat %>%
   )
 
 if (input$valuebasis_selected == "Wet weight basis"){
-  dat_plot2$Value_plot <- dat_plot2$Value_wet
+  dat_plot2$Value_plot <- dat_plot2$VALUE_WW
 } else  if (input$valuebasis_selected == "Dry weight basis"){
-  dat_plot2$Value_plot <- dat_plot2$Value_dry
+  dat_plot2$Value_plot <- dat_plot2$VALUE_DW
 } else if (input$valuebasis_selected == "Lipid weight basis"){
-  dat_plot2$Value_plot <- dat_plot2$Value_lip
+  dat_plot2$Value_plot <- dat_plot2$VALUE_FB
 } else if (input$valuebasis_selected == "Original value"){
-  dat_plot2$Value_plot <- dat_plot2$Value_orig
+  dat_plot2$Value_plot <- dat_plot2$VALUE_ORIG
 }
 
 
 # browser()
 
-gg <- ggplot(dat_plot2, aes(Year, Value_plot)) +
+gg <- ggplot(dat_plot2, aes(MYEAR, Value_plot)) +
   geom_smooth(se = FALSE, method = 'loess', formula = 'y ~ x') +
   geom_point(aes(shape = LOQ, color = Series), size = 2) +
   scale_shape_manual(values = c(19,25)) +
@@ -566,8 +566,8 @@ gg <- ggplot(dat_plot2, aes(Year, Value_plot)) +
 if (input$number_of_points)
   gg <- gg +
   geom_text(
-    data = dat_plot2 %>% count(Year, Value_plot) %>% filter(n > 1),  
-    aes(x = Year + 0.3, label = n))
+    data = dat_plot2 %>% count(MYEAR, Value_plot) %>% filter(n > 1),  
+    aes(x = MYEAR + 0.3, label = n))
 if (input$max_y != 0){
   if (input$range_x[1] == 1980 & input$range_x[2] == 2020){
     gg <- gg + 
@@ -615,47 +615,47 @@ dat_plot3a <- dat %>%
                     Basis, "-basis")
   )
 
-# xtabs(~Year + PARAM, dat_plot3b)
-# dat_plot3b %>% filter(Year == 2000) %>% View()
+# xtabs(~MYEAR + PARAM, dat_plot3b)
+# dat_plot3b %>% filter(MYEAR == 2000) %>% View()
 
 if (input$p3_valuebasis_selected_x == "Wet weight basis"){
-  dat_plot3a$Value_plot_x <- dat_plot3a$Value_wet
+  dat_plot3a$Value_plot_x <- dat_plot3a$VALUE_WW
 } else  if (input$p3_valuebasis_selected_x == "Dry weight basis"){
-  dat_plot3a$Value_plot_x <- dat_plot3a$Value_dry
+  dat_plot3a$Value_plot_x <- dat_plot3a$VALUE_DW
 } else if (input$p3_valuebasis_selected_x == "Lipid weight basis"){
-  dat_plot3a$Value_plot_x <- dat_plot3a$Value_lip
+  dat_plot3a$Value_plot_x <- dat_plot3a$VALUE_FB
 } else if (input$p3_valuebasis_selected_x == "Original value"){
-  dat_plot3a$Value_plot_x <- dat_plot3a$Value_orig
+  dat_plot3a$Value_plot_x <- dat_plot3a$VALUE_ORIG
 }
 
 if (input$p3_valuebasis_selected_y == "Wet weight basis"){
-  dat_plot3a$Value_plot_y <- dat_plot3a$Value_wet
+  dat_plot3a$Value_plot_y <- dat_plot3a$VALUE_WW
 } else  if (input$p3_valuebasis_selected_y == "Dry weight basis"){
-  dat_plot3a$Value_plot_y <- dat_plot3a$Value_dry
+  dat_plot3a$Value_plot_y <- dat_plot3a$VALUE_DW
 } else if (input$p3_valuebasis_selected_y == "Lipid weight basis"){
-  dat_plot3a$Value_plot_y <- dat_plot3a$Value_lip
+  dat_plot3a$Value_plot_y <- dat_plot3a$VALUE_FB
 } else if (input$p3_valuebasis_selected_y == "Original value"){
-  dat_plot3a$Value_plot_y <- dat_plot3a$Value_orig
+  dat_plot3a$Value_plot_y <- dat_plot3a$VALUE_ORIG
 }
 
 
 df_x <- dat_plot3a %>%
   filter(PARAM %in% input$p3_params_selected_x) %>%
-  select(PARAM, Year, Basis, LATIN_NAME, TISSUE_NAME, Station_name, smpno, subno, sub.sample, Value_plot_x, LOQ) %>%
+  select(PARAM, MYEAR, Basis, LATIN_NAME, TISSUE_NAME, Station_name, smpno, subno, sub.sample, Value_plot_x, LOQ) %>%
   mutate(Under_LOQ_x = ifelse(LOQ == "Under LOQ", "x", ""))
 df_y <- dat_plot3a %>%
   filter(PARAM %in% input$p3_params_selected_y) %>%
-  select(PARAM, Year, Basis, LATIN_NAME, TISSUE_NAME, Station_name, smpno, subno, sub.sample, Value_plot_y, LOQ) %>%
+  select(PARAM, MYEAR, Basis, LATIN_NAME, TISSUE_NAME, Station_name, smpno, subno, sub.sample, Value_plot_y, LOQ) %>%
   mutate(Under_LOQ_y = ifelse(LOQ == "Under LOQ", "y", ""))
 
-# df_x %>% filter(Year == 2000) %>% View()
-df_x %>% filter(Year == 2000) %>% head()
-df_y %>% filter(Year == 2000) %>% head()
+# df_x %>% filter(MYEAR == 2000) %>% View()
+df_x %>% filter(MYEAR == 2000) %>% head()
+df_y %>% filter(MYEAR == 2000) %>% head()
 
 dat_plot3b <- inner_join(
   df_x %>% select(-LOQ), 
   df_y %>% select(-LOQ),
-  by = c("Year", "LATIN_NAME", "TISSUE_NAME", "Station_name", "smpno", "subno", "sub.sample")) %>%
+  by = c("MYEAR", "LATIN_NAME", "TISSUE_NAME", "Station_name", "smpno", "subno", "sub.sample")) %>%
   mutate(
     Under_LOQ = case_when(
       Under_LOQ_x == "" & Under_LOQ_y == "" ~ "None under",
@@ -664,9 +664,9 @@ dat_plot3b <- inner_join(
   )
 
 dat_plot3b <- dat_plot3b %>%
-  filter(Year %in% input$p3_select_years)
+  filter(MYEAR %in% input$p3_select_years)
 
-# xtabs(~Year, dat_plot3b)
+# xtabs(~MYEAR, dat_plot3b)
 # stringi::stri_enc_toutf32("x")
 # stringi::stri_enc_toutf32("y")
 
@@ -676,7 +676,7 @@ paramtext_y <- paste(input$p3_params_selected_y, collapse = ", ")
 
 gg1 <- ggplot(dat_plot3b, aes(Value_plot_x, Value_plot_y)) +
   geom_smooth(se = FALSE, method = 'lm', formula = 'y ~ x') +
-  geom_point(aes(shape = Under_LOQ, color = Year), size = 2) +
+  geom_point(aes(shape = Under_LOQ, color = MYEAR), size = 2) +
   scale_shape_manual(values = c(`None under` = 19, `x under` = 120, `y under` = 121, `xy under` = 6)) +
   scale_color_viridis_c() +
   labs(
@@ -693,11 +693,101 @@ gg2 <- ggplot(dat_plot3b, aes(Value_plot_x, Value_plot_y)) +
     x = paste0(paramtext_x, " (", input$p3_valuebasis_selected_x, ")"),
     y = paste0(paramtext_y, " (", input$p3_valuebasis_selected_y, ")")
   )
-gg2 + facet_wrap(vars(Year))
-gg2 + facet_wrap(vars(Year), scales = "free_y")
-gg2 + facet_wrap(vars(Year), scales = "free")
+gg2 + facet_wrap(vars(MYEAR))
+gg2 + facet_wrap(vars(MYEAR), scales = "free_y")
+gg2 + facet_wrap(vars(MYEAR), scales = "free")
 
 
 
 # Set working directory back
 setwd(here::here())
+
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+# 6. APPENDIX ----
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+
+#
+# Data downloaded via OHAT page, link 'DOME raw data extractions' (https://www.ices.dk/sites/pub/Publication%20Reports/Forms/DispForm.aspx?ID=37129)  
+# See https://dome.ices.dk/ohat/?assessmentperiod=2021  
+#
+
+if (FALSE){
+  
+  #
+  # . Read published raw data and save the Norwegian part ----
+  #
+  # Do this only once -  reads all data and saves the Norwegian ones 
+  
+  fn <- "Files_to_ICES/Data_from_ICES/OSPAR_MIME_data_extraction_2021/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201.txt"
+  
+  # Checking
+  readLines(fn, n = 10, encoding = "UTF-8", skipNul = TRUE)
+  
+  # The file Didn't work
+  # readr::read_tsv(fn, n_max = 10)
+  # readr::read_delim(fn, delim = "\t", n_max = 10)
+  
+  # Didn't work (tried to read Norway only; see https://www.r-bloggers.com/2017/02/how-to-import-a-subset-of-a-too-huge-csv-file/)
+  # library(sqldf)
+  # dat <- sqldf::read.csv.sql(fn, header = TRUE, sep = "\t", sql = "select * from file where ÿþCountry = '\"Norway\"'")
+  # dat <- sqldf::read.csv.sql(fn, header = TRUE, sep = "\t", sql = "select * from file where StationName = '\"14-S\"'")
+  
+  # Worked (test read)
+  df <- read.table(fn, header = TRUE, sep = "\t", quote = "", nrows = 10, skipNul = TRUE)
+  str(df)
+  
+  # Read all (40 seconds)  
+  t0 <- Sys.time()
+  dat_all_countries <- read.table(fn, header = TRUE, sep = "\t", quote = "", skipNul = TRUE)
+  t1 <- Sys.time()
+  t1-t0
+  str(dat_all_countries)
+  names(dat_all_countries)[1] <- "Country"
+  
+  dat <- subset(dat_all_countries, Country == "Norway")
+  
+  fn_save <- "Files_to_ICES/Data_from_ICES/OSPAR_MIME_data_extraction_2021/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201_Norway.txt"
+  write.csv(dat, fn_save, row.names = FALSE, quote = FALSE, fileEncoding = "UTF-8")
+  
+  test <- readr::read_csv(fn_save)
+  unique(test$SD_StationName)
+  
+}
+
+If (FALSE){
+  
+  #
+  # . Test published raw data ----
+  #
+  
+  fn <- "../Files_to_ICES/Data_from_ICES/OSPAR_MIME_data_extraction_2021/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201_Norway.txt"
+  dat_publ <- readr::read_csv(fn)
+
+  dat_publ %>%
+    filter(PARAM %in% param,
+           MYEAR %in% 2019) %>% View()
+
+  dat_publ %>%
+    filter(StationName == "Varalds") %>% View()
+  
+  # Test "overview plot"
+  
+  param <- "CB118"
+  dat_publ %>%
+    filter(PARAM %in% param,
+           BASIS %in% "W") %>% # View()
+    mutate(Value_plot = Value) %>%
+    # The rest is copied from 5 plot 1
+  mutate(Station_name = fct_rev(Station_name)) %>%
+    ggplot(aes(MYEAR, Station_name)) +
+    geom_raster(aes(fill = log10(Value_plot))) +
+    scale_fill_viridis_c("log10(concentration)")
+    
+  
+}
+
+

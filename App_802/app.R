@@ -2,7 +2,7 @@
 # App_802 - Plot raw data from ICES (csv file from Rob)   
 #
 
-# library(shiny)
+library(shiny)
 library(dplyr)
 library(ggplot2)
 library(readr)
@@ -229,13 +229,14 @@ server <- function(input, output) {
       mutate(Station_name = fct_rev(Station_name)) %>%
       filter(No_years >= input$min_no_years,
              Last_year >= series_lasting_until) %>%
-      ggplot(aes(Year, Station_name)) +
+      ggplot(aes(MYEAR, Station_name)) +
       geom_raster(aes(fill = log10(Value_plot))) +
       scale_fill_viridis_c("log10(concentration)") +
       geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
                                              No_years >= input$min_no_years,
-                                             Last_year >= series_lasting_until))
-    
+                                             Last_year >= series_lasting_until)) +
+      labs(x = "Year", y = "Station")
+
     gg   
     
   })
@@ -270,29 +271,32 @@ server <- function(input, output) {
         )
       
       if (input$valuebasis_selected == "Wet weight basis"){
-        dat_plot2$Value_plot <- dat_plot2$Value_wet
+        dat_plot2$Value_plot <- dat_plot2$VALUE_WW
       } else  if (input$valuebasis_selected == "Dry weight basis"){
-        dat_plot2$Value_plot <- dat_plot2$Value_dry
+        dat_plot2$Value_plot <- dat_plot2$VALUE_DW
       } else if (input$valuebasis_selected == "Lipid weight basis"){
-        dat_plot2$Value_plot <- dat_plot2$Value_lip
+        dat_plot2$Value_plot <- dat_plot2$VALUE_FB
       } else if (input$valuebasis_selected == "Original value"){
-        dat_plot2$Value_plot <- dat_plot2$Value_orig
+        dat_plot2$Value_plot <- dat_plot2$VALUE_ORIG
       }
       
       # browser()
       
-      resultplot <- ggplot(dat_plot2, aes(Year, Value_plot)) +
-        geom_smooth(se = FALSE, method = 'loess', formula = 'y ~ x') +
+      resultplot <- ggplot(dat_plot2, aes(MYEAR, Value_plot)) +
         geom_point(aes(shape = LOQ, color = Series), size = 2) +
+        geom_smooth(se = FALSE, method = 'loess', formula = 'y ~ x') +
         scale_shape_manual(values = c(19,25)) +
         scale_fill_viridis_b() +
         facet_grid(vars(Station_name), vars(PARAM)) +
-        labs(y = paste0("Concentration (", tolower(input$valuebasis_selected), ")"))
+        labs(x = "Year",
+             y = paste0("Concentration (", tolower(input$valuebasis_selected), ")"))
+      
       if (input$number_of_points)
         resultplot <- resultplot +
         geom_text(
-          data = dat_plot2 %>% count(Year, Value_plot) %>% filter(n > 1),  
-          aes(x = Year + 0.3, label = n))
+          data = dat_plot2 %>% count(MYEAR, Value_plot) %>% filter(n > 1),  
+          aes(x = MYEAR + 0.3, label = n))
+      
       if (input$max_y != 0){
         if (input$range_x[1] == 1980 & input$range_x[2] == 2020){
           resultplot <- resultplot + 
@@ -345,48 +349,48 @@ server <- function(input, output) {
                         Basis, "-basis")
       )
     
-    # xtabs(~Year + PARAM, dat_plot3b)
-    # dat_plot3b %>% filter(Year == 2000) %>% View()
+    # xtabs(~MYEAR + PARAM, dat_plot3b)
+    # dat_plot3b %>% filter(MYEAR == 2000) %>% View()
     
     if (input$p3_valuebasis_selected_x == "Wet weight basis"){
-      dat_plot3a$Value_plot_x <- dat_plot3a$Value_wet
+      dat_plot3a$Value_plot_x <- dat_plot3a$VALUE_WW
     } else  if (input$p3_valuebasis_selected_x == "Dry weight basis"){
-      dat_plot3a$Value_plot_x <- dat_plot3a$Value_dry
+      dat_plot3a$Value_plot_x <- dat_plot3a$VALUE_DW
     } else if (input$p3_valuebasis_selected_x == "Lipid weight basis"){
-      dat_plot3a$Value_plot_x <- dat_plot3a$Value_lip
+      dat_plot3a$Value_plot_x <- dat_plot3a$VALUE_FB
     } else if (input$p3_valuebasis_selected_x == "Original value"){
-      dat_plot3a$Value_plot_x <- dat_plot3a$Value_orig
+      dat_plot3a$Value_plot_x <- dat_plot3a$VALUE_ORIG
     }
     
     if (input$p3_valuebasis_selected_y == "Wet weight basis"){
-      dat_plot3a$Value_plot_y <- dat_plot3a$Value_wet
+      dat_plot3a$Value_plot_y <- dat_plot3a$VALUE_WW
     } else  if (input$p3_valuebasis_selected_y == "Dry weight basis"){
-      dat_plot3a$Value_plot_y <- dat_plot3a$Value_dry
+      dat_plot3a$Value_plot_y <- dat_plot3a$VALUE_DW
     } else if (input$p3_valuebasis_selected_y == "Lipid weight basis"){
-      dat_plot3a$Value_plot_y <- dat_plot3a$Value_lip
+      dat_plot3a$Value_plot_y <- dat_plot3a$VALUE_FB
     } else if (input$p3_valuebasis_selected_y == "Original value"){
-      dat_plot3a$Value_plot_y <- dat_plot3a$Value_orig
+      dat_plot3a$Value_plot_y <- dat_plot3a$VALUE_ORIG
     }
     
     # browser()
     
     df_x <- dat_plot3a %>%
       filter(PARAM %in% input$p3_params_selected_x) %>%
-      select(PARAM, Year, Basis, LATIN_NAME, TISSUE_NAME, Station_name, smpno, subno, sub.sample, Value_plot_x, LOQ) %>%
+      select(PARAM, MYEAR, Basis, LATIN_NAME, TISSUE_NAME, Station_name, smpno, subno, sub.sample, Value_plot_x, LOQ) %>%
       mutate(Under_LOQ_x = ifelse(LOQ == "Under LOQ", "x", ""))
     df_y <- dat_plot3a %>%
       filter(PARAM %in% input$p3_params_selected_y) %>%
-      select(PARAM, Year, Basis, LATIN_NAME, TISSUE_NAME, Station_name, smpno, subno, sub.sample, Value_plot_y, LOQ) %>%
+      select(PARAM, MYEAR, Basis, LATIN_NAME, TISSUE_NAME, Station_name, smpno, subno, sub.sample, Value_plot_y, LOQ) %>%
       mutate(Under_LOQ_y = ifelse(LOQ == "Under LOQ", "y", ""))
     
-    # df_x %>% filter(Year == 2000) %>% View()
-    df_x %>% filter(Year == 2000) %>% head()
-    df_y %>% filter(Year == 2000) %>% head()
+    # df_x %>% filter(MYEAR == 2000) %>% View()
+    df_x %>% filter(MYEAR == 2000) %>% head()
+    df_y %>% filter(MYEAR == 2000) %>% head()
     
     result <- inner_join(
       df_x %>% select(-LOQ), 
       df_y %>% select(-LOQ),
-      by = c("Year", "LATIN_NAME", "TISSUE_NAME", "Station_name", "smpno", "subno", "sub.sample")) %>%
+      by = c("MYEAR", "LATIN_NAME", "TISSUE_NAME", "Station_name", "smpno", "subno", "sub.sample")) %>%
       mutate(
         Under_LOQ = case_when(
           Under_LOQ_x == "" & Under_LOQ_y == "" ~ "None under",
@@ -413,9 +417,9 @@ server <- function(input, output) {
     
     gg1 <- ggplot(data_for_plot, aes(Value_plot_x, Value_plot_y)) +
       geom_smooth(se = FALSE, method = 'lm', formula = 'y ~ x') +
-      geom_point(aes(shape = Under_LOQ, color = Year), size = 2) +
+      geom_point(aes(shape = Under_LOQ, color = MYEAR), size = 2) +
       scale_shape_manual(values = c(`None under` = 19, `x under` = 120, `y under` = 121, `xy under` = 6)) +
-      scale_color_viridis_c() +
+      scale_color_viridis_c("Year") +
       labs(
         x = paste0(paramtext_x, " (", input$p3_valuebasis_selected_x, ")"),
         y = paste0(paramtext_y, " (", input$p3_valuebasis_selected_y, ")")
@@ -433,13 +437,13 @@ server <- function(input, output) {
     if (input$p3_selectplot == "No subplots"){
       resultplot <- gg1 
     } else if (input$p3_selectplot == "Subplots per year, common x+y"){
-      resultplot <- gg2 + facet_wrap(vars(Year))
+      resultplot <- gg2 + facet_wrap(vars(MYEAR))
     } else if (input$p3_selectplot == "Subplots per year, free y"){
-      resultplot <- gg2 + facet_wrap(vars(Year), scales = "free_y")
+      resultplot <- gg2 + facet_wrap(vars(MYEAR), scales = "free_y")
     } else if (input$p3_selectplot == "Subplots per year, free x"){
-      resultplot <- gg2 + facet_wrap(vars(Year), scales = "free_x")
+      resultplot <- gg2 + facet_wrap(vars(MYEAR), scales = "free_x")
     } else if (input$p3_selectplot == "Subplots per year, free x+y"){
-      resultplot <- gg2 + facet_wrap(vars(Year), scales = "free")
+      resultplot <- gg2 + facet_wrap(vars(MYEAR), scales = "free")
     } 
     
     if (input$p3_logscale_x){
