@@ -3349,7 +3349,7 @@ if (sum(check) == 0){
 }
 
 ```
-### c2. Add 71A (the actual Bodø harbour)     
+### c2. Add 71A (Bjørkøya, Grenland)     
 ```{r}
 
 # data_2018[["91"]] %>% View()
@@ -3875,7 +3875,8 @@ if (FALSE){
 ```
 
 
-### Write ICES submission file   
+### Write ICES submission file    
+- automatically sets version number (finds the highest existing version number and adds one)  
 - Set up to use UTF-8 when writing, but apparently we need to change the file manually to UTF-8 afterwards anyway (in Notepad++, set encoding to ANSI, then "convert to UTF-8")  
 ```{r}
 
