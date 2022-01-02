@@ -7,6 +7,7 @@ library(dplyr)
 library(ggplot2)
 library(readr)
 library(forcats)
+library(DT)
 
 #
 # These files are too big to put on Github
@@ -103,7 +104,8 @@ ui <- fluidPage(
                 sliderInput("range_x", "Show plot for years (for auto, set to 1980-2020)", 
                             min = 1980, max = 2020, value = c(1980,2020), sep = "", step = 1),
                 numericInput("max_y", "Max y axis (for auto, set to 0)", 0),
-                checkboxInput("number_of_points", "Show number of overplotted points")
+                checkboxInput("number_of_points", "Show number of overplotted points"),
+                div(DTOutput("timeseriesdata"), style = "font-size:80%")
               ),
               
               # Subpanel 3a (plot 3)
@@ -198,6 +200,33 @@ server <- function(input, output) {
     )
   })
   
+  dat_plot2_function <- reactive({
+    
+    validate(
+      need(input$stations_selected != "", "Please select at least one station")
+    )
+    validate(
+      need(input$tissues_selected != "", "Please select at least one tissue")
+    )
+    
+    # Code in app, unchanged
+    result <- dat %>%
+      filter(PARAM %in% input$params_selected,
+             Basis %in% input$basis_selected,
+             LATIN_NAME %in% input$species_selected,
+             TISSUE_NAME %in% input$tissues_selected,
+             Station_name %in% input$stations_selected) %>%
+      mutate(
+        LOQ = ifelse(is.na(qflag), "Over LOQ", "Under LOQ"),
+        Series = paste0(LATIN_NAME, ", ", 
+                        TISSUE_NAME, ", ", 
+                        Basis, "-basis")
+      )
+    
+    result
+    
+  })
+  
   #
   # Plot 1 (overviewplot) ----
   #
@@ -247,28 +276,10 @@ server <- function(input, output) {
   
   # Plot below needs to be wrapped in observe() as 'height' uses an input value
   observe({         
+    
+   dat_plot2 <- dat_plot2_function()
+    
     output$timeseriesplot <- renderPlot({
-      
-      validate(
-        need(input$stations_selected != "", "Please select at least one station")
-      )
-      validate(
-        need(input$tissues_selected != "", "Please select at least one tissue")
-      )
-      
-      # Code in app, unchanged
-      dat_plot2 <- dat %>%
-        filter(PARAM %in% input$params_selected,
-               Basis %in% input$basis_selected,
-               LATIN_NAME %in% input$species_selected,
-               TISSUE_NAME %in% input$tissues_selected,
-               Station_name %in% input$stations_selected) %>%
-        mutate(
-          LOQ = ifelse(is.na(qflag), "Over LOQ", "Under LOQ"),
-          Series = paste0(LATIN_NAME, ", ", 
-                          TISSUE_NAME, ", ", 
-                          Basis, "-basis")
-        )
       
       if (input$valuebasis_selected == "Wet weight basis"){
         dat_plot2$Value_plot <- dat_plot2$VALUE_WW
@@ -325,6 +336,15 @@ server <- function(input, output) {
       TRUE ~ 600)   # let height vary
     )
   })  # end of observe  
+  
+  #
+  #  Plot 2 - tablewith data
+  #
+  
+  output$timeseriesdata <- DT::renderDT(
+    dat_plot2_function(), 
+    filter = "top"
+  )
   
   
   #
