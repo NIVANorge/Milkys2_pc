@@ -2846,10 +2846,140 @@ data_10$LMQNT[sel_uncrt] <- data_10$VALUE[sel_uncrt]
 ```
 
 
-### k10. Detection limits in tab 10 and original data   
+### k10a. Detection limits in tab 10 and original data   
 ```{r}
 xtabs(~is.na(DETLI), data_10)
 # xtabs(~is.na(DETECTION_LIMIT), data_conc)
+
+
+```
+### k10b. Detection limits, metals in liver
+```{r}
+
+#
+# Check metals in liver
+#
+# For getting metal parameters:
+# pars <- data_10$PARAM %>% unique()
+# pars[nchar(pars) == 2] %>% dput()
+
+pars_metals <- c("HG", "SN", "CD", "AG", "CU", "CR", "AS", "PB", "CO", "NI", "ZN")
+
+matrix <- "LI"
+df <- data_10 %>%
+  filter(PARAM %in% pars_metals & QFLAG %in% "Q" & MATRX %in% matrix) %>%
+  ungroup() %>%
+  group_by(PARAM) %>%
+  summarise(
+    loq_median = median(VALUE),
+    loq_min =  min(VALUE),
+    loq_max = max(VALUE)
+    ) %>%
+  arrange(loq_min)
+df
+
+#
+# Set DETLI for metals in liver, based on table shown below
+#
+# note that "CU" "AS" "ZN" had no data under LOQ, but were se from looking at graphs...
+
+matrix <- "LI"
+sel <- with(data_10, MATRX %in% matrix & PARAM %in% c("CD","CO"))
+data_10$DETLI[sel] <- 0.001
+sel <- with(data_10, MATRX %in% matrix & PARAM %in% "PB")
+data_10$DETLI[sel] <- 0.005
+sel <- with(data_10, MATRX %in% matrix & PARAM %in% c("CR","NI","SN", "CU"))
+data_10$DETLI[sel] <- 0.010
+sel <- with(data_10, MATRX %in% matrix & PARAM %in% c("AG", "ZN", "AS"))
+data_10$DETLI[sel] <- 0.050
+
+# pars_metals[!pars_metals %in% df$PARAM]
+# "HG" "CU" "AS" "ZN"
+
+# For use in the next chink (blue mussel)
+df_loq_metals <- bind_rows(
+  df %>% select(PARAM, loq_min),
+  data.frame(
+    PARAM = c("CU","AS","ZN"),
+    loq_min = c(0.010, 0.050, 0.050)
+  ))
+              
+
+```
+
+### k10c. Detection limits, metals in blue mussel
+```{r}
+
+matrix <- "SB"
+df1 <- data_10 %>%
+  filter(PARAM %in% pars_metals & QFLAG %in% "Q" & MATRX %in% matrix) %>%
+  ungroup() %>%
+  group_by(PARAM) %>%
+  summarise(
+    loq_median = median(VALUE),
+    loq_min =  min(VALUE),
+    loq_max = max(VALUE)
+    ) 
+df1
+
+df2 <- data_10 %>%
+  filter(PARAM %in% pars_metals & is.na(QFLAG) & MATRX %in% matrix) %>%
+  ungroup() %>%
+  group_by(PARAM) %>%
+  summarise(
+    val_median = median(VALUE),
+    val_min =  min(VALUE)
+    ) %>%
+  arrange(val_min)
+df2 %>%
+  left_join(df_loq_metals)
+
+#
+# Conclusion: we use the same limits as we used for liver 
+#
+matrix <- "SB"
+sel <- with(data_10, MATRX %in% matrix & PARAM %in% c("CD","CO"))
+data_10$DETLI[sel] <- 0.001
+sel <- with(data_10, MATRX %in% matrix & PARAM %in% "PB")
+data_10$DETLI[sel] <- 0.005
+sel <- with(data_10, MATRX %in% matrix & PARAM %in% c("CR","NI","SN", "CU"))
+data_10$DETLI[sel] <- 0.010
+sel <- with(data_10, MATRX %in% matrix & PARAM %in% c("AG", "ZN", "AS"))
+data_10$DETLI[sel] <- 0.050
+
+
+```
+
+### k10d. Detection limits, mercury in muscle
+```{r}
+
+matrix <- "MU"
+df1 <- data_10 %>%
+  filter(PARAM %in% pars_metals & QFLAG %in% "Q" & MATRX %in% matrix) %>%
+  ungroup() %>%
+  group_by(PARAM) %>%
+  summarise(
+    loq_median = median(VALUE),
+    loq_min =  min(VALUE),
+    loq_max = max(VALUE)
+    )  %>%
+  arrange(loq_min)
+df1
+
+df2 <- data_10 %>%
+  filter(PARAM %in% pars_metals & is.na(QFLAG) & MATRX %in% matrix) %>%
+  ungroup() %>%
+  group_by(PARAM) %>%
+  summarise(
+    val_median = median(VALUE),
+    val_min =  min(VALUE)
+    ) %>%
+  arrange(val_min)
+df2
+
+matrix <- "MU"
+sel <- with(data_10, QFLAG %in% "Q" & MATRX %in% matrix & PARAM %in% c("CD","CO"))
+
 ```
 
 ### k11. Set MUNIT for FAT% and test for remaining missing units    
@@ -4037,18 +4167,18 @@ if (restore) {
   string <- paste0("NIVA", selected_year, "CF_%02i.NO")
   fn <- sprintf(string, version)
   
-  data <- readRDS(paste0(save_folder_rds, "/", fn_rds))
-  names(data) <- c("00", "03", "04", "10", "20", "21", "90", "91", "92")
+  data_list <- readRDS(paste0(save_folder_rds, "/", fn_rds))
+  names(data_list) <- c("00", "03", "04", "10", "20", "21", "90", "91", "92")
   
-  data_00 <- data[["00"]]
-  data_03 <- data[["03"]]
-  data_04 <- data[["04"]]   # sample table
-  data_10 <- data[["10"]]   # concentration data
-  data_20 <- data[["20"]]
-  data_21 <- data[["21"]]
-  data_90 <- data[["90"]]
-  data_91 <- data[["91"]]   # station data
-  data_92 <- data[["92"]]
+  data_00 <- data_list[["00"]]
+  data_03 <- data_list[["03"]]
+  data_04 <- data_list[["04"]]   # sample table
+  data_10 <- data_list[["10"]]   # concentration data
+  data_20 <- data_list[["20"]]
+  data_21 <- data_list[["21"]]
+  data_90 <- data_list[["90"]]
+  data_91 <- data_list[["91"]]   # station data
+  data_92 <- data_list[["92"]]
   
 }
 
