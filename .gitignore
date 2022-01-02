@@ -6,5 +6,6 @@ Files_from_Jupyterhub/*
 !Files_from_Jupyterhub/Big_excel_table
 Files_from_Jupyterhub/Big_excel_table/*
 !Files_from_Jupyterhub/Big_excel_table/Data_xl_TEMPLATE.xlsm
-
-
+App_803/dat.csv
+App_803/dat_summ.csv
+App_804/109_adjusted_data_summ.csv
