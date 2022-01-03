@@ -108,6 +108,27 @@ read_ices_file <- function(fn, sep = ";"){
   df_list
 }
 
+#
+# Set numeric
+#
+set_numeric <- function(list_of_data){
+  
+  # Set some columns to be numeric 
+  vars_numeric <- c("SMPNO", "SUBNO", "DEPHU", "DEPHL", "AMLNK", "VALUE", "UNCRT", "DETLI")
+  
+  #  Assume 9 meaningful tables in list
+  for (i in 1:9){
+    #  For each table, go through columns
+    for (j in 1:ncol(list_of_data[[i]])){
+      # Set column to numeric, if its on the list:
+      if (names(list_of_data[[i]])[j] %in% vars_numeric)
+        list_of_data[[i]][,j] <- as.numeric(list_of_data[[i]][,j])
+    }
+  }
+  list_of_data
+}
+
+
 
 # Write ICES file (based on output of read_ices_file)
 # I.e. the reverse of read_ices_file()
@@ -148,7 +169,7 @@ var_overlap <- function(tab1, tab2, drop = NULL){
 #   lack_links1 lack_links1_comb      lack_links2 
 
 
-check_link <- function(tab1, tab2, by, print = TRUE, print_values = FALSE){
+check_link <- function(tab1, tab2, by, print = TRUE, print_values = FALSE, print_values_max = 50){
   # Select columns
   # Also set data to tibble, otherwise one-variable data frames becomes vectors - see below
   tab1_check <- as_tibble(tab1[by])
@@ -192,8 +213,12 @@ check_link <- function(tab1, tab2, by, print = TRUE, print_values = FALSE){
           " variable combinations) without corresponding rows in table 1\n", sep = "")
       for (v in by){
         cat("  Number of ", v, " values in missing rows: ", length(unique(df2[[v]])), "\n", sep = "")
-        if (print_values)
-          cat("    - ", paste(unique(df2[[v]]), collapse = "; "), "\n", sep = "")
+        if (print_values){
+          unique_values <- unique(df2[[v]])
+          cat("    - ", paste(head(unique_values, print_values_max), collapse = "; "), "\n", sep = "")
+          if (length(unique_values) > print_values_max)
+            cat("Only the first", print_values_max, "values are shown  \n")
+        }
       }
     }
   }
