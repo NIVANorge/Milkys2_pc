@@ -274,4 +274,53 @@ if (FALSE){
 }
 
 
+#
+# Checking all links between tables
+#
 
+check_all_links <- function(data, print_values = FALSE, ...){
+  
+  # Get key variables (RECID is the table number, not a key variable for the link)
+  cat("*** 03 (sample occasion per station) and 04 (samples for chemical analysis) ***\n")
+  df1 <- data[["03"]]
+  df2 <- data[["04"]]
+  cols <- var_overlap(df1, df2, drop = c("RECID", "Line_no"))
+  check_link(df1, df2, cols, print_values = print_values, ...)
+  cat("\n")
+  
+  cat("*** 04 (samples for chemical analysis) and 10 (measurements by parameter) ***\n")
+  df1 <- data[["04"]]
+  df2 <- data[["10"]]
+  cols <- var_overlap(df1, df2, drop = c("RECID", "Line_no"))
+  check_link(df1, df2, cols, print_values = print_values, ...)
+  cat("\n")
+  
+  cat("*** 10 (measurements by parameter) and 21 (chemical methods) ***\n")
+  df1 <- data[["10"]]
+  df2 <- data[["21"]]
+  cols <- var_overlap(df1, df2, drop = c("RECID", "Line_no"))
+  check_link(df1, df2, cols, print_values = print_values, ...)
+  cat("\n")
+  
+  cat("*** 03 (sample occasion per station) and 20 (sampling methods) ***\n")
+  df1 <- data[["03"]]
+  df2 <- data[["20"]]
+  cols <- var_overlap(df1, df2, drop = c("RECID", "Line_no"))
+  check_link(df1, df2, cols, print_values = print_values, ...)
+  cat("\n")
+  
+  cat("*** 03 (sample occasion per station) and 90 (cruises) ***\n")
+  df1 <- data[["10"]]
+  df2 <- data[["90"]]
+  cols <- var_overlap(df1, df2, drop = c("RECID", "Line_no"))
+  check_link(df1, df2, cols, print_values = print_values, ...)
+  cat("\n")
+  
+  cat("*** 04 (samples for chemical analysis) and 91 (stations) ***\n")
+  df1 <- data[["04"]]
+  df2 <- data[["91"]]
+  cols <- var_overlap(df1, df2, drop = c("RECID", "Line_no"))
+  check_link(df1, df2, cols, print_values = print_values, ...)
+  cat("\n")
+  
+}
