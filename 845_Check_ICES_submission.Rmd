@@ -1,0 +1,321 @@
+---
+title: ""
+author: "DHJ"
+date: "2 1 2022"
+output: html_document
+---
+
+
+## 0. Library + functions  
+Functions are from `"H:\Documents\seksjon 212\Milkys 2017\Analyse\21_read_ices_file.R"`
+```{r}
+
+# library(tidyverse)
+library(dplyr)
+library(purrr)
+library(ggplot2)
+source("845_Check_ICES_submission_functions.R")
+
+```
+
+
+## 1. Read submitted data file  
+The 2018 version, with changed stations according to '02_Change_stations_in_2014_submission.R'  
+### a. Filename
+```{r}
+
+folder_data <- "Files_to_ICES/2020/Delivered"
+dir(folder_data)
+fns <- dir(folder_data, ".NO", full.names = TRUE)
+fns
+fn <- paste0(folder_data, "/NIVA2020CF_ver01.NO")
+#  "ICESfiler_innsendte/NIVA2014CF.NO"
+
+fn <- "Files_to_ICES/Submission files 1981-2014/NIVA1990CF.NO"
+fn <- "Files_to_ICES/Submission files 1981-2014/NIVA2000CF.NO"
+
+```
+
+### b. Read data
+```{r}
+# data_txt <- readLines(fn)
+
+# debugonce(read_ices_file)
+
+data <- read_ices_file(fn, sep = ",") # 1990
+# data <- read_ices_file(fn, sep = ";") # 2020
+
+data <- add_field_codes(data)  
+
+
+# Set some columns to be numeric 
+vars_numeric <- c("SMPNO", "SUBNO", "DEPHU", "DEPHL", "AMLNK", "VALUE", "UNCRT", "DETLI")
+
+# str(data[["10"]]) 
+
+for (i in 1:9){
+  for (j in 1:ncol(data[[i]])){
+    if (names(data[[i]])[j] %in% vars_numeric)
+      data[[i]][,j] <- as.numeric(data[[i]][,j])
+  }
+}
+
+
+
+```
+
+```{r}
+
+# Get key variables (RECID is the table number, not a key variable for the link)
+cols <- var_overlap(data[["04"]], data[["10"]], drop = "RECID")
+
+check_link(data[["04"]], 
+            data[["10"]], 
+            cols)
+
+```
+
+```{r}
+
+# Get key variables (RECID is the table number, not a key variable for the link)
+cat("*** 03 (sample occation per station) and 04 (samples for chemical analysis) ***\n")
+df1 <- data[["03"]]
+df2 <- data[["04"]]
+cols <- var_overlap(df1, df2, drop = "RECID")
+check_link(df1, df2, cols)
+cat("\n")
+
+cat("*** 04 (samples for chemical analysis) and 10 (measurements by parameter) ***\n")
+df1 <- data[["04"]]
+df2 <- data[["10"]]
+cols <- var_overlap(df1, df2, drop = "RECID")
+check_link(df1, df2, cols)
+cat("\n")
+
+cat("*** 10 (measurements by parameter) and 21 (chemical methods) ***\n")
+df1 <- data[["10"]]
+df2 <- data[["21"]]
+cols <- var_overlap(df1, df2, drop = "RECID")
+check_link(df1, df2, cols)
+cat("\n")
+
+cat("*** 03 (sample occasion per station) and 20 (sampling methods) ***\n")
+df1 <- data[["03"]]
+df2 <- data[["20"]]
+cols <- var_overlap(df1, df2, drop = "RECID")
+check_link(df1, df2, cols)
+cat("\n")
+
+cat("*** 03 (sample occasion per station) and 90 (cruises) ***\n")
+df1 <- data[["10"]]
+df2 <- data[["90"]]
+cols <- var_overlap(df1, df2, drop = "RECID")
+check_link(df1, df2, cols)
+cat("\n")
+
+cat("*** 04 (samples for chemical analysis) and 91 (stations) ***\n")
+df1 <- data[["04"]]
+df2 <- data[["91"]]
+cols <- var_overlap(df1, df2, drop = "RECID")
+check_link(df1, df2, cols, print_values = TRUE)
+cat("\n")
+
+```
+
+
+### c. Check what others do
+```{r}
+
+# source("00_read_ICES_webservice_functions.R")
+source('00_read_ICES_webservice_functions.R', encoding = 'ANSI_X3.4-1986')
+
+# The following objects are masked from ???package:dplyr???:
+#   arrange, count, desc, failwith, id, mutate, rename, summarise, summarize
+
+# Hg data for one year
+# debugonce(get_ices_data)
+df_par <- get_ices_parameter_table()
+df <- get_ices_data("HG", 2017)
+# PYR1OH data for all years
+# df <- get_ices_data("PYR1OH", "")
+
+```
+
+## 2. Year 2000: Check HCHA at 36B   
+```{r}
+
+df_plot <- data[["10"]] %>% 
+  filter(STNNO %in% "36B" & MATRX %in% "LI" & PARAM %in% c("EXLIP%", "HCHA")) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG) %>%
+  pivot_wider(names_from = PARAM, values_from = c(VALUE, QFLAG)) 
+
+ggplot(df_plot, aes(`VALUE_EXLIP%`, VALUE_HCHA)) +
+  geom_text(aes(label = SUBNO))
+
+```
+
+```{r, fig.width=10, fig.height=8}
+
+df_plot_allpar <- data[["10"]] %>% 
+  filter(STNNO %in% "36B" & MATRX %in% "LI") %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG)
+
+df_plot_lip <- data[["10"]] %>% 
+  filter(STNNO %in% "36B" & MATRX %in% "LI" & PARAM %in% "EXLIP%") %>%
+  select(STNNO, SMPNO, SUBNO, VALUE) %>%
+  rename(Lip_perc = VALUE)
+
+df_plot_allpar <- df_plot_allpar %>%
+  left_join(df_plot_lip)
+
+ggplot(df_plot_allpar, aes(Lip_perc, VALUE)) +
+  geom_text(aes(label = SUBNO), size = 3) +
+  facet_wrap(vars(PARAM), scales = "free_y")
+
+```
+
+
+## 4. Check older files
+```{r}
+yr <- 2013
+fn <- paste0("H:/Documents/seksjon 212/Milkys 2017/Analyse/ICESfiler_innsendte/NIVA", yr, "CF.NO")
+df <- read_ices_file(fn) %>% add_field_codes()
+
+# Table 21, lines with METOA info
+df2 <- subset(df[["21"]], METOA != "")
+
+# Parameters with METOA info
+df_pars <- subset(df[["10"]], AMLNK %in% df2$AMLNK) %>% 
+  group_by(PARAM) %>%
+  summarise(AMLNK = first(AMLNK)) %>%
+  left_join(df[["21"]])
+df_pars
+
+
+```
+
+## 5. Back to 2014 file  
+```{r}
+fn2 <- "Rob_Norway_station_edits/NIVA2014CF_ver02.NO"
+data <- read_ices_file(fn) %>% add_field_codes()
+
+pars <- data[["10"]] %>% pull(PARAM) %>% unique()
+sel1 <- grepl("BD", pars)
+pars[sel1]
+
+pars[!sel1]
+# 
+
+
+# df_par$PARAM_NIVA <- df_par$PARAM
+# 
+# sel <- df_par$PARAM %in% c("BD100", "BD126", "BD153", "BD154", "BD183", "BD209")
+# df_par$PARAM_NIVA[sel] <- sub("BD", "BDE", df_par$PARAM[sel])
+# 
+# sel <- df_par$PARAM %in% "PFUnda"; sum(sel)
+# df_par$PARAM_NIVA[sel] <- "PFUdA"
+# 
+# sel <- df_par$PARAM %in% "PFDA"; sum(sel)
+# df_par$PARAM_NIVA[sel] <- "PFDcA"
+# 
+# sel <- df_par$PARAM %in% "TBTIN"; sum(sel)
+# df_par$PARAM_NIVA[sel] <- "TBT"
+
+df_syn <- read.csv("Milkys_2018/01b_synonyms.csv", sep = ";", stringsAsFactors = FALSE)
+
+df_metoa <- readxl::read_excel("Milkys_2018/Input_data/ICES 2014 correction/ICES_METOA_codes.xlsx")
+nrow(df_metoa)
+df_metoa <- left_join(df_metoa, df_syn[,1:2], by = c("NAME" = "substances")) %>%
+  rename(PARAM_NIVA = substances2)
+nrow(df_metoa)
+
+# Set PARAM
+df_metoa <- df_metoa %>% mutate(PARAM = PARAM_NIVA)
+
+# Change BDE to BD for the following. NOTE: "BDE28"  "BDE47"  "BDE99" should NOT be changed (!)
+sel <- df_metoa$PARAM_NIVA %in% c("BDE100", "BDE126", "BDE153", "BDE154", "BDE183", "BDE209")
+df_metoa$PARAM[sel] <- sub("BDE", "BD", df_metoa$PARAM[sel])
+
+sel <- df_metoa$PARAM_NIVA %in% "PFUdA"; sum(sel)
+df_metoa$PARAM[sel] <- "PFUnda"
+sel <- df_metoa$PARAM_NIVA %in% "PFDcA"; sum(sel)
+df_metoa$PARAM[sel] <- "PFDA"
+sel <- df_metoa$PARAM_NIVA %in% "TBT"; sum(sel)
+df_metoa$PARAM[sel] <- "TBTIN"
+
+df_metoa2 <- df_metoa %>%
+  select(PARAM, METST, METPT, METOA) %>%
+  group_by(PARAM) %>%
+  summarise_all(list(first=first))
+
+df_par <- data[["10"]]  %>%
+  group_by(PARAM) %>%
+  summarise(AMLNK = first(AMLNK))
+
+nrow(df_par)
+df_par <- df_par %>%
+  left_join(df_metoa2)
+nrow(df_par)
+
+write.csv2(df_par, "Data/25_df_par.csv", row.names = FALSE, na = "")
+
+  
+# dat_21 <- data[["21"]] %>%
+#   left_join()
+  
+clean_duplicates_NIVAbase <- function(data, duplicates_ind, prefer_list){
+  sel_delete <- with(data_from2015,
+                   PARAM %in% duplicates_ind$PARAM & 
+                     SAMPLE_ID %in% duplicates_ind$SAMPLE_ID &
+                     !NAME %in% prefer_list)
+  cat(sum(sel_delete), "records deleted due to duplication\n")
+  data_from2015[!sel_delete,]
+}
+
+preferred_names <- c("Sum DDT", "P.P'-DDD")
+data_from2015 <- clean_duplicates_NIVAbase(data_from2015, duplicates_ind, preferred_names)
+
+```
+
+
+
+## 6. Fix 2014 methods
+```{r}
+dir("Rob_Norway_station_edits")
+fn2 <- "Rob_Norway_station_edits/NIVA2014CF_ver02.NO"
+data <- read_ices_file(fn2) %>% add_field_codes()
+
+df_meth <- readxl::read_excel("Data/25_df_par_midified.xlsx")
+df_meth$AMLNK <- as.character(df_meth$AMLNK)
+
+df1 <- data[["10"]]
+df2 <- data[["21"]]
+mean(df1$AMLNK %in% df2$AMLNK)
+mean(df2$AMLNK %in% df1$AMLNK)
+mean(df_meth$AMLNK %in% df2$AMLNK)
+
+mean(df_metoa$PARAM_ICES %in% df1$PARAM)
+
+cn <- colnames(data[["21"]])
+df <- data[["21"]]
+head(df)
+head(df_meth)
+df_meth$AMLNK <- as.character(df_meth$AMLNK)
+df$METST <- NULL
+df$METPT <- NULL
+df$METOA <- NULL
+df <- df %>% left_join(df_meth)
+# df <- df[,c(cn, "PARAM")]
+df <- df[,cn]
+
+df1_p <- df1 %>% group_by(PARAM) %>% summarise(AMLNK = first(AMLNK))
+df <- df %>% left_join(df1_p)
+
+write.csv2(df, "Data/25_tab21_ver01.csv", row.names = FALSE, na = "")
+
+data[["21"]] <- df[,cn]
+  
+fn3 <- "Rob_Norway_station_edits/NIVA2014CF_ver03.NO"
+write_ices_file(data, fn3)
+
+```
