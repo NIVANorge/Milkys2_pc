@@ -117,7 +117,7 @@ set_numeric <- function(list_of_data){
   vars_numeric <- c("SMPNO", "SUBNO", "DEPHU", "DEPHL", "AMLNK", "VALUE", "UNCRT", "DETLI")
   
   #  Assume 9 meaningful tables in list
-  for (i in 1:9){
+  for (i in c("03","04","10","20","21","90","91")){
     #  For each table, go through columns
     for (j in 1:ncol(list_of_data[[i]])){
       # Set column to numeric, if its on the list:
