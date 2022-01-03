@@ -164,9 +164,9 @@ check_link <- function(tab1, tab2, by, print = TRUE, print_values = FALSE){
   stat <- c(n1 = nrow(tab1), n2 = nrow(tab2), 
             na1 = m1, na2 = m2, 
             lack_links1 = nrow(df1),
-            lack_links1_comb = df1 %>% group_by_all() %>% summarise(n()) %>% nrow(),
+            lack_links1_comb = df1 %>% count(across()) %>% nrow(),
             lack_links2 = nrow(df2),
-            lack_links2_comb = df2 %>% group_by_all() %>% summarise(n()) %>% nrow()
+            lack_links2_comb = df2 %>% count(across()) %>% nrow()
   )
   # missing_in_1 = tab2_check
   # print(stat)
