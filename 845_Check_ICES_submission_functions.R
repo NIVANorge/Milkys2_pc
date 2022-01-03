@@ -168,12 +168,11 @@ var_overlap <- function(tab1, tab2, drop = NULL){
 #   number of rows with missing values in join variables (na1, na2)
 #   lack_links1 lack_links1_comb      lack_links2 
 
-
 check_link <- function(tab1, tab2, by, print = TRUE, print_values = FALSE, print_values_max = 50){
   # Select columns
   # Also set data to tibble, otherwise one-variable data frames becomes vectors - see below
-  tab1_check <- as_tibble(tab1[by])
-  tab2_check <- as_tibble(tab2[by])
+  tab1_check <- as_tibble(tab1[c(by, "Line_no")])
+  tab2_check <- as_tibble(tab2[c(by, "Line_no")])
   tab1_complete <- complete.cases(tab1[by])
   tab2_complete <- complete.cases(tab2[by])
   m1 <- nrow(tab1) - sum(tab1_complete)
@@ -200,10 +199,16 @@ check_link <- function(tab1, tab2, by, print = TRUE, print_values = FALSE, print
     if (nrow(df1) > 0){
       cat("\nTable 1 has ",  stat["lack_links1"], " rows (", stat["lack_links1_comb"],  
           " variable combinations) without corresponding rows in table 2\n", sep = "")
+      if (print_values)
+        cat("Line numbers:", paste(df1$Line_no, collapse = ","), "\n")
       for (v in by){
         cat("  Number of ", v, " values in missing rows: ", length(unique(df1[[v]])), "\n", sep = "")
-        if (print_values)
-          cat("    -  ", paste(unique(df1[[v]]), collapse = "; "), "\n", sep = "")
+        if (print_values){
+          unique_values <- unique(df1[[v]])
+          cat("    - ", paste(head(unique_values, print_values_max), collapse = "; "), "\n", sep = "")
+          if (length(unique_values) > print_values_max)
+            cat("Only the first", print_values_max, "values are shown (for more, set print_values_max = ...) \n")
+        }
       }
     }
     if (nrow(df2) == 0)
@@ -211,13 +216,15 @@ check_link <- function(tab1, tab2, by, print = TRUE, print_values = FALSE, print
     if (nrow(df2) > 0){
       cat("\nTable 2 has ",  stat["lack_links2"], " rows (", stat["lack_links2_comb"],  
           " variable combinations) without corresponding rows in table 1\n", sep = "")
+      if (print_values)
+        cat("Line numbers:", paste(df2$Line_no, collapse = ","), "\n")
       for (v in by){
         cat("  Number of ", v, " values in missing rows: ", length(unique(df2[[v]])), "\n", sep = "")
         if (print_values){
           unique_values <- unique(df2[[v]])
           cat("    - ", paste(head(unique_values, print_values_max), collapse = "; "), "\n", sep = "")
           if (length(unique_values) > print_values_max)
-            cat("Only the first", print_values_max, "values are shown  \n")
+            cat("Only the first", print_values_max, "values are shown (for more, set print_values_max = ...) \n")
         }
       }
     }
