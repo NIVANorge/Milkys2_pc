@@ -36,8 +36,9 @@ add_field_codes <- function(dataset){
   tbls <- names(dataset)
   for (tbl in tbls){
     # cat(tbl, "\n")
-    nc <- ncol(dataset[[tbl]])
-    colnames(dataset[[tbl]]) <- fieldcodes[[tbl]][1:nc]
+    nc <- ncol(dataset[[tbl]]) - 1
+    new_colnames <- c(fieldcodes[[tbl]][1:nc], "Line_no")
+    colnames(dataset[[tbl]]) <- new_colnames
   }
   dataset
 }
@@ -86,7 +87,11 @@ txt_to_df <- function(txt_vector, sep = ";"){
 #
 read_file_part <- function(text_vector, recid, table_id, sep = ";"){
   line_no <- which(recid %in% table_id)
-  text_vector[line_no] %>% map_df(txt_to_df, sep = sep)
+  # extract data frame from text strings  
+  result <- text_vector[line_no] %>% map_df(txt_to_df, sep = sep)
+  # add line number form original file
+  result$Line_no <- line_no
+  result
 }
 
 # read_file_part(txtall, recid, "03")
