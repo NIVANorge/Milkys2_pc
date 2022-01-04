@@ -1,0 +1,310 @@
+---
+title: ""
+author: "DHJ"
+date: "2 1 2022"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    keep_md: true
+---
+
+Following up data queries from Rob, found here  
+`H:\seksjon 212\MIME 2021\Data_queries`    
+from mails from Rob Fryer 21.11 and 13.12.2021  
+- queries.doc          = Rob's original file - refers to file in 'dodgy_data_biota_211121'  
+- queries_norway.doc   = DHJ's comments to Rob's file  
+
+
+
+## 0. Library + functions  
+Functions are from `"H:\Documents\seksjon 212\Milkys 2017\Analyse\21_read_ices_file.R"`
+```{r}
+
+# library(tidyverse)
+library(dplyr)
+library(purrr)
+library(tidyr)     # pivot_wider
+library(ggplot2)
+source("845_Check_ICES_submission_functions.R")
+
+```
+
+
+## 1. Query 3 + 4. HCHA and HCHG at 36B, year 2000:     
+
+### Filename
+```{r}
+
+fn <- "Files_to_ICES/Submission files 1981-2014/NIVA2000CF.NO"
+
+```
+
+### Read data
+```{r}
+
+data_2000 <- read_ices_file(fn, sep = ",") %>%   # in newer files, used semicolon
+  add_field_codes() %>%
+  set_numeric()
+
+check_all_links(data_2000)
+
+```
+
+### Check w.w. conc vs. lipid weigth    
+```{r}
+
+df_plot <- data_2000[["10"]] %>% 
+  filter(STNNO %in% "36B" & MATRX %in% "LI" & PARAM %in% c("EXLIP%", "HCHA")) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG) %>%
+  pivot_wider(names_from = PARAM, values_from = c(VALUE, QFLAG)) 
+
+ggplot(df_plot, aes(`VALUE_EXLIP%`, VALUE_HCHA)) +
+  geom_text(aes(label = SUBNO))
+
+```
+
+### Check all params vs liid weight    
+- Note: MT = metallothionein   
+```{r, fig.width=10, fig.height=8}
+
+df_plot_allpar <- data_2000[["10"]] %>% 
+  filter(STNNO %in% "36B" & MATRX %in% "LI") %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG)
+
+df_plot_lip <- data_2000[["10"]] %>% 
+  filter(STNNO %in% "36B" & MATRX %in% "LI" & PARAM %in% "EXLIP%") %>%
+  select(STNNO, SMPNO, SUBNO, VALUE) %>%
+  rename(Lip_perc = VALUE)
+
+df_plot_allpar <- df_plot_allpar %>%
+  left_join(df_plot_lip)
+
+ggplot(df_plot_allpar, aes(Lip_perc, VALUE)) +
+  geom_point(data = df_plot_allpar %>% filter(SUBNO ==4), shape = 1, size = 3, color = "red") +
+  geom_text(aes(label = SUBNO), size = 3) +
+  facet_wrap(vars(PARAM), scales = "free_y")
+
+```
+
+### Lines to delete from file   
+- We keep metals and fat, they seem normal
+- note that MT = metallothionein (we keep that one too)     
+```{r}
+
+data_to_exclude <- data_2000[["10"]] %>% 
+  filter(
+    STNNO %in% "36B" & MATRX %in% "LI" & SUBNO == 4,        # specify sample
+    nchar(PARAM) != 2 & !PARAM %in% c("EXLIP%", "FATWT%")   # specify non-metals, and not fat
+    ) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG, Line_no) 
+
+data_to_exclude
+
+
+```
+### Delete lines and write edited version   
+```{r}
+
+fn_orig <- "Files_to_ICES/Submission files 1981-2014/NIVA2000CF.NO"
+fn_new <- "Files_to_ICES/Submission files 1981-2014/NIVA2000CF_edit_2022-01-03.NO"
+
+data_raw <- readLines(fn_orig) # 1990
+
+# Check
+# data_raw[11117]
+
+data_raw_fixed <- data_raw[-pull(data_to_exclude, Line_no)]
+
+# writeLines(data_raw_fixed, con = fn_new)
+
+```
+
+
+### Check 1 - read and check links  
+
+```{r}
+
+data_fixed <- read_ices_file(fn_new, sep = ",") %>%
+  add_field_codes() %>%
+  set_numeric()
+
+check_all_links(data_fixed)
+
+```
+### Check 2 - check data values  
+```{r}
+
+stationcode <- "36B"
+matrix <- "LI"
+
+df_plot_allpar <- data_fixed[["10"]] %>%
+  filter(STNNO %in% stationcode & MATRX %in% matrix) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG)
+
+df_plot_lip <- data_fixed[["10"]] %>%
+  filter(STNNO %in% stationcode & MATRX %in% matrix & PARAM %in% c("EXLIP%", "FATWT%")) %>%
+  select(STNNO, SMPNO, SUBNO, VALUE) %>%
+  rename(Lip_perc = VALUE)
+
+df_plot_allpar <- df_plot_allpar %>%
+  left_join(df_plot_lip)
+
+ggplot(df_plot_allpar, aes(Lip_perc, VALUE)) +
+  geom_point(data = df_plot_allpar %>% filter(SUBNO == 4), shape = 1, size = 3, color = "red") +
+  geom_text(aes(label = SUBNO), size = 3) +
+  facet_wrap(vars(PARAM), scales = "free_y")
+
+
+```
+
+
+
+
+## 2. Query 2. 2016. Chromium concentrations in cod liver at station 98B1 Austnesfjord, Lofoten  
+
+Note: Same high concentrations for the following stations:
+- "23B Karihavet area", "24B Bergen harbour", "53B Inner Sørfjord" 
+       
+
+### Filename
+```{r}
+
+fn <- "Files_to_ICES/Submission files 2015-2019/NIVA2016CF.NO"
+
+```
+
+### Read data
+```{r}
+
+# readLines(fn, 3)
+
+data_2016_raw <- read_ices_file(fn, sep = ";")
+
+length(data_2016_raw)
+
+# debugonce(set_numeric)
+data_2016 <- data_2016_raw %>%   # comma in older files, semicolon in newer
+  add_field_codes() %>%
+  set_numeric()
+
+# We set 'print_values = TRUE' as there were some missing 
+check_all_links(data_2016, print_values = TRUE)
+
+```
+
+### Check values     
+```{r}
+
+selected_stations <- c("98B1", "23B", "24B", "53B")
+matrix <- "LI"
+params <- "CR"
+
+df_plot <- data_2016[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) %>%
+  # filter(STNNO %in% stations) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG) %>%
+  mutate(
+    Selected = STNNO %in% selected_stations
+  )
+
+gg <- ggplot(df_plot, aes(STNNO, VALUE, color = Selected)) +
+  geom_jitter(width = 0.2)
+
+gg
+gg + scale_y_log10()
+
+```
+
+### Lines to delete from file   
+- We keep metals and fat, they seem normal
+- note that MT = metallothionein (we keep that one too)     
+```{r}
+
+data_to_exclude <- data_2016[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) %>%
+  filter(STNNO %in% stations) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG, Line_no) 
+
+data_to_exclude
+
+
+```
+
+### Delete lines and write edited version   
+```{r}
+
+fn_orig <- "Files_to_ICES/Submission files 2015-2019/NIVA2016CF.NO"
+fn_new <- "Files_to_ICES/Submission files 2015-2019/NIVA2016CF_edit_2022-01-03_temp.NO"
+
+# we call it 'temp' because we will delete 3 rows from table 03, see results of 'check_all_links'   
+
+data_raw <- readLines(fn_orig) 
+
+# Check
+# data_raw[11117]
+
+data_raw_fixed <- data_raw[-pull(data_to_exclude, Line_no)]
+
+# writeLines(data_raw_fixed, con = fn_new)
+
+```
+
+
+### Check 1 - read and check links  
+- The file 'NIVA2016CF_edit_2022-01-03_temp' is manually edited to 'NIVA2016CF_edit_2022-01-03' based on this   
+- Specifically: deleting "Line numbers: 85,90,98"   
+- NOTE: when deleting lines based on line numbers, *start with the last number!*!  (line numbers will be messed up if you start with the first... )   
+- See check 3 below
+
+```{r}
+
+data_fixed <- read_ices_file(fn_new, sep = ";") %>%   # remember sep value
+  add_field_codes() %>%
+  set_numeric()
+
+# debugonce(check_link)
+check_all_links(data_fixed, print_values = TRUE)
+
+```
+
+### Check 2 - check data values    
+```{r}
+
+# Code copied from above
+
+selected_stations <- c("98B1", "23B", "24B", "53B")
+matrix <- "LI"
+params <- "CR"
+
+df_plot <- data_fixed[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) %>%
+  # filter(STNNO %in% stations) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG) %>%
+  mutate(
+    Selected = STNNO %in% selected_stations
+  )
+
+gg <- ggplot(df_plot, aes(STNNO, VALUE, color = Selected)) +
+  geom_jitter(width = 0.2)
+
+gg
+gg + scale_y_log10()
+
+```
+
+
+### Check 3 - check manual edits   
+- Reading and checking manually fixed file (3 lnes deleted from part '03' in file, see Check 1)   
+```{r}
+
+fn_new2 <- "Files_to_ICES/Submission files 2015-2019/NIVA2016CF_edit_2022-01-03.NO"
+
+data_fixed2 <- read_ices_file(fn_new2, sep = ";") %>%   # remember sep value
+  add_field_codes() %>%
+  set_numeric()
+
+# debugonce(check_link)
+check_all_links(data_fixed2, print_values = TRUE)
+
+```
