@@ -1,0 +1,95 @@
+---
+title: "867_Add_PAH_metabolites_from_ICES"
+author: "DHJ"
+date: "2 12 2021"
+output: html_document
+---
+
+Collecting data on un-normalised PAH metabolites in bile    
+- Only the normalised ones are used nationally    
+- Needed in order to use OSPAR thresholds    
+- Seems unavailable in our own data (including MS Access), see 'Milkys' script 996   
+- So we instead download data from ICES for adding to Milkys data in Jupyterhub   
+
+
+## 0. Libraries and functions
+```{r}
+
+library(dplyr)
+library(ggplot2)
+
+# library(lubridate)
+# library(safejoin) # https://github.com/moodymudskipper/safejoin
+
+source("803_Read_ICES_webservice_functions.R")
+# source("00_read_ICES_webservice_functions.R", encoding = "UTF-8")
+source("../../R_packages/Utility_functions.R")
+
+```
+
+
+## 1. Get data from ICES     
+
+```{r}
+
+
+# PYR1OH data for all years
+df1 <- get_ices_biotadata(param = "PYR1OH", country = 58)
+df2 <- get_ices_biotadata(param = "BAP3OH", country = 58)
+df3 <- get_ices_biotadata(param = "PA1OH", country = 58)
+
+nrow(df1); nrow(df2); nrow(df3);
+
+df1 %>% 
+  count(STATN, MYEAR) %>%
+  arrange(STATN, MYEAR)
+
+```
+
+### Calculate median data set and combine with the rest    
+
+```{r}
+
+data_medians_ices <- bind_rows(df1, df2, df3) %>%
+  mutate(STATION_CODE = stringr::str_extract(STATN, "[^[[:blank:]]]+"),
+         TISSUE_NAME = "Bile") %>%
+  rename(LATIN_NAME = Species,
+         UNIT = MUNIT,
+         VALUE = Value,
+         FLAG1 = QFLAG) %>%
+  # Calculate median pe rstation/year/parameter
+  group_by(MYEAR, STATION_CODE, LATIN_NAME, TISSUE_NAME, PARAM, UNIT) %>%
+  summarise(N = n(),
+            Value = median(VALUE),
+            Over_LOQ = sum(is.na(FLAG1))
+            ) %>%
+  mutate(Basis = "WW")
+
+```
+
+### Check   
+So, we lack 2009-2013
+```{r}
+
+data_medians_ices %>%
+  filter(PARAM == "PYR1OH" & STATION_CODE == "15B") %>%
+  ggplot(aes(MYEAR, Value)) +
+  geom_point() + geom_smooth() +
+  scale_y_log10()
+  
+```
+
+## 5. Save  
+
+* For use in Jupiterhub
+
+```{r}
+
+# Set to true to overwrite saved data
+if (FALSE)
+  saveRDS(data_medians_new, "Data/86_data_med.rds")
+
+
+```
+
+
