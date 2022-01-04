@@ -259,17 +259,6 @@ df_tissue <- get_nivabase_data(
 df_species <- get_nivabase_data(
   "select * from NIVADATABASE.SPECIES")
 
-df_taxoncodes <- 
-  get_nivabase_data(
-    "select NIVA_TAXON_ID, TAXONOMY_CODE_ID, CODE from NIVADATABASE.TAXONOMY_CODES")
-
-df_taxon <- get_nivabase_selection(
-  "NIVA_TAXON_ID, LATIN_NAME", 
-  "TAXONOMY", 
-  "LATIN_NAME",
-  unique(dat$LATIN_NAME), values_are_text = TRUE
-  )
-
 # Get a list of projects
 df_projects <- get_projects()   # we call it 'df_projects' (the default name)
 

@@ -196,14 +196,6 @@ xtabs(~addNA(TISSUE_NAME) + addNA(Group), dat_excel_1)
 df_tissue <- get_nivabase_data(
   "select TISSUE_ID,TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
 
-# Taxa (here: all taxa)
-df_taxon <- get_nivabase_selection(
-  "NIVA_TAXON_ID, LATIN_NAME", 
-  "TAXONOMY", 
-  "LATIN_NAME",
-  selected_species, values_are_text = TRUE
-)
-
 # Get a list of projects
 df_projects <- get_projects()   # we call it 'df_projects' (the default name)
 
@@ -284,16 +276,6 @@ if (FALSE){
 
 df_chem_specimens <- get_specimens_from_stationdata(
   df_stations %>% filter(STATION_CODE %in% selected_station))
-
-# Add species 
-df_chem_species <- get_nivabase_data(paste(
-  "select a.TAXONOMY_CODE_ID, b.LATIN_NAME",
-  "from NIVADATABASE.TAXONOMY_CODES a left join NIVADATABASE.TAXONOMY b",
-  "on a.NIVA_TAXON_ID = b.NIVA_TAXON_ID",
-  "where a.TAXONOMY_CODE_ID =",
-  unique(df_chem_specimens$TAXONOMY_CODE_ID)
-  ))
-df_chem_specimens <- left_join(df_chem_specimens, df_chem_species, by = "TAXONOMY_CODE_ID")
 
 # Get data frame of chemical results (30 seconds or so)
 df_chem <- get_biota_chemistry(

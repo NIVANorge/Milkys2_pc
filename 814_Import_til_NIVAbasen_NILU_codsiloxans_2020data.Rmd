@@ -1045,35 +1045,6 @@ sql_list[1:3]
 
 ## 13. Final check    
 
-### 0. Functions modified   
-NOT USED (but works)
-```{r}
-
-get_specimens_from_stationdata <- function (station_data, years = NULL) {
-  if (!is.null(years)){
-    extra_where <- paste0(" and extract (YEAR from DATE_CAUGHT) in (", 
-                          paste(years, collapse = ","), 
-                          ")")
-  } else {
-    extra_where <- ""
-  }
-  get_nivabase_selection("*", 
-                         "BIOTA_SINGLE_SPECIMENS", 
-                         "STATION_ID", 
-                         station_data$STATION_ID,
-                         extra_where = extra_where)
-}
-
-# Test
-
-if (FALSE){
-  df_specimens_allyrs <- get_specimens_from_stationdata(
-    df_stations %>% filter(STATION_CODE %in% c("19B", "43B2", "30B", "24B", "10B")),
-    years = 2015:2020)
-}
-
-```
-
 ### a. Reload data  
 ```{r}
 

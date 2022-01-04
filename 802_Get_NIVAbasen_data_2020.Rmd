@@ -76,25 +76,10 @@ df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
 ```
 
 ### Get all specimens collected at these stations (20 seconds or so)
-
+- Includes LATIN_NAME  
 ```{r}
 
-df_specimens <- get_specimens_from_stationdata(df_stations)
-
-```
-
-### Get species  
-```{r}
-
-taxoncode_id <- unique(df_specimens$TAXONOMY_CODE_ID)
-
-df_species <- get_nivabase_data(paste(
-  "select a.TAXONOMY_CODE_ID, b.LATIN_NAME",
-  "from NIVADATABASE.TAXONOMY_CODES a LEFT JOIN NIVADATABASE.TAXONOMY b ON a.NIVA_TAXON_ID = b.NIVA_TAXON_ID",
-  "where TAXONOMY_CODE_ID in",
-  "(", paste(taxoncode_id, collapse=","), ");"
-))
-
+df_specimens <- get_specimens_from_stationdata(df_stations, years = 2020:2021)
 
 ```
 
@@ -102,7 +87,6 @@ df_species <- get_nivabase_data(paste(
 ```{r, fig.height=6, fig.width=7}
 
 df_specimens %>%
-  left_join(df_species, by = "TAXONOMY_CODE_ID") %>%
   filter(year(DATE_CAUGHT) >= 2020) %>%
   ggplot(aes(DATE_CAUGHT)) +
   geom_histogram(binwidth = 3600*24*10) +   # 10 days
