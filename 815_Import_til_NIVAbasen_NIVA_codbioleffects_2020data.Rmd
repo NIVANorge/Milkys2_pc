@@ -29,6 +29,12 @@ Note that
 - non-normalised PAH metabolites = PYR1OH, PA1OH, BAP3OH
 - absorption-normalised ones = PYR1O, PA1O, BAP3O  
 - absorption itself = ABS380 or AY (the two are the same)    
+  
+**Addition 3.1.2022**
+- Changing the absorption-normalised metabolites to PYR1O, PA1O, BAP3O
+- Part 14 (can be run after part zero)  
+- See issue https://github.com/NIVANorge/Milkys2_pc/issues/5#issue-1091156076   
+
 
 ## 0. Libraries and functions
 ```{r}
@@ -837,7 +843,7 @@ cat("\n")
 
 if (FALSE) {
   
-  # Check taht IDs are unique
+  # Check that IDs are unique
   tab <- xtabs(~SAMPLE_ID, biota_samples)
   table(tab)
   
@@ -1412,10 +1418,198 @@ dat_test %>%
 ```
 
 
+## 14. Fix cod metabolites in NIVAbasen    
+
+- In 2020, the absorption-normalised ones (low numbers) were by mistake called PYR1OH, PA1OH and BAP3OH
+- Must be changed to PYR1O, PA1O, BAP3O
+- VALUE_ID in this range: 2010411 2010558
+- See issue https://github.com/NIVANorge/Milkys2_pc/issues/5#issue-1091156076   
+
+### Get the list of projects
+
+```{r}
+
+df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+
+```
+
+### Get a list of the stations in the CEMP_Biota project
+
+```{r}
+
+df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+
+```
+
+### Get all specimens collected at these stations (20 seconds or so)
+- Incudes species name  
+```{r}
+
+df_specimens_2019 <- get_specimens_from_stationdata(df_stations, years = 2019)
+df_specimens <- get_specimens_from_stationdata(df_stations, years = 2020)
+
+```
 
 
+### Get the data itself  
+- Get data frame of chemical data for all samples from the measurement year 2016 (30 seconds or so)  
+- Now also includes LATIN_NAME   
+```{r, results = FALSE}
 
-## APPENDIX  
+df_2020 <- get_biota_chemistry(
+  years = 2020:2021,              # in case some specimens wrongly  
+                                  #    have date_caught = 2020
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+df_2020 <- df_2020 %>% rename(PARAM = NAME)
+
+```
+
+
+### Existing data  
+```{r}
+
+params <- c("PA1OH", "PYR1OH", "BAP3OH", 
+          "PA1O", "PYR1O", "BAP3O",
+          "1-OH-fenantren", "1-OH-pyren", "3-OH-benzo[a]pyren")
+
+df_2020 %>%
+  filter(PARAM %in% params) %>%
+  xtabs(~PARAM + STATION_CODE, .)  
+
+```
+### Check methods for adjusted data    
+- Only PYR1O exists
+```{r}
+
+# Get df_methods (NILU methods only)
+df_methods <- get_nivabase_selection(
+  "*", 
+  "METHOD_DEFINITIONS", 
+  "NAME", 
+  c("PA1O", "PYR1O", "BAP3O"), values_are_text = TRUE)
+
+# Same result:
+df_methods <- get_nivabase_selection(
+  "*", 
+  "METHOD_DEFINITIONS", 
+  "UNIT", 
+  "µg/kg/ABS 380 nm", values_are_text = TRUE)
+
+```
+
+### Add two methods for adjusted data: PA1O amd BAP30  
+
+```{r}
+
+n <- 2  
+new_methods <- tibble(
+  NAME = c("PA1O", "BAP3O"),
+  UNIT = rep("µg/kg/ABS 380 nm", n),
+  LABORATORY = rep("NIVA", n),
+  METHOD_REF = rep(NA, n),
+  MATRIX = rep("BIOTA", n),
+  CAS = c(NA, NA),
+  MATRIX_ID = rep(1, n),    # 1 is just for biota
+)
+
+new_methods
+
+
+### METHOD_DEFINITIONS II: Make SQL for use in SQL developer  
+# Copy-paste into SQL developer
+# * Remember "commit;"!
+
+# make_sql_chemistry_values(1, data = dat_summ)
+
+sql_list <- 1:nrow(new_methods) %>% 
+  map_chr(make_sql_methods, data = new_methods)
+cat("Number of records: \n")
+length(sql_list)  
+
+i <- 1:length(sql_list)
+sql <- paste(sql_list[i], collapse = ";\n")
+sql <- paste0(sql, ";\n")
+writeLines(sql, "clipboard-1024")   # copies SQLs to clipboard - go to SQL Developer and paste
+# "clipboard-1024" instead of "clipboard": increases avaliable
+#    for the clipboard
+
+cat("\nSQLs: \n")
+sql_list[1:2]
+
+```
+
+### Check METHOD_ID again      
+```{r}
+
+# Get df_methods (NILU methods only)
+df_methods <- get_nivabase_selection(
+  "*", 
+  "METHOD_DEFINITIONS", 
+  "NAME", 
+  c("PA1O", "PYR1O", "BAP3O"), 
+  values_are_text = TRUE)
+
+df_methods %>%
+  select(NAME, METHOD_ID)
+
+# METHOD_ID to use:
+# BAP3O	37111			
+# PA1O	37110			
+# PYR1O	16793	
+
+# Get METHOD_ID for wrongly used parameters:
+# df_2020 %>%
+#   filter(PARAM %in% params) %>%
+#   xtabs(~PARAM + METHOD_ID, .)  
+# RESULT:
+# BAP30H = 28578
+# PA1OH = 28576
+# PYR1OH = 28577 
+
+# Get VALUE_ID range
+df_2020 %>%
+  filter(PARAM %in% params) %>%
+  pull(VALUE_ID) %>%
+  range()
+# 1993444 2010558
+
+```
+
+### Update METHOD_ID  
+- Copy-paste into SQL developer    
+```{r}
+
+# UPDATE NIVADATABASE.BIOTA_CHEMISTRY_VALUES
+# SET METHOD_ID = 37111 WHERE METHOD_ID = 28578 and VALUE_ID >= 1993444 and VALUE_ID <= 2010558;
+# SET METHOD_ID = 37110 WHERE METHOD_ID = 28576 and VALUE_ID >= 1993444 and VALUE_ID <= 2010558;
+# SET METHOD_ID = 16793 WHERE METHOD_ID = 28577 and VALUE_ID >= 1993444 and VALUE_ID <= 2010558;
+# commit;
+
+```
+
+### New check  
+```{r}
+
+df_2020_new <- get_biota_chemistry(
+  years = 2020:2021, 
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE) %>%
+  rename(PARAM = NAME)
+
+df_2020_new %>%
+  filter(PARAM %in% params) %>%
+  xtabs(~PARAM + STATION_CODE, .)  
+
+```
+
+
+## APPENDIX    
+
+### Get data from one station  
 ```{r}
 
 df1 <- get_nivabase_selection(
@@ -1457,10 +1651,10 @@ df3b <- get_nivabase_selection(
   extra_where = " and extract(YEAR from SAMPLE_DATE) = 2020")
 
 
-
 ```
 
 
+### Biological effect data in old nivadatabase data  
 ```{r}
 
 #
