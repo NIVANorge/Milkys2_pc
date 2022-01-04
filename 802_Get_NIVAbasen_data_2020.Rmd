@@ -98,31 +98,24 @@ df_specimens %>%
 
 
 ## Get the data itself  
-Get data frame of chemical data for all samples from the measurement year 2016 (30 seconds or so)
+Get data frame of chemical data for all samples from the measurement year 2016 (30 seconds or so)  
+- LATIN_NAME is included  
 ```{r, results = FALSE}
 
 # debugonce(get_biota_chemistry)
 # debugonce(get_samples_from_sampleid)
 
-df_2020_temp <- get_biota_chemistry(
+df_2020 <- get_biota_chemistry(
   years = 2020:2021,              # in case some specimens wrongly  
                                   #    have date_caught = 2020
   specimendata = df_specimens, 
   stationdata = df_stations,
   report_samples = TRUE)
 
-# Add LATIN_NAME (using species)
-df_2020 <- df_2020_temp %>%
-  left_join(df_species, by = "TAXONOMY_CODE_ID")
-
 ```
 
-### Check species  
-```{r}
 
-table(addNA(df_2020$LATIN_NAME))
 
-```
 
 
 ### Save 
