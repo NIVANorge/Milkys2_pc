@@ -13,7 +13,8 @@ library(DT)
 # These files are too big to put on Github
 # NIVA people can find them here: 'K:\Avdeling\214-Oseanografi\DHJ\Data\Milkys_ICES_files'
 #  
-dat <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_added_columns.csv")
+dat <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_added_columns.csv") %>%
+  mutate(Speciestissue = paste0(LATIN_NAME, ", ", TISSUE_NAME))
 dat_summ <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_summ.csv")
 
 species_available <- dat %>%
@@ -40,6 +41,9 @@ basis_available <- dat %>%
   distinct(Basis) %>%
   pull(Basis)  
 
+selection_from_start_param <- c("CB28", "CB52", "CB101", "CB118", "CB138", "CB153", "CB180")
+selection_from_start_param <- "PFOS"
+
 #
 # UI ---- 
 #
@@ -53,7 +57,7 @@ ui <- fluidPage(
       sidebarPanel(
         selectizeInput(inputId = "params_selected", label = "Parameters", 
                        choices = params_available, multiple = TRUE,
-                       selected = c("CB28", "CB52", "CB101", "CB118", "CB138", "CB153", "CB180")),
+                       selected = selection_from_start_param),
         selectizeInput(inputId = "basis_selected", label = "Original basis of measurement", 
                        choices = basis_available, multiple = TRUE,
                        selected = basis_available),
@@ -106,9 +110,9 @@ ui <- fluidPage(
                 numericInput("max_y", "Max y axis (for auto, set to 0)", 0),
                 checkboxInput("number_of_points", "Show number of overplotted points"),
                 div(DTOutput("timeseriesdata"), style = "font-size:80%")
-              ),
+              ),  # end subpanel 2a
               
-              # Subpanel 3a (plot 3)
+              # Subpanel 2b (plot 3)
               tabPanel(
                 "Scatter plots by year",
                 selectizeInput(inputId = "p3_params_selected_x", label = "Parameter(s) for x axis", 
@@ -130,13 +134,28 @@ ui <- fluidPage(
                                         "Subplots per year, free x+y"), 
                             selected = c("Subplots per year, free y")),
                 checkboxInput("p3_logscale_x", "Use log10 on x axis", value = FALSE),
-                checkboxInput("p3_logscale_y", "Use log10 on y axis", value = FALSE)
-              )
+                checkboxInput("p3_logscale_y", "Use log10 on y axis", value = FALSE),
+                sliderInput("p3_range_years", "Show plot for years (for auto, set to 1980-2020)", 
+                            min = 1980, max = 2020, value = c(1980,2020), sep = "", step = 1)
+              ) # end subpanel 2b (no comma since it's the last)
               
-            )  # end tabsetPanel
-          ) # end main tabset 2
+            )  # end tabsetPanel for plots 2a + 2b 
+            
+          ), # end main tab 2
           
-        ),  # end tabsetPanel
+          tabPanel(
+            "Selected parameter at several stations",
+            selectizeInput(inputId = "p4_years_selected", label = "Year(s)", 
+                           choices = 1981:2020, multiple = TRUE,
+                           selected = 2020),
+            selectizeInput(inputId = "p4_speciestissue_selected", label = "Species and tissue", 
+                           choices = NULL, multiple = TRUE),
+            plotOutput("stationplot", height = "500px"),
+            checkboxInput("p4_logscale_y", "Use log10 on y axis", value = FALSE),
+            div(DTOutput("stationdata"), style = "font-size:80%")
+          )
+          
+        ),  # end entire tabsetPanel
         width = 8
       )  # end mainPanel
     )
@@ -148,21 +167,22 @@ ui <- fluidPage(
 server <- function(input, output) {
   
   #
-  # Get 'stations_avaliable' ----
+  # Get 'stations_available' ----
   #
   # For 'stations_selected' menu
   #
-  stations_avaliable <- reactive({
+  stations_available <- reactive({
     dat %>%
-      filter(LATIN_NAME %in% input$species_selected) %>%
+      filter(LATIN_NAME %in% input$species_selected,
+             PARAM %in% input$params_selected) %>%
       distinct(Station_name) %>%
       pull(Station_name)
   })
   
-  observeEvent(stations_avaliable(), {
+  observeEvent(stations_available(), {
     updateSelectizeInput(
       inputId = "stations_selected",
-      choices = stations_avaliable(),
+      choices = stations_available(),
       selected = input$stations_selected,     # => selected stations are not 'lost' if another species is selected 
       options = list(render = I(
         '{
@@ -173,12 +193,14 @@ server <- function(input, output) {
     )
   })
   
+
+  
   #
-  # Get 'tissues_avaliable' ----
+  # Get 'tissues_available' ----
   #
   # For 'tissues_selected' menu
   #
-  tissues_avaliable <- reactive({
+  tissues_available <- reactive({
     dat %>%
       filter(LATIN_NAME %in% input$species_selected,
              PARAM %in% input$params_selected & Station_name %in% input$stations_selected) %>%
@@ -186,10 +208,10 @@ server <- function(input, output) {
       pull(TISSUE_NAME)
   })
   
-  observeEvent(tissues_avaliable(), {
+  observeEvent(tissues_available(), {
     updateSelectizeInput(
       inputId = "tissues_selected",
-      choices = tissues_avaliable(),
+      choices = tissues_available(),
       selected = input$tissues_selected,     # => selected tissues are not 'lost' if another species is selected 
       options = list(render = I(
         '{
@@ -264,6 +286,7 @@ server <- function(input, output) {
       geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
                                              No_years >= input$min_no_years,
                                              Last_year >= series_lasting_until)) +
+      facet_grid(rows = vars(PARAM)) +
       labs(x = "Year", y = "Station")
 
     gg   
@@ -296,7 +319,7 @@ server <- function(input, output) {
       resultplot <- ggplot(dat_plot2, aes(MYEAR, Value_plot)) +
         geom_point(aes(shape = LOQ, color = Series), size = 2) +
         geom_smooth(se = FALSE, method = 'loess', formula = 'y ~ x') +
-        scale_shape_manual(values = c(19,25)) +
+        scale_shape_manual(values = c(`Over LOQ` = 19, `Under LOQ` = 25)) +
         scale_fill_viridis_b() +
         facet_grid(vars(Station_name), vars(PARAM)) +
         labs(x = "Year",
@@ -338,7 +361,7 @@ server <- function(input, output) {
   })  # end of observe  
   
   #
-  #  Plot 2 - tablewith data
+  #  Plot 2 - table of data
   #
   
   output$timeseriesdata <- DT::renderDT(
@@ -417,6 +440,11 @@ server <- function(input, output) {
           TRUE ~ paste0(Under_LOQ_x, Under_LOQ_y, " under")
         )
       )
+    
+    if (input$p3_range_years[1] > 1980 | input$p3_range_years[2] < 2020){
+      result <- result %>%
+        filter(MYEAR >= input$p3_range_years[1] & MYEAR <= input$p3_range_years[2])
+    }
 
     # browser()
     
@@ -446,8 +474,9 @@ server <- function(input, output) {
       )
     
     gg2 <- ggplot(data_for_plot, aes(Value_plot_x, Value_plot_y)) +
-      geom_smooth(se = FALSE, method = 'lm', formula = 'y ~ x') +
-      geom_point(aes(shape = Under_LOQ), size = 2) +
+      geom_smooth(aes(color = Station_name), se = FALSE, method = 'lm', formula = 'y ~ x') +
+      geom_point(aes(shape = Under_LOQ, color = Station_name), size = 2) +
+      scale_color_brewer(palette = "Dark2") +
       scale_shape_manual(values = c(`None under` = 19, `x under` = 120, `y under` = 121, `xy under` = 6)) +
       labs(
         x = paste0(paramtext_x, " (", input$p3_valuebasis_selected_x, ")"),
@@ -476,6 +505,133 @@ server <- function(input, output) {
     resultplot
 
   })
+  
+  #
+  # Plot 4 ----
+  #
+  
+  #
+  # Get 'stations_available_year' ----
+  # NOT USED for now
+  #
+  # For 'stations_selected' menu in plot 4
+  #
+  stations_available_year <- reactive({
+    dat %>%
+      filter(LATIN_NAME %in% input$species_selected,
+             PARAM %in% input$params_selected) %>%
+      distinct(Station_name) %>%
+      pull(Station_name)
+  })
+  
+  observeEvent(stations_available_year(), {
+    updateSelectizeInput(
+      inputId = "p4_stations_selected",
+      choices = stations_available_year(),
+      selected = input$p4_stations_selected,
+      options = list(render = I(
+        '{
+    option: function(item, escape) {
+      return "<div><strong>" + escape(item.value) + "</strong>"
+    }
+  }'))
+    )
+  })
+  
+  #
+  # Get 'speciestissue_available_year' ----
+  # NOT USED for now
+  #
+  # For 'stations_selected' menu in plot 4
+  #
+  speciestissue_available_year <- reactive({
+    dat %>%
+      filter(PARAM %in% input$params_selected,
+             MYEAR %in% input$p4_years_selected) %>%
+      distinct(Speciestissue) %>%
+      pull(Speciestissue)
+  })
+  
+  observeEvent(speciestissue_available_year(), {
+    updateSelectizeInput(
+      inputId = "p4_speciestissue_selected",
+      choices = speciestissue_available_year(),
+      selected = input$p4_speciestissue_selected,
+      options = list(render = I(
+        '{
+    option: function(item, escape) {
+      return "<div><strong>" + escape(item.value) + "</strong>"
+    }
+  }'))
+    )
+  })
+  
+  
+
+  # . Get plot data (dat_plot3b) ----
+
+  dat_plot4_function <- reactive({
+    
+    validate(
+      need(input$p4_years_selected != "", "Please select at least one year")
+    )
+    validate(
+      need(input$p4_speciestissue_selected != "", "Please select at least one species / tissue")
+    )
+    
+    # Code in app
+    result <- dat %>%
+      filter(PARAM %in% input$params_selected,
+             Basis %in% input$basis_selected,
+             MYEAR %in% input$p4_years_selected,
+             Speciestissue %in% input$p4_speciestissue_selected
+             # Station_name %in% input$p4_stations_selected    NOT INCLUDED, for now
+             ) %>%
+      mutate(
+        LOQ = ifelse(is.na(qflag), "Over LOQ", "Under LOQ"),
+        Series = paste0(LATIN_NAME, ", ", 
+                        TISSUE_NAME, ", ", 
+                        Basis, "-basis")
+      )
+    
+    result
+    
+  })
+  
+  # . Make plot ----
+
+  output$stationplot <- renderPlot({
+    
+    dat_plot4 <- dat_plot4_function()  
+    
+    resultplot <- ggplot(dat_plot4, aes(Station_name, VALUE_WW)) +
+      geom_jitter(aes(shape = LOQ, color = LOQ), size = 2, height = 0, width = 0.2) +
+      scale_shape_manual(values = c(`Over LOQ` = 19, `Under LOQ` = 25)) +
+      scale_color_manual(values = c(`Over LOQ` = "black", `Under LOQ` = "red2")) +
+      facet_grid(vars(MYEAR), vars(PARAM)) +
+      labs(x = "Station",
+           y = paste0("Concentration (", tolower(input$valuebasis_selected), ")")) +
+      theme(axis.text.x = element_text(angle = -45, hjust = 0))
+    
+    if (input$p4_logscale_y){
+      resultplot <- resultplot + scale_y_log10()
+    }
+
+      resultplot
+    
+    
+  })
+  
+  #
+  #  ... table of data ----
+  #
+  
+  output$stationdata <- DT::renderDT(
+    dat_plot4_function(), 
+    filter = "top"
+  )
+  
+  
   
 }  # end of server  
 
