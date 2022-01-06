@@ -155,7 +155,23 @@ if (!file.exists(fn_summ) | update_summary_table){
       Value_orig_median = median(VALUE_ORIG),
       Value_wet_median = median(VALUE_WW),
       Value_dry_median = median(VALUE_DW),
-      Value_lip_median = median(VALUE_FB)
+      Value_lip_median = median(VALUE_FB),
+      Value_orig_min = min(VALUE_ORIG),
+      Value_wet_min = min(VALUE_WW),
+      Value_dry_min = min(VALUE_DW),
+      Value_lip_min = min(VALUE_FB),
+      Value_orig_max = max(VALUE_ORIG),
+      Value_wet_max = max(VALUE_WW),
+      Value_dry_max = max(VALUE_DW),
+      Value_lip_max = max(VALUE_FB),
+      Value_orig_min_overloq = min(VALUE_ORIG[is.na(qflag)], na.rm = TRUE),
+      Value_wet_min_overloq = min(VALUE_WW[is.na(qflag)], na.rm = TRUE),
+      Value_dry_min_overloq = min(VALUE_DW[is.na(qflag)], na.rm = TRUE),
+      Value_lip_min_overloq = min(VALUE_FB[is.na(qflag)], na.rm = TRUE),
+      Value_orig_max_underloq = max(VALUE_ORIG[!is.na(qflag)], na.rm = TRUE),
+      Value_wet_max_underloq = max(VALUE_WW[!is.na(qflag)], na.rm = TRUE),
+      Value_dry_max_underloq = max(VALUE_DW[!is.na(qflag)], na.rm = TRUE),
+      Value_lip_max_underloq = max(VALUE_FB[!is.na(qflag)], na.rm = TRUE)
     ) %>%
     mutate(
       Station_name = factor(Station_name),
@@ -469,6 +485,7 @@ input$valuebasis_selected <- "Wet weight basis"
 input$speciesgroup_selected <- "Blue mussel"
 input$speciesgroup_selected <- "Cod"
 input$min_no_years <- 5
+input$p1_show_50perc_overLOQ <- TRUE
 
 # Code in app, unchanged
 dat_plot1 <- dat_summ %>%
@@ -498,9 +515,13 @@ gg <- dat_plot1 %>%
   ggplot(aes(MYEAR, Station_name)) +
   geom_raster(aes(fill = log10(Value_plot))) +
   scale_fill_viridis_c("log10(concentration)") +
-  geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
-                                         No_years >= input$min_no_years,
-                                         Last_year >= series_lasting_until))
+  facet_grid(rows = vars(PARAM)) +
+  labs(x = "Year", y = "Station")
+
+if (input$p1_show_50perc_overLOQ)
+  gg <- gg +   geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
+                                                      No_years >= input$min_no_years,
+                                                      Last_year >= series_lasting_until))
 
 gg   
 

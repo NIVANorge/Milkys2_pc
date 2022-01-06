@@ -74,7 +74,7 @@ ui <- fluidPage(
         tabsetPanel(
           type = "tabs",
           
-          # Main panel 1 (plot 1)
+          # .. Main panel 1 (plot 1) ----
           tabPanel(
             "All stations", 
             selectizeInput(inputId = "speciesgroup_selected", label = "Species group", 
@@ -82,10 +82,13 @@ ui <- fluidPage(
                            multiple = TRUE,
                            selected = c("Cod", "Blue mussel", "Flatfish", "Snail", "Eider duck")),
             plotOutput("overviewplot", height = "700px"),
+            checkboxInput("p1_show_50perc_overLOQ", "Show >50% over LOQ", value = TRUE),
+            checkboxInput("p1_show_number_overLOQ", "Show number over LOQ", value = FALSE),
+            checkboxInput("p1_show_min_overLOQ", "Show smallest value over LOQ", value = FALSE),
             sliderInput("min_no_years", "Show only stations with at least x years", min = 1, max = 40, value = 1, sep = "", step = 1)
           ),
           
-          # Main panel 2
+          # .. Main panel 2 (plot 2 and 3) ----
           tabPanel(
             "Selected station(s) and tissue(s)",
             
@@ -109,6 +112,7 @@ ui <- fluidPage(
                             min = 1980, max = 2020, value = c(1980,2020), sep = "", step = 1),
                 numericInput("max_y", "Max y axis (for auto, set to 0)", 0),
                 checkboxInput("number_of_points", "Show number of overplotted points"),
+                numericInput("p2_plotheight", "Plot height", 600),
                 div(DTOutput("timeseriesdata"), style = "font-size:80%")
               ),  # end subpanel 2a
               
@@ -143,6 +147,7 @@ ui <- fluidPage(
             
           ), # end main tab 2
           
+          # .. Main panel 3 (plot 4) ----
           tabPanel(
             "Selected parameter at several stations",
             selectizeInput(inputId = "p4_years_selected", label = "Year(s)", 
@@ -152,7 +157,7 @@ ui <- fluidPage(
                            choices = NULL, multiple = TRUE),
             plotOutput("stationplot", height = "500px"),
             checkboxInput("p4_logscale_y", "Use log10 on y axis", value = FALSE),
-            div(DTOutput("stationdata"), style = "font-size:80%")
+            div(DTOutput("stationdata"), style = "font-size:90%")
           )
           
         ),  # end entire tabsetPanel
@@ -222,6 +227,28 @@ server <- function(input, output) {
     )
   })
   
+  #
+  # Get dat_param ----
+  #
+  dat_param_function <- reactive({
+    
+    # Code in app, unchanged
+    result <- dat %>%
+      filter(PARAM %in% input$params_selected,
+             Basis %in% input$basis_selected) %>%
+      mutate(
+        LOQ = ifelse(is.na(qflag), "Over LOQ", "Under LOQ"),
+        Series = paste0(LATIN_NAME, ", ", 
+                        TISSUE_NAME)
+      )
+    
+    result
+    
+  })
+  
+  #
+  # Get dat_plot2 ----
+  #
   dat_plot2_function <- reactive({
     
     validate(
@@ -231,11 +258,11 @@ server <- function(input, output) {
       need(input$tissues_selected != "", "Please select at least one tissue")
     )
     
+    dat_param <- dat_param_function()
+    
     # Code in app, unchanged
-    result <- dat %>%
-      filter(PARAM %in% input$params_selected,
-             Basis %in% input$basis_selected,
-             LATIN_NAME %in% input$species_selected,
+    result <- dat_param %>%
+      filter(LATIN_NAME %in% input$species_selected,
              TISSUE_NAME %in% input$tissues_selected,
              Station_name %in% input$stations_selected) %>%
       mutate(
@@ -243,6 +270,48 @@ server <- function(input, output) {
         Series = paste0(LATIN_NAME, ", ", 
                         TISSUE_NAME, ", ", 
                         Basis, "-basis")
+      )
+    
+    result
+    
+  })
+  
+  #
+  # Get dat_plot1 ----
+  #
+  dat_plot1_function <- reactive({
+    
+    dat_param <- dat_param_function()
+    
+    result <- dat_param %>%
+      group_by(PARAM, Basis, Station_name, TISSUE_NAME, MYEAR) %>%
+      summarize(
+        N = n(),
+        Over_LOQ = sum(is.na(qflag)),
+        Prop_over_LOQ = Over_LOQ/N,
+        Value_orig_median = median(VALUE_ORIG),
+        Value_wet_median = median(VALUE_WW),
+        Value_dry_median = median(VALUE_DW),
+        Value_lip_median = median(VALUE_FB)
+      ) %>%
+      mutate(
+        Station_name = factor(Station_name),
+        Speciesgroup = case_when(
+          grepl("[0-9]+B", Station_name) ~ "Cod",
+          grepl("[0-9]+F", Station_name) ~ "Flatfish",
+          grepl("[0-9]+A", Station_name) ~ "Blue mussel",
+          grepl("[0-9]+X", Station_name) ~ "Blue mussel",
+          grepl("I[0-9]+", Station_name) ~ "Blue mussel",
+          grepl("305", Station_name) ~ "Blue mussel",
+          grepl("[0-9]+G", Station_name) ~ "Snail",
+          grepl("[0-9]+N", Station_name) ~ "Eider duck",
+          grepl("[0-9]+C", Station_name) ~ "Shrimp",
+          TRUE ~ "Others")
+      ) %>%
+      group_by(PARAM, Basis, Station_name) %>%
+      mutate(
+        No_years = n(),
+        Last_year = max(MYEAR)
       )
     
     result
@@ -261,14 +330,22 @@ server <- function(input, output) {
              Basis %in% input$basis_selected,
              Speciesgroup %in% input$speciesgroup_selected)
     
+    # FOR DYNAMIC CALCULATION OF MEDIANS (not used now)
+    # dat_plot1 <- dat_plot1_function() %>%
+    #   filter(Speciesgroup %in% input$speciesgroup_selected)
+    
     if (input$valuebasis_selected == "Wet weight basis"){
       dat_plot1$Value_plot <- dat_plot1$Value_wet_median
+      dat_plot1$Value_min_overloq <- dat_plot1$Value_wet_min_overloq
     } else  if (input$valuebasis_selected == "Dry weight basis"){
       dat_plot1$Value_plot <- dat_plot1$Value_dry_median
+      dat_plot1$Value_min_overloq <- dat_plot1$Value_dry_min_overloq
     } else if (input$valuebasis_selected == "Lipid weight basis"){
       dat_plot1$Value_plot <- dat_plot1$Value_lip_median
+      dat_plot1$Value_min_overloq <- dat_plot1$Value_lip_min_overloq
     } else if (input$valuebasis_selected == "Original value"){
       dat_plot1$Value_plot <- dat_plot1$Value_orig_median
+      dat_plot1$Value_min_overloq <- dat_plot1$Value_orig_min_overloq
     }
     
     # browser()
@@ -283,12 +360,34 @@ server <- function(input, output) {
       ggplot(aes(MYEAR, Station_name)) +
       geom_raster(aes(fill = log10(Value_plot))) +
       scale_fill_viridis_c("log10(concentration)") +
-      geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
-                                             No_years >= input$min_no_years,
-                                             Last_year >= series_lasting_until)) +
       facet_grid(rows = vars(PARAM)) +
       labs(x = "Year", y = "Station")
 
+    
+    if (input$p1_show_50perc_overLOQ){
+      gg <- gg +   
+      geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
+                                             No_years >= input$min_no_years,
+                                             Last_year >= series_lasting_until))
+    }
+    
+    if (input$p1_show_number_overLOQ){
+      gg <- gg +   
+        geom_label(data = dat_plot1 %>% filter(No_years >= input$min_no_years,
+                                               Last_year >= series_lasting_until),
+                   aes(label = Over_LOQ))
+    }
+
+    if (input$p1_show_min_overLOQ){
+      gg <- gg +   
+        geom_point(data = dat_plot1 %>% filter(No_years >= input$min_no_years,
+                                               Last_year >= series_lasting_until,
+                                               Over_LOQ > 0),
+                   aes(color = Value_min_overloq),
+                   size = 5) +
+        scale_color_viridis_c("Min value over LOQ")
+    }
+    
     gg   
     
   })
@@ -297,13 +396,16 @@ server <- function(input, output) {
   # Plot 2 (timeseriesplot) ----
   #
   
+  
+  
   # Plot below needs to be wrapped in observe() as 'height' uses an input value
   observe({         
     
-   dat_plot2 <- dat_plot2_function()
     
     output$timeseriesplot <- renderPlot({
       
+      dat_plot2 <- dat_plot2_function()
+
       if (input$valuebasis_selected == "Wet weight basis"){
         dat_plot2$Value_plot <- dat_plot2$VALUE_WW
       } else  if (input$valuebasis_selected == "Dry weight basis"){
@@ -623,7 +725,7 @@ server <- function(input, output) {
   })
   
   #
-  #  ... table of data ----
+  #  . Table of data ----
   #
   
   output$stationdata <- DT::renderDT(
