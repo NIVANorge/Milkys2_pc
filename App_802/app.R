@@ -82,9 +82,10 @@ ui <- fluidPage(
                            multiple = TRUE,
                            selected = c("Cod", "Blue mussel", "Flatfish", "Snail", "Eider duck")),
             plotOutput("overviewplot", height = "700px"),
-            checkboxInput("p1_show_50perc_overLOQ", "Show >50% over LOQ", value = TRUE),
-            checkboxInput("p1_show_number_overLOQ", "Show number over LOQ", value = FALSE),
-            checkboxInput("p1_show_min_overLOQ", "Show smallest value over LOQ", value = FALSE),
+            checkboxInput("p1_show_medians", "Rectangles showing median value", value = TRUE),
+            checkboxInput("p1_show_50perc_overLOQ", "Points showing >50% over LOQ", value = TRUE),
+            checkboxInput("p1_show_min_overLOQ", "Points showing smallest value over LOQ", value = FALSE),
+            checkboxInput("p1_show_number_overLOQ", "Numbers showing number over LOQ", value = FALSE),
             sliderInput("min_no_years", "Show only stations with at least x years", min = 1, max = 40, value = 1, sep = "", step = 1)
           ),
           
@@ -106,14 +107,13 @@ ui <- fluidPage(
               # Subpanel 2a (plot 2)
               tabPanel(
                 "Time series", 
-                plotOutput("timeseriesplot", height = "600px"),
+                uiOutput("timeseriesplot_ui"),
                 checkboxInput("p2_logscale_y", "Use log10 on y axis ('Max y axis' must be set to zero)", value = FALSE),
                 sliderInput("range_x", "Show plot for years (for auto, set to 1980-2020)", 
                             min = 1980, max = 2020, value = c(1980,2020), sep = "", step = 1),
                 numericInput("max_y", "Max y axis (for auto, set to 0)", 0),
                 checkboxInput("number_of_points", "Show number of overplotted points"),
-                numericInput("p2_plotheight", "Plot height", 600),
-                div(DTOutput("timeseriesdata"), style = "font-size:80%")
+                div(DTOutput("timeseriesdata"), style = "font-size:90%")
               ),  # end subpanel 2a
               
               # Subpanel 2b (plot 3)
@@ -359,17 +359,22 @@ server <- function(input, output) {
       filter(No_years >= input$min_no_years,
              Last_year >= series_lasting_until) %>%
       ggplot(aes(MYEAR, Station_name)) +
-      geom_raster(aes(fill = log10(Value_plot))) +
-      scale_fill_viridis_c("log10(concentration)") +
       facet_grid(rows = vars(PARAM)) +
       labs(x = "Year", y = "Station")
 
+    
+    if (input$p1_show_medians){
+      gg <- gg +   
+        geom_raster(aes(fill = log10(Value_plot))) +
+        scale_fill_viridis_c("log10(concentration)")
+    }
     
     if (input$p1_show_50perc_overLOQ){
       gg <- gg +   
       geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
                                              No_years >= input$min_no_years,
-                                             Last_year >= series_lasting_until))
+                                             Last_year >= series_lasting_until),
+                 size = 5)
     }
     
     if (input$p1_show_number_overLOQ){
@@ -432,6 +437,12 @@ server <- function(input, output) {
           data = dat_plot2 %>% count(MYEAR, Value_plot) %>% filter(n > 1),  
           aes(x = MYEAR + 0.3, label = n))
       
+      if (input$number_of_points)
+        resultplot <- resultplot +
+        geom_text(
+          data = dat_plot2 %>% count(MYEAR, Value_plot) %>% filter(n > 1),  
+          aes(x = MYEAR + 0.3, label = n))
+      
       if (input$max_y != 0){
         if (input$range_x[1] == 1980 & input$range_x[2] == 2020){
           resultplot <- resultplot + 
@@ -453,16 +464,29 @@ server <- function(input, output) {
       
       resultplot  
     })
+  
+  
+  #
+  # . make ui ----
+  #
+  
+  p2_plotheight <- reactive({
+    length(input$stations_selected)/length(input$params_selected)*500
+  })
+  
+  output$timeseriesplot_ui <- renderUI({
+    plotOutput("timeseriesplot", height = p2_plotheight())
+  })
 
   #
-  #  Plot 2 - table of data
+  #  . table of data ----
   #
   
   output$timeseriesdata <- DT::renderDT(
     dat_plot2_function(), 
     filter = "top"
   )
-  
+
   
   #
   # Plot 3 (correlationplot) ----
