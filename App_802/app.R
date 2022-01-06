@@ -278,6 +278,7 @@ server <- function(input, output) {
   
   #
   # Get dat_plot1 ----
+  # FOR DYNAMIC CALCULATION OF MEDIANS (not used now)
   #
   dat_plot1_function <- reactive({
     
@@ -399,9 +400,7 @@ server <- function(input, output) {
   
   
   # Plot below needs to be wrapped in observe() as 'height' uses an input value
-  observe({         
-    
-    
+  
     output$timeseriesplot <- renderPlot({
       
       dat_plot2 <- dat_plot2_function()
@@ -453,15 +452,8 @@ server <- function(input, output) {
       }
       
       resultplot  
-    }, 
-    height = case_when(
-      length(input$stations_selected) == 1 ~ 300,
-      length(input$stations_selected) == 2 ~ 400,
-      length(input$stations_selected) == 3 ~ 500,
-      TRUE ~ 600)   # let height vary
-    )
-  })  # end of observe  
-  
+    })
+
   #
   #  Plot 2 - table of data
   #
