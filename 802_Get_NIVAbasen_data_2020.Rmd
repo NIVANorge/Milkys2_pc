@@ -6,6 +6,7 @@ output: html_document
 ## Libraries
 ```{r setup, include=FALSE}
 # install.packages("niRvana")
+
 library(dplyr)
 library(ggplot2)
 library(lubridate)
@@ -18,39 +19,6 @@ source("802_Get_NIVAbasen_data_functions.R")
 
 ```
 
-
-## Modify niRvana functions  
-
-### New version of 'get_samples_from_sampleid'  
-- does not get data from NIVADATABASE.SPECIES (which has been deleted)  
-```{r}
-
-get_samples_from_sampleid <- function (sample_id, add_species_and_tissue = TRUE, report = FALSE) {
-    df <- get_nivabase_selection("*", "BIOTA_SAMPLES", 
-        "SAMPLE_ID", sample_id)
-    if (add_species_and_tissue) {
-        df_tissue <- get_nivabase_data("select TISSUE_ID,TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
-        # DOESN'T EXIST ANYMORE:
-        # df_species <- get_nivabase_data("select SPECIES_ID,LATIN_NAME from NIVADATABASE.SPECIES")
-        df <- merge(df, df_tissue, by = "TISSUE_ID", all.x = TRUE, 
-            all.y = FALSE)
-    }
-    df <- dplyr::rename(df, REMARK_sample = REMARK)
-    if (report) {
-        n <- sum(is.na(df$TISSUE_ID))
-        p <- round(mean(is.na(df$TISSUE_ID)) * 100, 1)
-        cat("TISSUE_ID lacking for", n, "cases, i.e.", 
-            p, "percent\n")
-        n <- sum(!is.na(df$TISSUE_ID) & is.na(df$TISSUE_NAME))
-        p <- round(mean(!is.na(df$TISSUE_ID) & is.na(df$TISSUE_NAME)) * 
-            100, 1)
-        cat("TISSUE_NAME lacking for additional", n, "cases, i.e.", 
-            p, "percent\n")
-    }
-    df
-}
-
-```
 
 ## Get new(er) data
 
