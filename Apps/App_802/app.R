@@ -13,9 +13,9 @@ library(DT)
 # These files are too big to put on Github
 # NIVA people can find them here: 'K:\Avdeling\214-Oseanografi\DHJ\Data\Milkys_ICES_files'
 #  
-dat <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_added_columns.csv") %>%
+dat <- read_csv("../../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_added_columns.csv") %>%
   mutate(Speciestissue = paste0(LATIN_NAME, ", ", TISSUE_NAME))
-dat_summ <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_summ.csv")
+dat_summ <- read_csv("../../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_summ.csv")
 
 species_available <- dat %>%
   count(LATIN_NAME) %>%
