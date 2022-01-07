@@ -40,13 +40,13 @@ library(forcats)
 # NOTE: The files used (and made below) are too big to put on Github
 # NIVA people can find them here: 'K:\Avdeling\214-Oseanografi\DHJ\Data\Milkys_Access_files'
 #  
-dat_loc <- read_csv2("../../../CEMP/2016_Milkys/dbo_locality_ny.txt") %>%
+dat_loc <- read_csv2("../../../../CEMP/2016_Milkys/dbo_locality_ny.txt") %>%
   mutate(
     Station_name = paste(jmpst, stnam)
   )
 
 # The following file cotains a few duplicates, which are fixed below  
-dat_mas_orig <- read_csv2("../../../CEMP/2016_Milkys/dbo_fish_mas.txt") %>%
+dat_mas_orig <- read_csv2("../../../../CEMP/2016_Milkys/dbo_fish_mas.txt") %>%
   rename(
     Year = myear,
     LATIN_NAME = speci
@@ -67,19 +67,19 @@ dat_mas <- bind_rows(
     summarise(across(.fn = first), .groups = "drop"),
 )
 
-dat_spe <- read_csv2("../../../CEMP/2016_Milkys/dbo_fish_spe.txt") %>%
+dat_spe <- read_csv2("../../../../CEMP/2016_Milkys/dbo_fish_spe.txt") %>%
   rename(
     Year = myear
   )
 
-dat_tis <- read_csv2("../../../CEMP/2016_Milkys/dbo_fish_tis.txt") %>%
+dat_tis <- read_csv2("../../../../CEMP/2016_Milkys/dbo_fish_tis.txt") %>%
   rename(
     Year = myear,
     TISSUE_NAME = tissu
   )
 
 # All concentrations, including some data with 'NA' in  value field 'valsnf'   
-dat_con_orig <- read_csv2("../../../CEMP/2016_Milkys/dbo_fish_con.txt") %>%
+dat_con_orig <- read_csv2("../../../../CEMP/2016_Milkys/dbo_fish_con.txt") %>%
   rename(
     Year = myear,
     PARAM = param,

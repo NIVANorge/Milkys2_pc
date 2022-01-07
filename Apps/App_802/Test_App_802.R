@@ -40,7 +40,7 @@ library(forcats)
 # NOTE: The files used (and made below) are too big to put on Github
 # NIVA people can find them here: 'K:\Avdeling\214-Oseanografi\DHJ\Data\Milkys_ICES_files'
 #  
-dat_orig <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway.csv") %>%
+dat_orig <- read_csv("../../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway.csv") %>%
   rename(
     LATIN_NAME = species,
     TISSUE_NAME = matrix,
@@ -125,7 +125,7 @@ dat <- dat_duplicates_removed %>%
 
 
 
-fn <- "../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_added_columns.csv"
+fn <- "../../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_added_columns.csv"
 # Uncomment to overwrite (takes 30-40 seconds)
 # write_csv(dat, fn)
 
@@ -135,7 +135,7 @@ fn <- "../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_added_colum
 #  App reads from file made below
 #
 
-fn_summ <- "../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_summ.csv"
+fn_summ <- "../../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_summ.csv"
 update_summary_table <- FALSE
 # update_summary_table <- TRUE
 
@@ -197,7 +197,7 @@ if (!file.exists(fn_summ) | update_summary_table){
   
 } else {
 
-  dat_summ <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_summ.csv")
+  dat_summ <- read_csv("../../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_summ.csv")
   
 }  
 
@@ -785,7 +785,7 @@ If (FALSE){
   # . Test published raw data ----
   #
   
-  fn <- "../Files_to_ICES/Data_from_ICES/OSPAR_MIME_data_extraction_2021/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201_Norway.txt"
+  fn <- "../../Files_to_ICES/Data_from_ICES/OSPAR_MIME_data_extraction_2021/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201/OSPAR_MIME_AMAP_Biota_contaminants_effects_20210201_Norway.txt"
   dat_publ <- readr::read_csv(fn)
 
   dat_publ %>%

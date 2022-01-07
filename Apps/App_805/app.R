@@ -12,7 +12,7 @@ library(dplyr)
 library(ggplot2)
 library(DT)
 
-save_folder_rds <- "../Files_to_ICES/2020/Rdata"
+save_folder_rds <- "../../Files_to_ICES/2020/Rdata"
 files_available <- dir(save_folder_rds) %>% sort(decreasing = TRUE)
 
 #

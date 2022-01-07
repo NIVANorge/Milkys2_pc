@@ -10,7 +10,7 @@ library(shiny)
 library(dplyr)
 library(ggplot2)
 
-dat_med <- readRDS("../Files_from_Jupyterhub_2020/Raw_data/110_mediandata_updated_2021-10-08.rds")
+dat_med <- readRDS("../../Files_from_Jupyterhub_2020/Raw_data/110_mediandata_updated_2021-10-08.rds")
 
 # Parameters to choose from (only those found in 2020)
 species_avaliable <- dat_med %>%
