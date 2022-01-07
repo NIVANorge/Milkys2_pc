@@ -15,19 +15,20 @@
     - Files are joined together and saved in the app folder as `dat.csv`    
     
     
-* App_804  
+* App_804 - Raw data from NIVA (RData file from Jupyterhub script 109)    
+`dat <- readRDS("../../Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")`    
+    - In addition, station file   
+    
+    
+* App_805 - Check ICES submission file (saved in rds format)   
+`"../../Files_to_ICES/2020/Rdata"`    
+    -  Has some weight on checking measurement (analysis) error
+    
+    
+* App_806 
 ``  
     
     
-* App_805  
-``  
-    
-    
-* App_806  
-``  
-    
-    
-* App_807  
-``  
-    
+* App_807 - Reading data directly from Nivabasen including Labware tables     
+    - Not finished  
     
