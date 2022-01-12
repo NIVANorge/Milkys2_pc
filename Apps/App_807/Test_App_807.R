@@ -1,8 +1,7 @@
 
 library(niRvana)
 library(dplyr)
-
-nivabasen_username <- "DHJ"
+library(lubridate)
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
@@ -396,6 +395,57 @@ xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE, df_check3 )
 df_check3 %>% filter(is.na(AQUAMONITOR_CODE)) %>% head(3)
 # DESCRIPTION says 'Blank'
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+## Quartzcorp data ----
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
+# check_sample <- get_nivabase_data("select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT = 'QuartzCorp overvåkning'")
+check_sample <- get_nivabase_data("select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where lower(PROSJEKT) like '%quartzcorp%'")
+
+check_results <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where lower(PROSJEKT) like '%quartzcorp%'")
+
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+## Industry project data (Sigurd) ----
+#
+# Ranfjorden: O-210181, tre blåskjellstasjoner. Resultatene er klare der.
+# Vefsnfjorden: O-210239, blåskjellstasjoner. Resultatene er klare.
+# Årdalsfjorden: O-210266, blåskjellstasjoner. Resultatene ikke klare ennå.
+# Høyangsfjorden: O-210293, blåskjellstasjoner. Resultatene ikke klare ennå.
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+check_results_rana <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_IMPORT where lower(PROSJEKT) like '%210181%'",
+  "and extract(YEAR from SAMPLED_DATE) >= 2020"))
+
+table(addNA(check_results_rana$STATUS))
+table(addNA(check_results_rana$STATUSX))
+xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE, check_results_rana)
+xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE + year(SAMPLED_DATE), check_results_rana)
+xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE + year(SAMPLED_DATE) + STATUSX, check_results_rana)
+
+check_results_aardal <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_IMPORT where lower(PROSJEKT) like '%210266%'",
+  "and extract(YEAR from SAMPLED_DATE) >= 2020"))
+
+table(addNA(check_results_aardal$STATUS))
+table(addNA(check_results_aardal$STATUSX))
+xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE + year(SAMPLED_DATE), check_results_aardal)
+xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE + year(SAMPLED_DATE) + STATUSX, check_results_aardal)
+
+check_results_hoyang <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_IMPORT where lower(PROSJEKT) like '%210266%'",
+  "and extract(YEAR from SAMPLED_DATE) >= 2020"))
+
+table(addNA(check_results_hoyang$STATUS))
+table(addNA(check_results_hoyang$STATUSX))
+xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE + year(SAMPLED_DATE), check_results_hoyang)
+xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE + year(SAMPLED_DATE) + STATUSX, check_results_hoyang)
+
+xtabs(~addNA(REPORTED_NAME) + SAMPLE_TYPE, check_results_hoyang)
 
 
