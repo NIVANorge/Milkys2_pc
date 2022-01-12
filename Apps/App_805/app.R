@@ -9,8 +9,14 @@
 
 library(shiny)
 library(dplyr)
+library(purrr)
+library(forcats)
 library(ggplot2)
 library(DT)
+
+source("../../844_ICES_submission_check_functions.R")
+source("../../845_Check_ICES_submission_functions.R")   # set_numeric
+
 
 save_folder_rds <- "../../Files_to_ICES/2020/Rdata"
 files_available <- dir(save_folder_rds) %>% sort(decreasing = TRUE)
@@ -32,8 +38,15 @@ ui <- fluidPage(
                   min = 1,
                   max = 50,
                   value = 30),
+      selectInput("selected_folder", "Select folder of data",
+                  c("Submission files 1981-2014", "Submission files 2015-2019", "2020/Delivered"), 
+                  selected = "2020/Delivered"
+                  ),
       selectInput("selected_dataset", "Select dataset",
                   files_available),
+      selectizeInput(inputId = "selected_dataset2", label = "Select dataset", 
+                     choices = NULL, multiple = FALSE, 
+                     selected = "NIVA2020CF_11.NO"),
       selectizeInput(inputId = "params_selected", label = "Parameter", 
                      choices = NULL, multiple = FALSE),
       selectizeInput(inputId = "matrix_selected", label = "Matrix", 
@@ -57,13 +70,45 @@ ui <- fluidPage(
 #
 server <- function(input, output) {
   
+  files_available <- reactive({
+    folder_data <- paste0("../../Files_to_ICES/", input$selected_folder)
+    fns <- dir(folder_data, full.names = FALSE)
+    # browser()
+    fns
+  })
+  
+  observeEvent(files_available(), {
+    updateSelectizeInput(
+      inputId = "selected_dataset2",
+      choices = files_available(),
+      selected = input$selected_dataset2     # => selection isn't 'lost' when other input changes 
+    )
+  })
+  
+  filename <- reactive({
+    validate(
+      need(input$selected_dataset2 != "", "Please select dataset")
+    )
+    
+    fn <- paste0("../../Files_to_ICES/", input$selected_folder, "/", input$selected_dataset2)
+    browser()
+    fn
+    
+  })
+  
   
   data_list_fn <- reactive({
-    data_list <-readRDS(paste0(save_folder_rds, "/", input$selected_dataset))
-    names(data_list) <- c("00", "03", "04", "10", "20", "21", "90", "91", "92")
-    # 04 = sample table
-    # 10 = concentration data
-    # 91 = station data
+    
+    data_list <- read_ices_file(filename()) %>%
+      add_field_codes() %>%
+      set_numeric()
+    
+    # data_list <-readRDS(paste0(save_folder_rds, "/", input$selected_dataset))
+    # names(data_list) <- c("00", "03", "04", "10", "20", "21", "90", "91", "92")
+    # # 04 = sample table
+    # # 10 = concentration data
+    # # 91 = station data
+    
     data_list
   })
   
