@@ -1,3 +1,10 @@
+# Test app 807 ----
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+## Libraries ----
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 library(niRvana)
 library(dplyr)
@@ -5,7 +12,7 @@ library(lubridate)
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-## Milkys data ----
+## Milkys data in Labware ----
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
@@ -14,7 +21,7 @@ table(check$PROSJEKT)
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# . Sample data in Labware ----
+### . Sample data in Labware ----
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
@@ -30,7 +37,7 @@ head(df1_summ)
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# . Concentration data in Labware ----
+### . Concentration data in Labware ----
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
@@ -68,6 +75,31 @@ get_nivabase_data(paste(
   "and AQUAMONITOR_CODE is NULL"))
 # 0
 
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+## Milkys data in Nivadatabase ----
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+
+df_stations <- get_nivabase_data("select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where upper(PROSJEKT) like '%MILKYS%'")
+table(check$PROSJEKT)
+
+df_projects <- get_projects() %>%
+  select(-ENTERED_BY) %>%
+  arrange(PROJECT_NAME) %>%
+  mutate(Menu_string = paste0(PROJECT_NAME, " (ID:", PROJECT_ID, ")"))
+
+projects_available <- df_projects$Menu_string
+
+
+get_nivabase_selection("PROJECT_ID, STATION_ID, STATION_CODE, STATION_NAME, STATION_IS_ACTIVE, PROJECTS_STATION_ID", 
+                       "PROJECTS_STATIONS", "PROJECT_ID", id))
+
+
+
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
 ## Other data ----
@@ -76,13 +108,13 @@ get_nivabase_data(paste(
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# . Data not yet accepted ----
+### . Data not yet accepted ----
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# . - Check out STATUS and STATUSX ----
+#### . - Check out STATUS and STATUSX ----
 #
 # Note that STATUS is different things in sample data and measurement data
 #
@@ -116,7 +148,7 @@ get_nivabase_data(paste(
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# . - Check out 'Midlertidig' data ----
+#### . - Check out 'Midlertidig' data ----
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
@@ -133,7 +165,7 @@ get_nivabase_data(paste(
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# Urbanfjord data ----
+## Urbanfjord data ----
 #
 # Contains STATUS Midlertidig as well as Ferdig
 #
@@ -155,7 +187,7 @@ df_labware <- get_nivabase_data(paste(
 #
 
 #
-# . Add PARAM_group and BIOTA_matrix ----
+### . Add PARAM_group and BIOTA_matrix ----
 #
 df_labware <- df_labware %>%
   mutate(
@@ -193,7 +225,7 @@ xtabs(~addNA(BIOTA_matrix), df_labware %>% filter(SAMPLE_TYPE == "BIOTA"))
 library(stringr)
 
 #
-# . Check deviant PARAM names ----
+### . Check deviant PARAM names ----
 #
 df_labware_names <- df_labware %>%
   mutate(
@@ -245,7 +277,7 @@ df_labware %>%
   tidyr::pivot_wider(names_from = Value_existing, values_from = n, values_fill = 0)
 
 #
-# . Urbanfjord: Plots of PFAS ----
+### . Urbanfjord: Plots of PFAS ----
 #  All PFAS
 #
 df_labware %>%
@@ -292,10 +324,16 @@ df_labware %>%
 
 
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+## Check some "station-less" data ----
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# . Summarize "station-less" data ----
+### . Summarize "station-less" data ----
 #
 # Data with no AQUAMONITOR_CODE
 #
@@ -333,14 +371,8 @@ get_nivabase_data(paste(
 
 
 
-#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# . Check some "station-less" data ----
-#
-#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
-
-#
-# . - ØKOSTOR ----
+#### . - ØKOSTOR ----
 # ØKOSTOR Basisovervåking av store innsjøer 2020
 # Most but not all data have a station
 #
@@ -364,7 +396,7 @@ df_check1_1 <- get_nivabase_selection(
   "*", "LABWARE_CHECK_SAMPLE", "TEXT_ID", stns, values_are_text = TRUE)
 
 #
-# . - Urbanfjord ----
+#### . - Urbanfjord ----
 # O 17146 Urbanfjord
 # Again, most but not all data have a station
 #
@@ -380,7 +412,7 @@ df_check2 %>% filter(is.na(AQUAMONITOR_CODE)) %>% head(3)
 # DESCRIPTION says "Sediment-Cm21"
 
 #
-# . - Økokyst ----
+#### . - Økokyst ----
 # O 200089;HY_ANA - Økokyst DP Skagerrak; Hydrografi analyse og rapport
 # Most but not all data have a station
 #
@@ -418,6 +450,10 @@ check_results <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT wh
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
+check_samples_rana <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where lower(PROSJEKT) like '%210181%'",
+  "and extract(YEAR from SAMPLED_DATE) >= 2020"))
+
 check_results_rana <- get_nivabase_data(paste(
   "select * from NIVADATABASE.LABWARE_IMPORT where lower(PROSJEKT) like '%210181%'",
   "and extract(YEAR from SAMPLED_DATE) >= 2020"))
@@ -427,6 +463,8 @@ table(addNA(check_results_rana$STATUSX))
 xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE, check_results_rana)
 xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE + year(SAMPLED_DATE), check_results_rana)
 xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE + year(SAMPLED_DATE) + STATUSX, check_results_rana)
+
+
 
 check_results_aardal <- get_nivabase_data(paste(
   "select * from NIVADATABASE.LABWARE_IMPORT where lower(PROSJEKT) like '%210266%'",
@@ -448,4 +486,47 @@ xtabs(~addNA(AQUAMONITOR_CODE) + SAMPLE_TYPE + year(SAMPLED_DATE) + STATUSX, che
 
 xtabs(~addNA(REPORTED_NAME) + SAMPLE_TYPE, check_results_hoyang)
 
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+### Summarise data (industry project) ----
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+df_summ1 <- check_results_rana %>%
+  group_by(SAMPLE_TYPE, DESCRIPTION, AQUAMONITOR_CODE, AQUAMONITOR_NAME, REPORTED_NAME) %>%
+  summarise(n = n(), val1 = first(FORMATTED_ENTRY), val2 = last(FORMATTED_ENTRY))
+
+check_duplicates_equal <- df_summ1 %>% filter(val1 != val2) %>% nrow()
+if (check_duplicates_equal > 0){
+  stop("There are duplicates with different values. See df_summ1.")
+}
+
+df_summ2 <- df_summ1 %>%
+  mutate(
+    Station = case_when(
+      !is.na(AQUAMONITOR_CODE) ~ paste(AQUAMONITOR_CODE, AQUAMONITOR_NAME),
+      TRUE ~ DESCRIPTION
+    )
+  ) %>%
+  count(SAMPLE_TYPE, Station, AQUAMONITOR_CODE, AQUAMONITOR_NAME, DESCRIPTION) %>%
+  arrange(SAMPLE_TYPE, Station)
+
+df_summ2$x1 <- 1
+df_summ2$x2 <- 2
+df_summ2$y <- 1:nrow(df_summ2)
+
+library(ggplot2)
+
+ggplot(df_summ2, aes(y=y)) +
+  geom_text(aes(x = x1, label = Station, color = SAMPLE_TYPE), hjust = 0) +
+  geom_text(aes(x = x2, label = n, color = SAMPLE_TYPE)) +
+  scale_y_reverse()
+
+ggplot(df_summ2, aes(y=y)) +
+  geom_text(aes(x = x1, label = DESCRIPTION, color = SAMPLE_TYPE), hjust = 0) +
+  geom_text(aes(x = x2, label = n, color = SAMPLE_TYPE)) +
+  scale_y_reverse()
+
+# make three numbers: number of lines, numbers with values, numbers accepted 
 
