@@ -7,6 +7,10 @@
 #    http://shiny.rstudio.com/
 #
 
+#
+# Run at start-up ----
+#
+
 library(shiny)
 library(dplyr)
 library(ggplot2)
@@ -22,11 +26,14 @@ df_projects <- get_projects() %>%
 
 projects_available <- df_projects$Menu_string
 
-# Define UI for application that draws a histogram
+#
+# USER INTERFACE ----
+#
+
 ui <- fluidPage(
 
     # Application title
-    titlePanel("Reading data directly from Nivabasen including Labware tables"),
+    titlePanel("Biota chemistry - read data directly from Nivabasen"),
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
@@ -41,17 +48,29 @@ ui <- fluidPage(
                         "Number of bins:",
                         min = 1,
                         max = 50,
-                        value = 30)
+                        value = 30),
+          width = 4
         ),
 
         # Show a plot of the generated distribution
         mainPanel(
-           plotOutput("distPlot")
-        )
+            # Tabset panel
+            tabsetPanel(
+              type = "tabs",
+              # .. Tab 1 (plot 1) ----
+              tabPanel(
+                plotOutput("station_years_plot", width = "600px"),
+                div(DTOutput("station_years_datatable"), style = "font-size:90%")
+              ) # end tabPanel 1
+            ), # end tabsetPanel
+            width = 8
+        )  # end mainPAnel
     )
 )
 
-# Define server logic required to draw a histogram
+#
+# SERVER ----
+#
 server <- function(input, output, session) {
   
   #
@@ -64,34 +83,86 @@ server <- function(input, output, session) {
     server = TRUE)
   
   #
-  # Get 'stations_available' ----
+  # get_stations ----
   #
   # For 'stations_selected' menu
   #
-  stations_available <- reactive({
-    id <- df_projects %>%
-      filter(Menu_string %in% input$projects_selected) %>%
+  get_stations <- reactive({
+    
+    validate(
+      need(input$projects_selected != "", "Please select a project")
+    )
+    
+    df_projects_sel <- df_projects %>%
+      filter(Menu_string %in% input$projects_selected)
+    id <- df_projects_sel %>%
       pull(PROJECT_ID)
-    if (length(id) > 0){
-      result <- get_nivabase_selection(
+    
+    result <- get_nivabase_selection(
       "PROJECT_ID, STATION_ID, STATION_CODE, STATION_NAME, STATION_IS_ACTIVE, PROJECTS_STATION_ID",
       "PROJECTS_STATIONS",
       "PROJECT_ID",
       id) %>%
       mutate(
         Menu_string = paste0(STATION_CODE, " ", STATION_NAME, " (ID:", STATION_ID, ")")
-        )
-    } else {
-      result <- data.frame(
-        PROJECT_ID = NA, STATION_ID = NA, STATION_CODE = NA, STATION_NAME = NA, STATION_IS_ACTIVE = NA, PROJECTS_STATION_ID = NA,
-        Menu_string = NA)
-    }
+      )
+    result
+  })
+  
+  #
+  # get_stations_years ----
+  #
+  # Count of number of 
+  get_stations_years <- reactive({
+    df_stations <- get_stations() %>%
+      distinct(STATION_ID, STATION_CODE, STATION_NAME)
+    station_id <- df_stations %>%
+      pull(STATION_ID) %>%
+      unique()
+    sql <-   paste(
+      "select STATION_ID, extract(YEAR from DATE_CAUGHT) as YEAR, count(*) as N",
+      "from NIVADATABASE.BIOTA_SINGLE_SPECIMENS",
+      "WHERE STATION_ID in",
+      paste("(", paste(station_id, collapse = ","), ")"),
+      "group by STATION_ID, extract(YEAR from DATE_CAUGHT)",
+      "order by STATION_ID"
+    )
+    result <- get_nivabase_data(sql) %>%
+      left_join(
+        df_stations %>% select(STATION_ID, STATION_CODE, STATION_NAME),
+        by = "STATION_ID") %>%
+      select(STATION_CODE, STATION_NAME, STATION_ID, YEAR, N)
     # browser()
     result
   })
-
-  observeEvent(stations_available(), {
-    df_stations <- stations_available()
+  
+  #
+  # output station_years_plot ----
+  #
+  output$station_years_plot <- renderPlot({
+    df <- get_stations_years()
+    # df <- mutate(STATION_ID = factor(STATION_ID))
+    resultplot <- ggplot(df, aes(YEAR, STATION_CODE, fill = N)) +
+      geom_tile() +
+      scale_fill_viridis_b()
+    resultplot
+    })
+  
+  #
+  # output station_years_datatable ----
+  #
+  output$station_years_datatable <- DT::renderDT(
+    get_stations_years(), 
+    filter = "top"
+  )
+  
+  #
+  # fill menu stations_selected ---- 
+  #
+  # Using get_stations
+  #
+  observeEvent(get_stations(), {
+    df_stations <- get_stations()
     stations_available <- df_stations %>% pull(Menu_string)
     updateSelectizeInput(
       inputId = "stations_selected",
@@ -101,36 +172,16 @@ server <- function(input, output, session) {
   })
   
   #
-  # Get 'specimens_available' ----
+  # fill menu years_selected ----  
   #
-  # For 'years_available'  
+  # Using get_stations_years
   #
-  specimens_available <- reactive({
-    df_stations <- stations_available()
-    id <- df_stations %>%
-      filter(Menu_string %in% input$stations_selected) %>%
-      pull(STATION_ID)
-    if (length(id) > 0){
-      result <- get_nivabase_selection(
-        "STATION_ID, DATE_CAUGHT, SPECIMEN_NO, TAXONOMY_CODE_ID, SPECIMEN_ID",
-        "BIOTA_SINGLE_SPECIMENS",
-        "STATION_ID",
-        id)
-    } else {
-      result <- data.frame(
-        STATION_ID = NA, DATE_CAUGHT = NA, SPECIMEN_NO = NA, TAXONOMY_CODE_ID = NA, SPECIMEN_ID = NA)
-    }
-    # browser()
-    result
-  })
-  
-  observeEvent(specimens_available(), {
-    df_specimens <- specimens_available()
-    years_available <- df_specimens %>%
-      distinct(DATE_CAUGHT) %>%
-      mutate(Year = year(DATE_CAUGHT)) %>%
-      distinct(Year) %>% 
-      pull(Year)
+  observeEvent(get_stations_years(), {
+    df <- get_stations_years()
+    years_available <- df %>%
+      distinct(YEAR) %>%
+      pull(YEAR) %>%
+      sort()
     updateSelectizeInput(
       inputId = "years_selected",
       choices = years_available
@@ -140,16 +191,12 @@ server <- function(input, output, session) {
   
   
   #
-  # Get 'years_available' ----
+  # get_specimens ----
   #
-  # For 'years_selected' menu
+  # For 'years_available'  
   #
-  years_available <- reactive({
-    df_specimens <- specimens_available()
-    df_specimens %>%
-      distinct(DATE_CAUGHT) %>%
-      mutate(Year = year(DATE_CAUGHT)) %>%
-      distinct(Year) %>% 
+  get_specimens <- reactive({
+    df_stations <- get_stations()
     id <- df_stations %>%
       filter(Menu_string %in% input$stations_selected) %>%
       pull(STATION_ID)
@@ -167,14 +214,7 @@ server <- function(input, output, session) {
     result
   })
   
-    output$distPlot <- renderPlot({
-        # generate bins based on input$bins from ui.R
-        x    <- faithful[, 2]
-        bins <- seq(min(x), max(x), length.out = input$bins + 1)
 
-        # draw the histogram with the specified number of bins
-        hist(x, breaks = bins, col = 'darkgray', border = 'white')
-    })
 }
 
 # Run the application 

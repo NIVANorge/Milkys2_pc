@@ -478,7 +478,6 @@ input$basis_selected <- "W"
 input$valuebasis_selected <- "Wet weight basis"
 
 #
-# . Plot 1 (overview) ----
 #
 
 # From menus
