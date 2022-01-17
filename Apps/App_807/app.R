@@ -44,11 +44,6 @@ ui <- fluidPage(
                          choices = NULL, multiple = TRUE),
           selectizeInput(inputId = "years_selected", label = "Years", 
                          choices = NULL, multiple = TRUE),
-          sliderInput("bins",
-                        "Number of bins:",
-                        min = 1,
-                        max = 50,
-                        value = 30),
           width = 4
         ),
 
@@ -59,11 +54,24 @@ ui <- fluidPage(
               type = "tabs",
               # .. Tab 1 (plot 1) ----
               tabPanel(
+                "Stations x years",
                 plotOutput("station_years_plot", width = "600px"),
                 div(DTOutput("station_years_datatable"), style = "font-size:90%")
-              ) # end tabPanel 1
+              ), # end tabPanel 1
+
+              tabPanel(
+                "Specimens (sel. stations)",
+                div(DTOutput("specimens_selected_stations_datatable"), style = "font-size:90%")
+              ), # end tabPanel 1
+              
+              tabPanel(
+                "Specimens (sel. years)",
+                div(DTOutput("specimens_selected_years_datatable"), style = "font-size:90%")
+              ), # end tabPanel 3
+              
             ), # end tabsetPanel
             width = 8
+            
         )  # end mainPAnel
     )
 )
@@ -85,6 +93,7 @@ server <- function(input, output, session) {
   #
   # get_stations ----
   #
+  # Triggered by selecting project
   # For 'stations_selected' menu
   #
   get_stations <- reactive({
@@ -112,10 +121,12 @@ server <- function(input, output, session) {
   #
   # get_stations_years ----
   #
+  # Triggered by get_stations (which is triggered by selecting project)
+  #
   # Count of number of 
   get_stations_years <- reactive({
     df_stations <- get_stations() %>%
-      distinct(STATION_ID, STATION_CODE, STATION_NAME)
+      distinct(STATION_ID, STATION_CODE, STATION_NAME, Menu_string)
     station_id <- df_stations %>%
       pull(STATION_ID) %>%
       unique()
@@ -129,9 +140,9 @@ server <- function(input, output, session) {
     )
     result <- get_nivabase_data(sql) %>%
       left_join(
-        df_stations %>% select(STATION_ID, STATION_CODE, STATION_NAME),
+        df_stations %>% select(STATION_ID, STATION_CODE, STATION_NAME, Menu_string),
         by = "STATION_ID") %>%
-      select(STATION_CODE, STATION_NAME, STATION_ID, YEAR, N)
+      select(STATION_CODE, STATION_NAME, STATION_ID, YEAR, N, Menu_string)
     # browser()
     result
   })
@@ -191,29 +202,83 @@ server <- function(input, output, session) {
   
   
   #
-  # get_specimens ----
+  # get_specimens_from_station ----
   #
-  # For 'years_available'  
+  # For getting samples    
   #
-  get_specimens <- reactive({
+
+  get_specimens_from_station <- reactive({
+    
+    validate(
+      need(input$stations_selected != "", "Please select a station")
+    )
+    
     df_stations <- get_stations()
     id <- df_stations %>%
       filter(Menu_string %in% input$stations_selected) %>%
       pull(STATION_ID)
-    if (length(id) > 0){
-      result <- get_nivabase_selection(
-        "STATION_ID, DATE_CAUGHT, SPECIMEN_NO, TAXONOMY_CODE_ID, SPECIMEN_ID",
-        "BIOTA_SINGLE_SPECIMENS",
-        "STATION_ID",
-        id)
-    } else {
-      result <- data.frame(
-        STATION_ID = NA, DATE_CAUGHT = NA, SPECIMEN_NO = NA, TAXONOMY_CODE_ID = NA, SPECIMEN_ID = NA)
-    }
+    result <- get_nivabase_selection(
+      "STATION_ID, DATE_CAUGHT, SPECIMEN_NO, TAXONOMY_CODE_ID, SPECIMEN_ID",
+      "BIOTA_SINGLE_SPECIMENS",
+      "STATION_ID",
+      id)
     # browser()
     result
   })
   
+  #
+  # output specimens_selected_stations_datatable ----
+  #
+  output$specimens_selected_stations_datatable <- DT::renderDT(
+    get_specimens_from_station(), 
+    filter = "top"
+  )
+  
+  #
+  # get_specimens_from_year ----
+  #
+  # Note: can be used with or without selecting stations  
+  # - if stations NOT selected, it returns specimens for all stations that year    
+  # - if stations ARE selected, it returns specimens for specific stations that year    
+  #
+  
+  get_specimens_from_year <- reactive({
+    
+    validate(
+      need(input$years_selected != "", "Please select a year")
+    )
+    
+    df_stations_years <- get_stations_years()
+    # browser()
+    
+    if (is.null(input$stations_selected)){
+      station_ids <- df_stations_years %>%
+        filter(YEAR %in% input$years_selected) %>%
+        pull(STATION_ID)
+    } else {
+      station_ids <- df_stations_years %>%
+        filter(Menu_string %in% input$stations_selected) %>%
+        pull(STATION_ID)
+    }
+    result <- get_nivabase_selection(
+      "STATION_ID, DATE_CAUGHT, SPECIMEN_NO, TAXONOMY_CODE_ID, SPECIMEN_ID",
+      "BIOTA_SINGLE_SPECIMENS",
+      "STATION_ID",
+      station_ids, 
+      extra_where = paste(" and extract(YEAR from DATE_CAUGHT) =", input$years_selected)
+    )
+    # browser()
+    result
+  })
+  
+  #
+  # output specimens_selected_stations_datatable ----
+  #
+  output$specimens_selected_years_datatable <- DT::renderDT(
+    get_specimens_from_year(), 
+    filter = "top"
+  )
+
 
 }
 
