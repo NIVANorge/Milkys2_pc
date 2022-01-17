@@ -72,10 +72,16 @@ ui <- fluidPage(
               ), # end tabPanel 3
               
               tabPanel(
-                "Samples (sel. years)",
+                "Samples",
                 div(DTOutput("samples_selected_years_datatable"), style = "font-size:90%")
               ), # end tabPanel 4
               
+              tabPanel(
+                "Measurements",
+                div(DTOutput("measurements_selected_years_datatable"), style = "font-size:90%")
+              ) # end tabPanel 5
+              
+            
             ), # end tabsetPanel
             width = 8
             
@@ -89,7 +95,7 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
   #
-  # Update projects_available
+  # fill menu projects_available ----
   #
   updateSelectizeInput(
     session,
@@ -309,9 +315,15 @@ server <- function(input, output, session) {
       specimen_ids
     )
     
-    result_specimens_summ <- result_samp_spec %>%
+    result_specimens_summ <- df_specimens %>%
+      left_join(
+        result_samp_spec %>% select(SPECIMEN_ID, SAMPLE_ID),
+        by = "SPECIMEN_ID") %>%
       group_by(SAMPLE_ID) %>%
-      summarise(SPECIMEN_ID = paste(SPECIMEN_ID, collapse = ","))
+      summarise(
+        SPECIMEN_ID = paste(SPECIMEN_ID, collapse = ","),
+        SPECIMEN_NO = paste(SPECIMEN_NO, collapse = ","))
+    
     
     result <- get_nivabase_selection(
       "SAMPLE_ID, TISSUE_ID, SAMPLE_DATE, SAMPLE_NO, REPNO",
@@ -333,6 +345,57 @@ server <- function(input, output, session) {
     filter = "top"
   )
   
+  #
+  # get_measurements_from_year ----
+  #
+  
+  get_measurements_from_year <- reactive({
+    
+    validate(
+      need(input$years_selected != "", "Please select a year")
+    )
+    
+    df_samples <- get_samples_from_year()  
+    
+    sample_ids <- df_samples %>%
+      pull(SAMPLE_ID) %>%
+      unique()
+    
+    result <- get_nivabase_selection(
+      "SAMPLE_ID, METHOD_ID, VALUE, FLAG1, DETECTION_LIMIT, UNCERTAINTY, QUANTIFICATION_LIMIT, VALUE_ID",
+      "BIOTA_CHEMISTRY_VALUES",
+      "SAMPLE_ID",
+      sample_ids)
+    
+    df_methods <- get_nivabase_selection(
+      "METHOD_ID, NAME, UNIT, LABORATORY, MATRIX",
+      "METHOD_DEFINITIONS",
+      "METHOD_ID",
+      unique(result$METHOD_ID))
+    
+    result <- result %>%
+      left_join(
+        df_methods, by = "METHOD_ID") %>%
+      left_join(
+        df_samples %>% select(SAMPLE_ID, SAMPLE_NO, SPECIMEN_NO, SPECIMEN_ID), 
+        by = "SAMPLE_ID") %>%
+      select(
+        SAMPLE_NO, SPECIMEN_NO, NAME, UNIT, VALUE, FLAG1, 
+        DETECTION_LIMIT, UNCERTAINTY, QUANTIFICATION_LIMIT, 
+        LABORATORY, MATRIX,
+        SAMPLE_ID, SPECIMEN_ID, METHOD_ID, VALUE_ID)
+
+    # browser()
+    result
+  })
+  
+  #
+  # output measurements_selected_years_datatable ----
+  #
+  output$measurements_selected_years_datatable <- DT::renderDT(
+    get_measurements_from_year(), 
+    filter = "top"
+  )
   
   
 
