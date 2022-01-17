@@ -37,7 +37,10 @@ ui <- fluidPage(
 
     # Sidebar with a slider input for number of bins 
     sidebarLayout(
+      
         sidebarPanel(
+          
+          # Menu ----
           selectizeInput(inputId = "projects_selected", label = "Projects", 
                          choices = NULL, multiple = TRUE),
           selectizeInput(inputId = "stations_selected", label = "Stations", 
@@ -49,10 +52,9 @@ ui <- fluidPage(
 
         # Show a plot of the generated distribution
         mainPanel(
-            # Tabset panel
+            # Plots ----
             tabsetPanel(
               type = "tabs",
-              # .. Tab 1 (plot 1) ----
               tabPanel(
                 "Stations x years",
                 plotOutput("station_years_plot", width = "600px"),
@@ -68,6 +70,11 @@ ui <- fluidPage(
                 "Specimens (sel. years)",
                 div(DTOutput("specimens_selected_years_datatable"), style = "font-size:90%")
               ), # end tabPanel 3
+              
+              tabPanel(
+                "Samples (sel. years)",
+                div(DTOutput("samples_selected_years_datatable"), style = "font-size:90%")
+              ), # end tabPanel 4
               
             ), # end tabsetPanel
             width = 8
@@ -278,7 +285,56 @@ server <- function(input, output, session) {
     get_specimens_from_year(), 
     filter = "top"
   )
+  
+  #
+  # get_samples_from_year ----
+  #
 
+  get_samples_from_year <- reactive({
+    
+    validate(
+      need(input$years_selected != "", "Please select a year")
+    )
+
+    df_specimens <- get_specimens_from_year()  
+    
+    specimen_ids <- df_specimens %>%
+      pull(SPECIMEN_ID) %>%
+      unique()
+    
+    result_samp_spec <- get_nivabase_selection(
+      "SPECIMEN_ID, SAMPLE_ID, BIOTA_SAMPLES_SPECIMENS_ID",
+      "BIOTA_SAMPLES_SPECIMENS",
+      "SPECIMEN_ID",
+      specimen_ids
+    )
+    
+    result_specimens_summ <- result_samp_spec %>%
+      group_by(SAMPLE_ID) %>%
+      summarise(SPECIMEN_ID = paste(SPECIMEN_ID, collapse = ","))
+    
+    result <- get_nivabase_selection(
+      "SAMPLE_ID, TISSUE_ID, SAMPLE_DATE, SAMPLE_NO, REPNO",
+      "BIOTA_SAMPLES",
+      "SAMPLE_ID",
+      unique(result_samp_spec$SAMPLE_ID)
+    ) %>%
+      left_join(result_specimens_summ, by = "SAMPLE_ID")
+
+    # browser()
+    result
+  })
+  
+  #
+  # output specimens_selected_stations_datatable ----
+  #
+  output$samples_selected_years_datatable <- DT::renderDT(
+    get_samples_from_year(), 
+    filter = "top"
+  )
+  
+  
+  
 
 }
 
