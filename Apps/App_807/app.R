@@ -26,6 +26,27 @@ df_projects <- get_projects() %>%
 
 projects_available <- df_projects$Menu_string
 
+lookup_tissues <- get_nivabase_data(
+  "select TISSUE_ID, TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
+
+df_taxoncode_id <- get_nivabase_data(
+  "select DISTINCT TAXONOMY_CODE_ID from NIVADATABASE.BIOTA_SINGLE_SPECIMENS;")
+
+# Taxonomy lookup table
+# use NAME (from TAXONOMY_CODES) instead of LATIN_NAME (from NIVADATABASE.TAXONOMY) as some 
+#  things such as 'Zooplankton epilimnion' only has NAME
+# When latin names does exist, NAME and LATIN_NAME seem to always be the same
+
+lookup_taxonomy <- get_nivabase_data(paste(
+  "select TAXONOMY_CODE_ID, NAME as TAXON_NAME",
+  "from NIVADATABASE.TAXONOMY_CODES",
+  "where TAXONOMY_CODE_ID in (",
+  paste(sQuote(df_taxoncode_id$TAXONOMY_CODE_ID), collapse = ","), 
+  ");"
+))
+
+
+
 #
 # USER INTERFACE ----
 #
@@ -261,16 +282,26 @@ server <- function(input, output, session) {
       extras_sql_string <- sql_years   
     }
     
-    result <- get_nivabase_selection(
+    result_1 <- get_nivabase_selection(
       "STATION_ID, DATE_CAUGHT, SPECIMEN_NO, TAXONOMY_CODE_ID, SPECIMEN_ID",
       "BIOTA_SINGLE_SPECIMENS",
       "STATION_ID",
       station_ids, 
       extra_sql = extras_sql_string
     )
+    # browser()
+    
+    result_2 <- result_1 %>%
+      left_join(
+        df_stations %>% select(STATION_ID, PROJECT_ID, STATION_CODE, STATION_NAME),
+        by = "STATION_ID") %>% 
+      left_join(
+        lookup_taxonomy, by = "TAXONOMY_CODE_ID",
+      ) %>%
+      select(PROJECT_ID, STATION_CODE, STATION_NAME, TAXON_NAME, everything())      
     
     # browser()
-    result
+    result_2 
     
   })
   
@@ -311,10 +342,10 @@ server <- function(input, output, session) {
         result_samp_spec %>% select(SPECIMEN_ID, SAMPLE_ID),
         by = "SPECIMEN_ID") %>%
       group_by(SAMPLE_ID) %>%
-      summarise(
-        SPECIMEN_ID = paste(SPECIMEN_ID, collapse = ","),
-        SPECIMEN_NO = paste(SPECIMEN_NO, collapse = ","))
-    
+      summarise(across(
+          c(PROJECT_ID, STATION_CODE, STATION_NAME, TAXON_NAME, DATE_CAUGHT, SPECIMEN_NO, SPECIMEN_ID),
+          .fn = ~paste(unique(.x), collapse = ",")
+        ))
     
     result <- get_nivabase_selection(
       "SAMPLE_ID, TISSUE_ID, SAMPLE_DATE, SAMPLE_NO, REPNO",
@@ -322,14 +353,17 @@ server <- function(input, output, session) {
       "SAMPLE_ID",
       unique(result_samp_spec$SAMPLE_ID)
     ) %>%
-      left_join(result_specimens_summ, by = "SAMPLE_ID")
+      left_join(result_specimens_summ, by = "SAMPLE_ID") %>%
+      left_join(lookup_tissues, by = "TISSUE_ID") %>%
+      arrange(PROJECT_ID, STATION_CODE, STATION_NAME, TAXON_NAME, DATE_CAUGHT, TISSUE_NAME, SAMPLE_NO, SPECIMEN_NO) %>%
+      select(PROJECT_ID, STATION_CODE, STATION_NAME, TAXON_NAME, DATE_CAUGHT, TISSUE_NAME, SAMPLE_NO, SPECIMEN_NO, everything())
 
     # browser()
     result
   })
   
   #
-  # output specimens_datatable ----
+  # output samples_datatable ----
   #
   output$samples_datatable <- DT::renderDT(
     get_samples(), 
@@ -447,9 +481,11 @@ server <- function(input, output, session) {
       left_join(
         df_methods, by = "METHOD_ID") %>%
       left_join(
-        df_samples %>% select(SAMPLE_ID, SAMPLE_NO, SPECIMEN_NO, SPECIMEN_ID), 
+        df_samples %>% select(PROJECT_ID, STATION_CODE, STATION_NAME, TAXON_NAME, DATE_CAUGHT, 
+                              SPECIMEN_NO, SPECIMEN_ID, SAMPLE_ID, SAMPLE_NO), 
         by = "SAMPLE_ID") %>%
       select(
+        PROJECT_ID, STATION_CODE, STATION_NAME, TAXON_NAME, DATE_CAUGHT, 
         SAMPLE_NO, SPECIMEN_NO, NAME, UNIT, VALUE, FLAG1, 
         DETECTION_LIMIT, UNCERTAINTY, QUANTIFICATION_LIMIT, 
         LABORATORY, MATRIX,
