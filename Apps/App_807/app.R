@@ -47,6 +47,8 @@ ui <- fluidPage(
                          choices = NULL, multiple = TRUE),
           selectizeInput(inputId = "stations_selected", label = "Stations", 
                          choices = NULL, multiple = TRUE),
+          selectizeInput(inputId = "params_selected", label = "Parameters", 
+                         choices = NULL, multiple = TRUE),
           width = 4
         ),
 
@@ -64,19 +66,18 @@ ui <- fluidPage(
               tabPanel(
                 "Specimens",
                 div(DTOutput("specimens_datatable"), style = "font-size:90%")
-              ), # end tabPanel 3
+              ), # end tabPanel 2
               
               tabPanel(
                 "Samples",
-                div(DTOutput("samples_selected_years_datatable"), style = "font-size:90%")
-              ), # end tabPanel 4
+                div(DTOutput("samples_datatable"), style = "font-size:90%")
+              ), # end tabPanel 3
               
               tabPanel(
                 "Measurements",
-                div(DTOutput("measurements_selected_years_datatable"), style = "font-size:90%")
-              ) # end tabPanel 5
+                div(DTOutput("measurements_datatable"), style = "font-size:90%")
+              ), # end tabPanel 4
               
-            
             ), # end tabsetPanel
             width = 8
             
@@ -124,6 +125,7 @@ server <- function(input, output, session) {
         Menu_string = paste0(STATION_CODE, " ", STATION_NAME, " (ID:", STATION_ID, ")")
       )
     result
+    
   })
   
   #
@@ -262,7 +264,7 @@ server <- function(input, output, session) {
   })
   
   #
-  # output specimens_selected_stations_datatable ----
+  # output specimens_datatable ----
   #
   output$specimens_datatable <- DT::renderDT(
     get_specimens(), 
@@ -316,9 +318,9 @@ server <- function(input, output, session) {
   })
   
   #
-  # output specimens_selected_stations_datatable ----
+  # output specimens_datatable ----
   #
-  output$samples_selected_years_datatable <- DT::renderDT(
+  output$samples_datatable <- DT::renderDT(
     get_samples(), 
     filter = "top"
   )
@@ -369,14 +371,33 @@ server <- function(input, output, session) {
   })
   
   #
-  # output measurements_selected_years_datatable ----
+  # fill menu params_selected ----  
   #
-  output$measurements_selected_years_datatable <- DT::renderDT(
+  # Using get_measurements
+  #
+  observeEvent(get_measurements(), {
+    df <- get_measurements()
+    params_available <- df %>%
+      distinct(NAME) %>%
+      pull(NAME) %>%
+      sort()
+    updateSelectizeInput(
+      inputId = "params_selected",
+      choices = params_available
+      # selected = input$params_selected
+    )
+  })
+
+  
+  #
+  # output measurements_datatable ----
+  #
+  output$measurements_datatable <- DT::renderDT(
     get_measurements(), 
     filter = "top"
   )
   
-  
+
 
 }
 
