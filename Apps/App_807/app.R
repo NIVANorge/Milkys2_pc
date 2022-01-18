@@ -43,9 +43,11 @@ ui <- fluidPage(
           # Menu ----
           selectizeInput(inputId = "projects_selected", label = "Projects", 
                          choices = NULL, multiple = TRUE),
-          selectizeInput(inputId = "stations_selected", label = "Stations", 
-                         choices = NULL, multiple = TRUE),
+          radioButtons("stations_or_years", "Primary selection: years or stations", 
+                       choices = c("Years", "Stations"), selected = "Years"),
           selectizeInput(inputId = "years_selected", label = "Years", 
+                         choices = NULL, multiple = TRUE),
+          selectizeInput(inputId = "stations_selected", label = "Stations", 
                          choices = NULL, multiple = TRUE),
           width = 4
         ),
@@ -62,13 +64,8 @@ ui <- fluidPage(
               ), # end tabPanel 1
 
               tabPanel(
-                "Specimens (sel. stations)",
-                div(DTOutput("specimens_selected_stations_datatable"), style = "font-size:90%")
-              ), # end tabPanel 1
-              
-              tabPanel(
-                "Specimens (sel. years)",
-                div(DTOutput("specimens_selected_years_datatable"), style = "font-size:90%")
+                "Specimens",
+                div(DTOutput("specimens_datatable"), style = "font-size:90%")
               ), # end tabPanel 3
               
               tabPanel(
@@ -160,6 +157,7 @@ server <- function(input, output, session) {
     result
   })
   
+
   #
   # output station_years_plot ----
   #
@@ -214,71 +212,57 @@ server <- function(input, output, session) {
   })
   
   
-  #
-  # get_specimens_from_station ----
-  #
-  # For getting samples    
-  #
 
-  get_specimens_from_station <- reactive({
-    
-    validate(
-      need(input$stations_selected != "", "Please select a station")
-    )
-    
-    df_stations <- get_stations()
-    id <- df_stations %>%
-      filter(Menu_string %in% input$stations_selected) %>%
-      pull(STATION_ID)
-    result <- get_nivabase_selection(
-      "STATION_ID, DATE_CAUGHT, SPECIMEN_NO, TAXONOMY_CODE_ID, SPECIMEN_ID",
-      "BIOTA_SINGLE_SPECIMENS",
-      "STATION_ID",
-      id)
-    # browser()
-    result
-  })
-  
   #
-  # output specimens_selected_stations_datatable ----
-  #
-  output$specimens_selected_stations_datatable <- DT::renderDT(
-    get_specimens_from_station(), 
-    filter = "top"
-  )
-  
-  #
-  # get_specimens_from_year ----
+  # get_specimens ----
   #
   # Note: can be used with or without selecting stations  
   # - if stations NOT selected, it returns specimens for all stations that year    
   # - if stations ARE selected, it returns specimens for specific stations that year    
   #
   
-  get_specimens_from_year <- reactive({
+  get_specimens <- reactive({
     
-    validate(
-      need(input$years_selected != "", "Please select a year")
-    )
+    if (input$stations_or_years == "Years"){
+      validate(
+        need(input$years_selected != "", "Please select a year")
+      )
+    } else {
+      validate(
+        need(input$stations_selected != "", "Please select a station")
+      )
+    }
     
     df_stations_years <- get_stations_years()
+    df_stations <- get_stations()  # this have 'Menu_string" so we need this one too
     # browser()
+
+    sql_years <- paste(" and extract(YEAR from DATE_CAUGHT) in (", 
+                       paste(input$years_selected, collapse = ","),
+                       ")")  
     
     if (is.null(input$stations_selected)){
       station_ids <- df_stations_years %>%
         filter(YEAR %in% input$years_selected) %>%
         pull(STATION_ID)
+      extras_sql_string <- sql_years   
+    } else if (is.null(input$years_selected)){
+      station_ids <- df_stations %>%
+        filter(Menu_string %in% input$stations_selected) %>%
+        pull(STATION_ID)
+      extras_sql_string <- ""
     } else {
       station_ids <- df_stations_years %>%
         filter(Menu_string %in% input$stations_selected) %>%
         pull(STATION_ID)
+      extras_sql_string <- sql_years   
     }
     result <- get_nivabase_selection(
       "STATION_ID, DATE_CAUGHT, SPECIMEN_NO, TAXONOMY_CODE_ID, SPECIMEN_ID",
       "BIOTA_SINGLE_SPECIMENS",
       "STATION_ID",
       station_ids, 
-      extra_where = paste(" and extract(YEAR from DATE_CAUGHT) =", input$years_selected)
+      extra_where = extras_sql_string
     )
     # browser()
     result
@@ -287,22 +271,28 @@ server <- function(input, output, session) {
   #
   # output specimens_selected_stations_datatable ----
   #
-  output$specimens_selected_years_datatable <- DT::renderDT(
-    get_specimens_from_year(), 
+  output$specimens_datatable <- DT::renderDT(
+    get_specimens(), 
     filter = "top"
   )
   
   #
-  # get_samples_from_year ----
+  # get_samples ----
   #
 
-  get_samples_from_year <- reactive({
+  get_samples <- reactive({
     
-    validate(
-      need(input$years_selected != "", "Please select a year")
-    )
-
-    df_specimens <- get_specimens_from_year()  
+    if (input$stations_or_years == "Years"){
+      validate(
+        need(input$years_selected != "", "Please select a year")
+      )
+    } else {
+      validate(
+        need(input$stations_selected != "", "Please select a station")
+      )
+    }
+    
+    df_specimens <- get_specimens()  
     
     specimen_ids <- df_specimens %>%
       pull(SPECIMEN_ID) %>%
@@ -341,21 +331,27 @@ server <- function(input, output, session) {
   # output specimens_selected_stations_datatable ----
   #
   output$samples_selected_years_datatable <- DT::renderDT(
-    get_samples_from_year(), 
+    get_samples(), 
     filter = "top"
   )
   
   #
-  # get_measurements_from_year ----
+  # get_measurements ----
   #
   
-  get_measurements_from_year <- reactive({
+  get_measurements <- reactive({
     
-    validate(
-      need(input$years_selected != "", "Please select a year")
-    )
+    if (input$stations_or_years == "Years"){
+      validate(
+        need(input$years_selected != "", "Please select a year")
+      )
+    } else {
+      validate(
+        need(input$stations_selected != "", "Please select a station")
+      )
+    }
     
-    df_samples <- get_samples_from_year()  
+    df_samples <- get_samples()  
     
     sample_ids <- df_samples %>%
       pull(SAMPLE_ID) %>%
@@ -393,7 +389,7 @@ server <- function(input, output, session) {
   # output measurements_selected_years_datatable ----
   #
   output$measurements_selected_years_datatable <- DT::renderDT(
-    get_measurements_from_year(), 
+    get_measurements(), 
     filter = "top"
   )
   
