@@ -257,7 +257,7 @@ server <- function(input, output, session) {
       "BIOTA_SINGLE_SPECIMENS",
       "STATION_ID",
       station_ids, 
-      extra_where = extras_sql_string
+      extra_sql = extras_sql_string
     )
     # browser()
     result
