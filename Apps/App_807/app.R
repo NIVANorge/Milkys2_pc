@@ -83,7 +83,7 @@ ui <- fluidPage(
               tabPanel(
                 "Project",
                 selectizeInput(inputId = "lastyear_data_series", label = "Show time series lasting at least until", 
-                               choices = NULL, multiple = TRUE),
+                               choices = NULL, multiple = FALSE),
                 plotOutput("station_years_plot", width = "600px"),
                 div(DTOutput("station_years_datatable"), style = "font-size:90%")
               ), # end tabPanel 1
@@ -268,7 +268,7 @@ server <- function(input, output, session) {
   
   
   #
-  # fill menu years_selected ----  
+  # fill menu lastyear_data_series ----  
   #
   # Using get_stations_years
   #
@@ -277,7 +277,7 @@ server <- function(input, output, session) {
     years_available <- df %>%
       distinct(YEAR) %>%
       pull(YEAR) %>%
-      sort()
+      sort(decreasing = TRUE)
     updateSelectizeInput(
       inputId = "lastyear_data_series",
       choices = years_available
