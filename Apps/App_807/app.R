@@ -43,8 +43,6 @@ ui <- fluidPage(
           # Menu ----
           selectizeInput(inputId = "projects_selected", label = "Projects", 
                          choices = NULL, multiple = TRUE),
-          radioButtons("stations_or_years", "Primary selection: years or stations", 
-                       choices = c("Years", "Stations"), selected = "Years"),
           selectizeInput(inputId = "years_selected", label = "Years", 
                          choices = NULL, multiple = TRUE),
           selectizeInput(inputId = "stations_selected", label = "Stations", 
@@ -223,14 +221,9 @@ server <- function(input, output, session) {
   
   get_specimens <- reactive({
     
-    if (input$stations_or_years == "Years"){
-      validate(
-        need(input$years_selected != "", "Please select a year")
-      )
-    } else {
-      validate(
-        need(input$stations_selected != "", "Please select a station")
-      )
+    # Make sure either years or stations is selected
+    if (is.null(input$years_selected) & is.null(input$stations_selected)){
+      validate(need(FALSE, "Please select years and/or stations"))
     }
     
     df_stations_years <- get_stations_years()
@@ -282,16 +275,11 @@ server <- function(input, output, session) {
 
   get_samples <- reactive({
     
-    if (input$stations_or_years == "Years"){
-      validate(
-        need(input$years_selected != "", "Please select a year")
-      )
-    } else {
-      validate(
-        need(input$stations_selected != "", "Please select a station")
-      )
+    # Make sure either years or stations is selected
+    if (is.null(input$years_selected) & is.null(input$stations_selected)){
+      validate(need(FALSE, "Please select years and/or stations"))
     }
-    
+
     df_specimens <- get_specimens()  
     
     specimen_ids <- df_specimens %>%
@@ -341,14 +329,9 @@ server <- function(input, output, session) {
   
   get_measurements <- reactive({
     
-    if (input$stations_or_years == "Years"){
-      validate(
-        need(input$years_selected != "", "Please select a year")
-      )
-    } else {
-      validate(
-        need(input$stations_selected != "", "Please select a station")
-      )
+    # Make sure either years or stations is selected
+    if (is.null(input$years_selected) & is.null(input$stations_selected)){
+      validate(need(FALSE, "Please select years and/or stations"))
     }
     
     df_samples <- get_samples()  
