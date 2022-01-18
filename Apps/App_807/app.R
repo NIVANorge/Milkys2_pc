@@ -47,7 +47,7 @@ ui <- fluidPage(
                          choices = NULL, multiple = TRUE),
           selectizeInput(inputId = "stations_selected", label = "Stations", 
                          choices = NULL, multiple = TRUE),
-          selectizeInput(inputId = "params_selected", label = "Parameters", 
+          selectizeInput(inputId = "parameters_selected", label = "Parameters", 
                          choices = NULL, multiple = TRUE),
           width = 4
         ),
@@ -74,9 +74,14 @@ ui <- fluidPage(
               ), # end tabPanel 3
               
               tabPanel(
+                "Parameters",
+                div(DTOutput("parameters_datatable"), style = "font-size:90%")
+              ), # end tabPanel 4
+              
+              tabPanel(
                 "Measurements",
                 div(DTOutput("measurements_datatable"), style = "font-size:90%")
-              ), # end tabPanel 4
+              ) # end tabPanel 5
               
             ), # end tabsetPanel
             width = 8
@@ -84,6 +89,8 @@ ui <- fluidPage(
         )  # end mainPAnel
     )
 )
+
+
 
 #
 # SERVER ----
@@ -135,26 +142,27 @@ server <- function(input, output, session) {
   #
   # Count of number of 
   get_stations_years <- reactive({
+    
     df_stations <- get_stations() %>%
       distinct(STATION_ID, STATION_CODE, STATION_NAME, Menu_string)
     station_id <- df_stations %>%
       pull(STATION_ID) %>%
       unique()
-    sql <-   paste(
-      "select STATION_ID, extract(YEAR from DATE_CAUGHT) as YEAR, count(*) as N",
-      "from NIVADATABASE.BIOTA_SINGLE_SPECIMENS",
-      "WHERE STATION_ID in",
-      paste("(", paste(station_id, collapse = ","), ")"),
-      "group by STATION_ID, extract(YEAR from DATE_CAUGHT)",
-      "order by STATION_ID"
-    )
-    result <- get_nivabase_data(sql) %>%
+
+    result <- get_nivabase_selection(
+      "STATION_ID, extract(YEAR from DATE_CAUGHT) as YEAR, count(*) as N",
+      "BIOTA_SINGLE_SPECIMENS",
+      "STATION_ID",
+      ids, 
+      extra_sql = "group by STATION_ID, extract(YEAR from DATE_CAUGHT) order by STATION_ID"
+    ) %>%
       left_join(
         df_stations %>% select(STATION_ID, STATION_CODE, STATION_NAME, Menu_string),
         by = "STATION_ID") %>%
       select(STATION_CODE, STATION_NAME, STATION_ID, YEAR, N, Menu_string)
-    # browser()
+    
     result
+    
   })
   
 
@@ -252,6 +260,7 @@ server <- function(input, output, session) {
         pull(STATION_ID)
       extras_sql_string <- sql_years   
     }
+    
     result <- get_nivabase_selection(
       "STATION_ID, DATE_CAUGHT, SPECIMEN_NO, TAXONOMY_CODE_ID, SPECIMEN_ID",
       "BIOTA_SINGLE_SPECIMENS",
@@ -259,8 +268,10 @@ server <- function(input, output, session) {
       station_ids, 
       extra_sql = extras_sql_string
     )
+    
     # browser()
     result
+    
   })
   
   #
@@ -326,10 +337,10 @@ server <- function(input, output, session) {
   )
   
   #
-  # get_measurements ----
+  # get_parameters ----
   #
   
-  get_measurements <- reactive({
+  get_parameters <- reactive({
     
     # Make sure either years or stations is selected
     if (is.null(input$years_selected) & is.null(input$stations_selected)){
@@ -343,11 +354,89 @@ server <- function(input, output, session) {
       unique()
     
     result <- get_nivabase_selection(
+      "METHOD_ID, count(*) as N",
+      "BIOTA_CHEMISTRY_VALUES",
+      "SAMPLE_ID",
+      sample_ids,
+      extra_sql = "group by METHOD_ID"
+      )
+    
+    df_methods <- get_nivabase_selection(
+      "METHOD_ID, NAME, UNIT, LABORATORY, MATRIX",
+      "METHOD_DEFINITIONS",
+      "METHOD_ID",
+      result$METHOD_ID)
+    
+    result <- result %>%
+      left_join(
+        df_methods, by = "METHOD_ID") %>%
+      select(
+        NAME, UNIT, LABORATORY, METHOD_ID, MATRIX, N) %>%
+      mutate(Menu_string = paste0(NAME, " (", UNIT, "; id:", METHOD_ID, ")"))
+    
+    # browser()
+    result
+    
+  })
+  
+  #
+  # fill menu parameters_selected ----  
+  #
+  # Using get_parameters
+  #
+  observeEvent(get_parameters(), {
+    df <- get_parameters()
+    params_available <- df %>%
+      distinct(Menu_string) %>%
+      pull(Menu_string) %>%
+      sort()
+    updateSelectizeInput(
+      inputId = "parameters_selected",
+      choices = params_available,
+      selected = input$parameters_selected
+    )
+  })
+
+  
+  #
+  # output parameters_datatable ----
+  #
+  output$parameters_datatable <- DT::renderDT(
+    get_parameters(), 
+    filter = "top"
+  )
+  
+  #
+  # get_measurements ----
+  #
+  
+  get_measurements <- reactive({
+    
+    # Make sure either years or stations is selected
+    if (is.null(input$years_selected) & is.null(input$stations_selected)){
+      validate(need(FALSE, "Please select years and/or stations"))
+    }
+    validate(need(input$parameters_selected != "", "Please select parameters"))
+
+    df_samples <- get_samples()  
+    df_parameters <- get_parameters()
+    
+    sample_ids <- df_samples %>%
+      pull(SAMPLE_ID) %>%
+      unique()
+    parameter_ids <- df_parameters %>%
+      filter(Menu_string %in% input$parameters_selected) %>%
+      pull(METHOD_ID) %>%
+      unique()
+
+    result <- get_nivabase_selection(
       "SAMPLE_ID, METHOD_ID, VALUE, FLAG1, DETECTION_LIMIT, UNCERTAINTY, QUANTIFICATION_LIMIT, VALUE_ID",
       "BIOTA_CHEMISTRY_VALUES",
       "SAMPLE_ID",
-      sample_ids)
-    
+      sample_ids,
+      extra_sql = paste("and METHOD_ID in (", paste(parameter_ids, collapse = ","), ")")
+    )
+
     df_methods <- get_nivabase_selection(
       "METHOD_ID, NAME, UNIT, LABORATORY, MATRIX",
       "METHOD_DEFINITIONS",
@@ -365,29 +454,12 @@ server <- function(input, output, session) {
         DETECTION_LIMIT, UNCERTAINTY, QUANTIFICATION_LIMIT, 
         LABORATORY, MATRIX,
         SAMPLE_ID, SPECIMEN_ID, METHOD_ID, VALUE_ID)
-
+    
     # browser()
     result
+    
   })
   
-  #
-  # fill menu params_selected ----  
-  #
-  # Using get_measurements
-  #
-  observeEvent(get_measurements(), {
-    df <- get_measurements()
-    params_available <- df %>%
-      distinct(NAME) %>%
-      pull(NAME) %>%
-      sort()
-    updateSelectizeInput(
-      inputId = "params_selected",
-      choices = params_available
-      # selected = input$params_selected
-    )
-  })
-
   
   #
   # output measurements_datatable ----
