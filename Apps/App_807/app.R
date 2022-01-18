@@ -17,7 +17,7 @@ library(ggplot2)
 library(lubridate)
 library(forcats)
 library(DT)
-
+library(niRvana)
 
 df_projects <- get_projects() %>%
   select(-ENTERED_BY) %>%
@@ -61,7 +61,7 @@ ui <- fluidPage(
       
         sidebarPanel(
           
-          # Menu ----
+          # Sidebar menu ----
           selectizeInput(inputId = "projects_selected", label = "Projects", 
                          choices = NULL, multiple = TRUE),
           selectizeInput(inputId = "years_selected", label = "Years", 
@@ -75,11 +75,15 @@ ui <- fluidPage(
 
         # Show a plot of the generated distribution
         mainPanel(
-            # Plots ----
+          
+            # Result tabs ----
+            
             tabsetPanel(
               type = "tabs",
               tabPanel(
-                "Stations x years",
+                "Project",
+                selectizeInput(inputId = "lastyear_data_series", label = "Show time series lasting at least until", 
+                               choices = NULL, multiple = TRUE),
                 plotOutput("station_years_plot", width = "600px"),
                 div(DTOutput("station_years_datatable"), style = "font-size:90%")
               ), # end tabPanel 1
@@ -166,7 +170,7 @@ server <- function(input, output, session) {
     
     df_stations <- get_stations() %>%
       distinct(STATION_ID, STATION_CODE, STATION_NAME, Menu_string)
-    station_id <- df_stations %>%
+    station_ids <- df_stations %>%
       pull(STATION_ID) %>%
       unique()
 
@@ -174,7 +178,7 @@ server <- function(input, output, session) {
       "STATION_ID, extract(YEAR from DATE_CAUGHT) as YEAR, count(*) as N",
       "BIOTA_SINGLE_SPECIMENS",
       "STATION_ID",
-      ids, 
+      station_ids, 
       extra_sql = "group by STATION_ID, extract(YEAR from DATE_CAUGHT) order by STATION_ID"
     ) %>%
       left_join(
@@ -186,24 +190,46 @@ server <- function(input, output, session) {
     
   })
   
+  #
+  # get_stations_years_select ----
+  #
+  get_stations_years_select <- reactive({
 
+    df_stations_years <- get_stations_years()
+    
+    if (!is.null(input$lastyear_data_series)){
+      df_stations_years <- df_stations_years %>%
+        group_by(STATION_ID) %>%
+        mutate(YEAR_last = max(YEAR)) %>%
+        ungroup() %>%
+        filter(YEAR_last >= input$lastyear_data_series)
+    }
+    
+    df_stations_years
+    
+  })
+  
+  
   #
   # output station_years_plot ----
   #
   output$station_years_plot <- renderPlot({
-    df <- get_stations_years()
+    
+    df_stations_years <- get_stations_years_select()
+    
     # df <- mutate(STATION_ID = factor(STATION_ID))
-    resultplot <- ggplot(df, aes(YEAR, STATION_CODE, fill = N)) +
+    resultplot <- ggplot(df_stations_years, aes(YEAR, STATION_CODE, fill = N)) +
       geom_tile() +
       scale_fill_viridis_b()
     resultplot
-    })
+    
+  })
   
   #
   # output station_years_datatable ----
   #
   output$station_years_datatable <- DT::renderDT(
-    get_stations_years(), 
+    get_stations_years_select(), 
     filter = "top"
   )
   
@@ -241,11 +267,29 @@ server <- function(input, output, session) {
   })
   
   
-
+  #
+  # fill menu years_selected ----  
+  #
+  # Using get_stations_years
+  #
+  observeEvent(get_stations_years(), {
+    df <- get_stations_years()
+    years_available <- df %>%
+      distinct(YEAR) %>%
+      pull(YEAR) %>%
+      sort()
+    updateSelectizeInput(
+      inputId = "lastyear_data_series",
+      choices = years_available
+      # selected = input$stations_selected
+    )
+  })
+  
+  
   #
   # get_specimens ----
   #
-  # Note: can be used with or without selecting stations  
+  # Note: works by selecting either (or both of) stations and years   
   # - if stations NOT selected, it returns specimens for all stations that year    
   # - if stations ARE selected, it returns specimens for specific stations that year    
   #
@@ -421,7 +465,6 @@ server <- function(input, output, session) {
   observeEvent(get_parameters(), {
     df <- get_parameters()
     params_available <- df %>%
-      distinct(Menu_string) %>%
       pull(Menu_string) %>%
       sort()
     updateSelectizeInput(
