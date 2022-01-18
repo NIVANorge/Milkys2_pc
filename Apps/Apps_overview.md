@@ -9,7 +9,6 @@
 `dat <- read_csv("../Files_to_ICES/Data_from_ICES/data_extraction_211008/Norway_added_columns.csv")`      
     - Most developed so far  
     
-    
 * App_803 - Raw data from CEMP Access database  
 `dat_loc <- read_csv2("../../../CEMP/2016_Milkys/dbo_locality_ny.txt")` (several files)    
     - Files are joined together and saved in the app folder as `dat.csv`    
@@ -20,15 +19,17 @@
     - In addition, station file   
     
     
-* App_805 - Check ICES submission file (saved in rds format)   
+* App_805 - Check ICES submission file      
 `"../../Files_to_ICES/2020/Rdata"`    
-    -  Has some weight on checking measurement (analysis) error
+    - Has some weight on checking measurement (analysis) error
+    - Reads files from hard-coded folders  
     
-    
-* App_806 
-``  
+* App_806 - Use fior searching on a big SQL join? (see script 821)
     
     
 * App_807 - Reading data directly from Nivabasen including Labware tables     
-    - Not finished  
+    - Main menus and main server functions finished  
+    - Goes from project towards parameters (cannot search for parameter first)   
+    - Select first project, then stations and/or years (but needs one of them), then parameter 
+    - Can be made a bit quicker if samples are selected using a join in the database   
     
