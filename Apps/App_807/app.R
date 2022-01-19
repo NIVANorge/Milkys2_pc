@@ -64,10 +64,15 @@ ui <- fluidPage(
           # Sidebar menu ----
           selectizeInput(inputId = "projects_selected", label = "Projects", 
                          choices = NULL, multiple = TRUE),
+          textOutput("n_years_stations"),
+          br(),
           selectizeInput(inputId = "years_selected", label = "Years", 
                          choices = NULL, multiple = TRUE),
           selectizeInput(inputId = "stations_selected", label = "Stations", 
                          choices = NULL, multiple = TRUE),
+          actionButton("download_samples", "Download available samples"),
+          textOutput("n_specimens_samples"),
+          br(),
           selectizeInput(inputId = "parameters_selected", label = "Parameters", 
                          choices = NULL, multiple = TRUE),
           width = 4
@@ -191,6 +196,13 @@ server <- function(input, output, session) {
   })
   
   #
+  # output n_years_stations ----
+  #
+  output$n_years_stations <- renderText(
+    paste("Number of years x stations:", nrow(get_stations_years()))
+  )
+  
+  #
   # get_stations_years_select ----
   #
   get_stations_years_select <- reactive({
@@ -294,7 +306,7 @@ server <- function(input, output, session) {
   # - if stations ARE selected, it returns specimens for specific stations that year    
   #
   
-  get_specimens <- reactive({
+  get_specimens <- eventReactive(input$download_samples, {
     
     # Make sure either years or stations is selected
     if (is.null(input$years_selected) & is.null(input$stations_selected)){
@@ -415,6 +427,15 @@ server <- function(input, output, session) {
   )
   
   #
+  # output n_specimens_samples ----
+  #
+  output$n_specimens_samples <- renderText(
+    paste("Downloaded", nrow(get_samples()), 
+          "samples from", nrow(get_specimens()), "specimens")
+  )
+  
+
+    #
   # get_parameters ----
   #
   
