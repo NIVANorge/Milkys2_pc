@@ -107,6 +107,8 @@ ui <- fluidPage(
                          multiple = TRUE,
                          selected = c("Cod", "Blue mussel", "Flatfish", "Snail", "Eider duck")),
           plotOutput("overviewplot", height = "700px"),
+          radioButtons("overview_show_param", "Show parameters", 
+                       c("Show sum only", "Show parameters individually", "Show both")),
           sliderInput("min_no_years", "Show only stations with at least x years", min = 1, max = 40, value = 1, sep = "", step = 1)
         ),
         
@@ -249,6 +251,36 @@ server <- function(input, output) {
     } else if (input$valuebasis_selected == "Original value"){
       dat_plot1$Value_plot <- dat_plot1$Value_orig_median
     }
+
+    # Variables at this point:
+    # PARAM, Basis, Station_name, TISSUE_NAME, MYEAR, N, Over_LOQ, Prop_over_LOQ, 
+    #   Value_wet_median, Value_dry_median, Value_lip_median, 
+    #   Speciesgroup, No_years, Last_year, Value_plot
+    
+    dat_plot1 <- dat_plot1 %>%
+      filter(!is.na(Value_plot)) %>%
+      select(PARAM, Station_name, TISSUE_NAME, MYEAR, Speciesgroup, 
+             No_years, Last_year, Value_plot, Prop_over_LOQ)
+    
+    # browser()
+    
+    if (input$overview_show_param %in% c("Show sum only", "Show both")){
+      dat_plot1_summ <- dat_plot1 %>%
+        group_by(Station_name, TISSUE_NAME, MYEAR, Speciesgroup, 
+                 No_years, Last_year, Value_plot) %>%
+        summarise(Value_plot = sum(Value_plot),
+                  Prop_over_LOQ = mean(Prop_over_LOQ)) %>% 
+        mutate(PARAM = "Sum")
+      }
+    if (input$overview_show_param %in% c("Show both")){
+      dat_plot1 <- bind_rows(
+        dat_plot1,
+        dat_plot1_summ
+      )
+    } else if (input$overview_show_param %in% c("Show sum only")){
+      dat_plot1 <- dat_plot1_summ 
+    }
+
     
     # browser()
     
@@ -265,6 +297,7 @@ server <- function(input, output) {
       geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
                                              No_years >= input$min_no_years,
                                              Last_year >= series_lasting_until)) +
+      facet_grid(vars(PARAM), vars(TISSUE_NAME)) +
       labs(x = "Year", y = "Station")
     
     gg   
