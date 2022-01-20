@@ -41,8 +41,11 @@ dat <- dat %>%
   mutate(Station_name = paste(STATION_CODE, Station_name))
 
 # Summary data
-dat_summ <- read_csv("109_adjusted_data_summ.csv")
-  
+
+dat_summ <- read_csv("109_adjusted_data_summ.csv") %>%
+  mutate(
+    Speciesgroup_tissue = paste(Speciesgroup, TISSUE_NAME)
+    )
   
 #
 species_available <- dat %>%
@@ -51,11 +54,19 @@ species_available <- dat %>%
   mutate(LATIN_NAME = factor(LATIN_NAME) %>% fct_inorder) %>%
   pull(LATIN_NAME)
 
-speciesgroup_available <- dat_summ %>%
-  count(Speciesgroup) %>%
+# speciesgroup_available <- dat_summ %>%
+#   count(Speciesgroup) %>%
+#   arrange(desc(n)) %>%
+#   mutate(Speciesgroup = factor(Speciesgroup) %>% fct_inorder) %>%
+#   pull(Speciesgroup)
+
+speciesgroup_tissue_available <- dat_summ %>%
+  count(Speciesgroup_tissue) %>%
   arrange(desc(n)) %>%
-  mutate(Speciesgroup = factor(Speciesgroup) %>% fct_inorder) %>%
-  pull(Speciesgroup)
+  mutate(
+    Speciesgroup_tissue = factor(Speciesgroup_tissue) %>% fct_inorder()
+    ) %>%
+  pull(Speciesgroup_tissue)
 
 params_available <- dat %>%
   distinct(PARAM) %>%
@@ -102,10 +113,13 @@ ui <- fluidPage(
         # Main panel 1 (plot 1)
         tabPanel(
           "All stations", 
-          selectizeInput(inputId = "speciesgroup_selected", label = "Species group", 
-                         choices = speciesgroup_available, 
+          selectizeInput(inputId = "speciesgroup_tissue_selected", label = "Species group", 
+                         choices = speciesgroup_tissue_available, 
                          multiple = TRUE,
-                         selected = c("Cod", "Blue mussel", "Flatfish", "Snail", "Eider duck")),
+                         selected = c(
+                           "Blue mussel Whole soft body", "Cod Lever", "Cod Muskel", 
+                           "Flatfish Lever", "Flatfish Muskel", 
+                           "Eider duck Egg", "Eider duck Blod")),
           plotOutput("overviewplot", height = "700px"),
           radioButtons("overview_show_param", "Show parameters", 
                        c("Show sum only", "Show parameters individually", "Show both")),
@@ -240,7 +254,7 @@ server <- function(input, output) {
     dat_plot1 <- dat_summ %>%
       filter(PARAM %in% input$params_selected,
              Basis %in% input$basis_selected,
-             Speciesgroup %in% input$speciesgroup_selected)
+             Speciesgroup_tissue %in% input$speciesgroup_tissue_selected)
     
     if (input$valuebasis_selected == "Wet weight basis"){
       dat_plot1$Value_plot <- dat_plot1$Value_wet_median
@@ -255,21 +269,22 @@ server <- function(input, output) {
     # Variables at this point:
     # PARAM, Basis, Station_name, TISSUE_NAME, MYEAR, N, Over_LOQ, Prop_over_LOQ, 
     #   Value_wet_median, Value_dry_median, Value_lip_median, 
-    #   Speciesgroup, No_years, Last_year, Value_plot
+    #   Speciesgroup_tissue, No_years, Last_year, Value_plot
     
     dat_plot1 <- dat_plot1 %>%
       filter(!is.na(Value_plot)) %>%
-      select(PARAM, Station_name, TISSUE_NAME, MYEAR, Speciesgroup, 
+      select(PARAM, Station_name, MYEAR, Speciesgroup_tissue, 
              No_years, Last_year, Value_plot, Prop_over_LOQ)
     
     # browser()
     
     if (input$overview_show_param %in% c("Show sum only", "Show both")){
       dat_plot1_summ <- dat_plot1 %>%
-        group_by(Station_name, TISSUE_NAME, MYEAR, Speciesgroup, 
+        group_by(Station_name, MYEAR, Speciesgroup_tissue, 
                  No_years, Last_year, Value_plot) %>%
         summarise(Value_plot = sum(Value_plot),
-                  Prop_over_LOQ = mean(Prop_over_LOQ)) %>% 
+                  Prop_over_LOQ = mean(Prop_over_LOQ),
+                  .groups = "drop") %>% 
         mutate(PARAM = "Sum")
       }
     if (input$overview_show_param %in% c("Show both")){
@@ -292,12 +307,12 @@ server <- function(input, output) {
       filter(No_years >= input$min_no_years,
              Last_year >= series_lasting_until) %>%
       ggplot(aes(MYEAR, Station_name)) +
-      geom_raster(aes(fill = log10(Value_plot))) +
+      geom_tile(aes(fill = log10(Value_plot))) +
       scale_fill_viridis_c("log10(concentration)") +
       geom_point(data = dat_plot1 %>% filter(Prop_over_LOQ > 0.5, 
                                              No_years >= input$min_no_years,
                                              Last_year >= series_lasting_until)) +
-      facet_grid(vars(PARAM), vars(TISSUE_NAME)) +
+      facet_grid(vars(PARAM), vars(Speciesgroup_tissue)) +
       labs(x = "Year", y = "Station")
     
     gg   

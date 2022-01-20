@@ -5,7 +5,7 @@
 #
 
 # Set working directory before rerunning code
-setwd(here::here("App_804"))
+setwd(here::here("Apps/App_804"))
 
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
@@ -74,6 +74,12 @@ if (!file.exists(fn_summ) | update_summary_table){
   
   dat_dt <- lazy_dt(dat)
   
+  extra_blue_mussel_stations <- 
+    c("907 NA", "912 NA", "A141 NA", "A331 NA", 
+      "A341 NA", "A371 NA", "A561 NA", "A581 NA", "A651 NA", "B10 NA", 
+      "B11 NA", "B2 NA", "B3 NA", "B3x NA", "B4 NA", "B5 NA", "B6 NA", 
+      "B7 NA", "BK NA", "KR1 NA", "KR2 NA", "KR3 NA", "KR4 NA", "KR5 NA")
+  
   dat_summ <- dat %>%
     group_by(PARAM, Basis, Station_name, TISSUE_NAME, MYEAR) %>%
     summarize(
@@ -93,6 +99,7 @@ if (!file.exists(fn_summ) | update_summary_table){
         grepl("[0-9]+A", Station_name) ~ "Blue mussel",
         grepl("[0-9]+X", Station_name) ~ "Blue mussel",
         grepl("I[0-9]+", Station_name) ~ "Blue mussel",
+        Station_name %in% extra_blue_mussel_stations ~ "Blue mussel",
         grepl("305", Station_name) ~ "Blue mussel",
         grepl("[0-9]+G", Station_name) ~ "Snail",
         grepl("[0-9]+N", Station_name) ~ "Eider duck",
