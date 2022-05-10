@@ -1,57 +1,15 @@
 
-make_top_rows <- function(header_main_part, parameter_group){
-  
-  sheet_rows_1a <- bind_cols(
-    data.frame(
-      V0a = c(
-        "Encl. to measuring report:",
-        "NILU-Sample number:",
-        "Customer:",
-        "Comment:",
-        "Customers sample ID:",
-        "Sample type:",
-        "Sample amount:",
-        "Analysed sample amount:",
-        "Concentration units:",
-        "Data files:"),
-      # adds two extra empty columns coming before the 
-      V0b = "",      
-      V0c = ""),
-    header_main_part)
-  
-  # Adds one row containg just the name of the parameter group, 
-  # Adds two empty rows first ()
-  sheet_rows_1 <- bind_rows(sheet_rows_1a[1:2,], sheet_rows_1a, sheet_rows_1a[1:2,])
-  sheet_rows_1[1,1] <- parameter_group
-  sheet_rows_1[2,1] <- ""
-  sheet_rows_1[nrow(sheet_rows_1)-1,1] <- ""
-  sheet_rows_1[nrow(sheet_rows_1),1] <- "Compound"
-  sheet_rows_1
-  
-}
-
-if (F){
-  test_headers <- data.frame(
-    LT1 = c("", "", "", "", "", "", "", "", "", ""), 
-    V1 = c("", "", "MILKYS (NIVA)", "19N Breøyane - fugl egg 1", "NR-2020-08432", "Ærfugl Egg", "", "", "", ""), 
-    LT2 = c("", "", "", "", "", "", "", "", "", ""), 
-    V2 = c("", "", "MILKYS (NIVA)", "19N Breøyane - fugl egg 2", "NR-2020-08433", "Ærfugl Egg", "", "", "", "")
-    )
-  
-  make_top_rows(test_headers, "PBDE")
-}
-
-
 #
 # Note: the parameters will be in the same order as they are in 'nilu_data_long'
 #
-make_bottom_rows <- function(nilu_data_long, example_sample_number, parameter_group){
+get_nilu_parameters <- function(nilu_data_long, example_sample_number, parameter_group){
   
   nilu_data_long %>%
     filter(Sample_no %in% example_sample_number & Group %in% parameter_group) %>%
     mutate(IPUAC_no = as.character(IPUAC_no)) %>%
     select(Parameter, IPUAC_no, PARAM) %>%
-    rename(NIVA_name = PARAM)
+    rename(NIVA_name = PARAM) %>%
+    as.data
 
 }
 
@@ -65,33 +23,123 @@ if (FALSE){
                                     Value = c(0.05, 0.10, 0.15)), 
                                row.names = c(NA, -3L), class = c("tbl_df", "tbl", "data.frame"))
   
-  make_bottom_rows(test_data, "Nr. 2020-08432", "PBDE")
+  get_nilu_parameters(test_data, "Nr. 2020-08432", "PBDE")
   
 }
 
-make_nilu_template_sheet <- function(parameter_group, header_main_part, parameter_data, example_sample_number){
+make_sheet_bottomleft <- function(sample_data){
   
-  sheet_rows_1 <- make_top_rows(header_main_part, parameter_group)
-  sheet_rows_2 <- make_bottom_rows(parameter_data, example_sample_number, parameter_group)
+  df_samples_matrix <- as.matrix(sample_data, ncol = ncol(sampledata))
+  # df_samples_matrix[1:5,]
   
+  df_excel_1 <- matrix("", 
+                       nrow = nrow(df_samples_matrix) + 3, 
+                       ncol = ncol(df_samples_matrix))
   
-  # Middle row
-  sheet_rows_2_names <- colnames(sheet_rows_2)
-  values_middle <- rep(c("Under LOQ ('<')", "Value"), ncol(header_main_part)/2)
-  sheet_rows_middle <- matrix(c(sheet_rows_2_names, values_middle), nrow = 1) %>% as.data.frame()
-
-  colnames(sheet_rows_2) <- colnames(sheet_rows_1)
-  colnames(sheet_rows_middle ) <- colnames(sheet_rows_1)
+  # dim(df_excel_1)
+  df_excel_1[3, ] <- colnames(df_samples_matrix)
+  df_excel_1[-(1:3),] <- df_samples_matrix[]
   
-  bind_rows(sheet_rows_1, sheet_rows_middle, sheet_rows_2)
-
+  df_excel_1
+  
 }
 
 if (FALSE){
   
-  # test_headers, test_parameters are defined above
+  df_samples_test <- structure(
+    list(
+      NILU_ID = c("", "", ""), 
+      NIVA_ID = c("NR-2020-08432","NR-2020-08433", "NR-2020-08434"), 
+      Prøvetype = c("Ærfugl Egg", "Ærfugl Egg", "Ærfugl Egg"), 
+      Kommentar = c("", "", ""), Vekt = c("", "", "")
+      ), 
+    row.names = c(NA, 3L), class = "data.frame") 
   
-  # debugonce(make_nilu_template_sheet)
-  make_nilu_template_sheet("PBDE", test_headers, test_parameters, "Nr. 2020-08432")
+  make_sheet_bottomleft(df_samples_test)
+  
+}
 
+make_sheet_bottomright <- function(parameter_data, sample_data, unit){
+  
+  df_pars <- parameter_data %>%
+    select(Parameter, IPUAC_no) %>%
+    t()
+  
+  # dim(df_pars)
+  
+  df_excel_2 <- matrix("", 
+                       nrow = nrow(sample_data) + 3, 
+                       ncol = ncol(df_pars))
+  df_excel_2[1:2,] <- df_pars
+  df_excel_2[3,] <- unit
+  
+  df_excel_2
+  
+}
+
+if (FALSE) {
+  
+  df_pars_test <- structure(
+    list(
+      Parameter = c("TBA", "2,2',4-TriBDE", "2,4,4'-TriBDE"), 
+      IPUAC_no = c(NA, "17", "28"), 
+      NIVA_name = c("TBA", "BDE-17", "BDE-28")), 
+    row.names = c(NA, 3L), class = "data.frame")
+  
+  make_sheet_bottomright(parameter_data = df_pars_test, sample_data = df_samples_test, unit = "ng/g")
+  
+}
+
+
+make_nilu_template_sheet <- function(sample_data, parameter_data, parametergroup_name, 
+                                     unit = "",
+                                     prosjektnr = "O-99999"){
+  
+  excel_bottomleft <- make_sheet_bottomleft(sample_data)
+  excel_bottomright <- make_sheet_bottomright(parameter_data = parameter_data, 
+                                              sample_data = sample_data, 
+                                              unit = unit)
+  
+  
+  #
+  # left + right part of sheet (df_excel_bottom)  
+  #
+  
+  if (nrow(excel_bottomleft) != nrow(excel_bottomright)){
+    stop("The two df_excel parts have different number of rows!")
+  }
+  
+  df_excel_bottom <- cbind(excel_bottomleft, excel_bottomright)
+  
+  #
+  # combine to entire sheet (df_excel) 
+  #
+  
+  df_excel_top <- matrix("", nrow = 4, ncol = ncol(df_excel_bottom))
+  df_excel_top[1,1] <- paste(parametergroup_name, "i biologisk materiale")
+  df_excel_top[3,1] <- paste("Prosjektnr:", prosjektnr)
+  df_excel_top[4,1] <- paste("Rapportnr:")
+  
+  df_excel <- rbind(df_excel_top, df_excel_bottom)
+  
+  # Set cells that are not used to NA
+  sel <- df_excel == ""
+  df_excel[sel] <- NA
+  
+  
+  df_excel
+
+  }
+
+
+if (FALSE){
+  
+  # df_samples_test, df_pars_test are defined above
+  
+  make_nilu_template_sheet(
+    sample_data = df_samples_test, 
+    parameter_data = df_pars_test, 
+    parametergroup_name = "PBDE", 
+    unit = "ng/g")[1:8, 1:7]
+  
 }
