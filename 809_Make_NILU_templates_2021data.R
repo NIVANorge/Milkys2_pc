@@ -23,22 +23,14 @@ lims_project_name <- "O 210330;ANA21 - MILKYS 2021; Hovedanalyser 2021"
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# 2. 2020 data ----
+# 2. Parameters ----
 #
-# Just for getting parameter names  
+# NILU and NIVA names    
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
-dat_eiderduck_2020 <- readRDS("Data/808_dat_eiderduck_2020.rds")
-first_sample_number <- "Nr. 2020-08432"
-
-parametergroup_table <- table(dat_eiderduck_2020$Group)
-
-
-if (FALSE){
-  dat_eiderduck_2020$Sample_no %>% head(40)   # get 'first_sample_number'
-  table(addNA(dat_eiderduck_2020$Group))
-}
+df_parameters <- readxl::read_excel(
+  "Input_files_2020/NILU_template/Parameters_NILU_NIVA_2020.xlsx")
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
@@ -81,19 +73,7 @@ df_samples <- lims_eiderduck %>%
 # test
 # sheet_data <- make_sheet(header_4, dat_eiderduck_2020, "Nr. 2020-08432", "PBDE")
 
-parametergroups <- names(parametergroup_table)  
-
-parametergroups_list <- map(
-  parametergroups,
-  ~ get_nilu_parameters(
-    nilu_data_long = dat_eiderduck_2020, 
-    example_sample_number = "Nr. 2020-08432", 
-    parameter_group = .)
-  )
-
-length(parametergroups_list)  
-
-names(parametergroups_list) <- parametergroups
+parametergroups <- unique(df_parameters$Group)
 
 parametergroups_list[["CP"]]
 parametergroups_list[["Siloxans"]] <- data.frame(
@@ -110,17 +90,24 @@ parametergroups_list[["Siloxans"]] <- data.frame(
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
+# . - List of parameter groups for excel sheets ----
+
+# Will be one excel sheet per group
+
+parametergroups <- unique(df_parameters$Group)
+
+
 # . - Test function ----  
 # 'make_nilu_template_sheet'     
 
 test <- make_nilu_template_sheet(
-  sample_data = df_samples, 
-  parameter_data = parametergroups_list[["PBDE"]], 
-  parametergroup_name = "PBDE", 
+  sample_data = df_samples,
+  parameter_data = df_parameters,
+  parametergroup_name = "HBCD",
   unit = "ng/g")
 
-dim(test)
-test[1:12, 1:7]
+# dim(test)
+# test[1:12, 1:7]
 
 # . - Make list of sheet data ---- 
 
@@ -128,7 +115,7 @@ sheet_list <- map(
   parametergroups,
   ~ make_nilu_template_sheet(
     sample_data = df_samples, 
-    parameter_data = parametergroups_list[[.]], 
+    parameter_data = df_parameters, 
     parametergroup_name = ., 
     unit = "")
 )
@@ -145,6 +132,10 @@ wb <- openxlsx::write.xlsx(
   file = fn,
   colNames = FALSE)
 
+#
+# Increase font for first lines
+#
+
 style_big <- createStyle(fontSize = 15)
 
 for (i in 1:length(sheet_list)){
@@ -159,13 +150,67 @@ openxlsx::saveWorkbook(wb, fn, overwrite = TRUE)
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# APPENDIX. Test sheet (PBDE) ----
+# APPENDIX 1. Make Parameters_NILU_NIVA_2020.xlsx ----
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
+df_parameters <- readxl::read_excel(
+  "Input_files_2020/NILU_template/Parameters_NILU_NIVA_2020.xlsx")
+
+
+if (FALSE){
+  
+  # . - NILU data ----
+  dat_eiderduck_2020 <- readRDS("Data/808_dat_eiderduck_2020.rds")
+  first_sample_number <- "Nr. 2020-08432"
+  
+  # getting 'first_sample_number'
+  dat_eiderduck_2020$Sample_no %>% head(40)   # get 'first_sample_number'
+  table(addNA(dat_eiderduck_2020$Group))
+  
+  #
+  # . - Making 'Parameters_NILU_2020.xlsx' ----
+  #
+  # which was edited into 'Parameters_NILU_NIVA_2020.xlsx'
+  dat_eiderduck_2020 %>%
+    filter(Sample_no == "Nr. 2020-08432") %>%
+    select(Parameter, IPUAC_no, Group) %>% # View()
+    writexl::write_xlsx("Input_files_2020/NILU_template/Parameters_NILU_2020.xlsx")
+  
+  # . -  Reported_name and Analysis ----
+  #
+  # Code used to find  Reported_name and Analysis 
+  #
+  
+  sql <- paste(
+    "select distinct reported_name, analysis from labware.result",
+    "where lower(reported_name) like ('%157%')")
+  lims_reported_name <- get_nivabase_data(sql)
+  # lims_reported_name
+  
+  sql <- paste(
+    "select distinct reported_name, analysis from labware.result",
+    "where lower(analysis) like ('%pcblike%')")
+  lims_reported_name <- get_nivabase_data(sql) %>% arrange(ANALYSIS, REPORTED_NAME)
+  # lims_reported_name
+  
+  sql <- paste(
+    "select distinct name, laboratory, unit from nivadatabase.method_definitions",
+    "where lower(name) like ('%hbcd%')")
+  ndb_name <- get_nivabase_data(sql)
+  # ndb_name
+  
+}
+
+
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+# APPENDIX 2. Test sheet (PBDE) ----
 #
 # Used to make functions in '809_Make_NILU_templates_functions.R'  
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
-
-
 
 param_group <- "PBDE"
 prosjektnr <- "O 210330"
@@ -174,41 +219,40 @@ prosjektnr <- "O 210330"
 # . - left part of sheet (df_excel_1) ---- 
 #
 
+# Number of extra rows on top:
+n_extra <- 5   
+
 df_samples_matrix <- as.matrix(df_samples, ncol = ncol(df_samples))
 # df_samples_matrix[1:5,]
 
 df_excel_1 <- matrix("", 
-                     nrow = nrow(df_samples_matrix) + 3, 
+                     nrow = nrow(df_samples_matrix) + n_extra, 
                      ncol = ncol(df_samples_matrix))
 
 # dim(df_excel_1)
-df_excel_1[3, ] <- colnames(df_samples_matrix)
-df_excel_1[-(1:3),] <- df_samples_matrix[]
-df_excel_1[1:5, 1:5]
+df_excel_1[n_extra, ] <- colnames(df_samples_matrix)
+df_excel_1[-(1:n_extra),] <- df_samples_matrix[]
+df_excel_1[1:7, 1:5]
 
 #
 # . - right part of sheet (df_excel_2) ---- 
 #
 
-df_pars_tall <- get_nilu_parameters(
-  nilu_data_long = dat_eiderduck_2020, 
-  example_sample_number = "Nr. 2020-08432", 
-  parameter_group = param_group) %>%
-  as.data.frame()
-
-df_pars <- df_pars_tall %>%
-  select(Parameter, IPUAC_no) %>%
+df_pars <- df_parameters %>%
+  filter(Group %in% param_group) %>%
+  mutate(IPUAC_no = as.character(IPUAC_no)) %>%
+  select(Parameter_NILU, IPUAC_no, Parameter_LIMS, Analysis) %>%
   t()
 
 dim(df_pars)
 
 df_excel_2 <- matrix("", 
-                     nrow = nrow(df_samples) + 3, 
+                     nrow = nrow(df_samples) + n_extra,
                      ncol = ncol(df_pars))
-df_excel_2[1:2,] <- df_pars
-df_excel_2[3,] <- "ng/g"
+df_excel_2[1:4,] <- df_pars
+df_excel_2[5,] <- "ng/g"
 
-df_excel_2[1:5,1:5]
+df_excel_2[1:8,1:5]
 # colnames(df_excel_2) <- df_pars_tall$Parameter
 
 #
@@ -220,9 +264,11 @@ if (nrow(df_excel_1) != nrow(df_excel_2)){
 }
 
 df_excel_bottom <- cbind(df_excel_1, df_excel_2)
-df_excel_bottom[]
 
-df_excel_bottom[1:5, 1:9]
+df_excel_bottom[1:5, ncol(df_excel_1)] <- 
+  c("Parameter", "IUPAC no.", "NIVA_parameter", "NIVA_analysis", "Unit")
+
+df_excel_bottom[1:8, 1:9]
 
 #
 # . - combine to entire sheet (df_excel) ---- 

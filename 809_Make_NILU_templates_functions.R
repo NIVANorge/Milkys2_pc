@@ -27,18 +27,18 @@ if (FALSE){
   
 }
 
-make_sheet_bottomleft <- function(sample_data){
+make_sheet_bottomleft <- function(sample_data, n_extra = 5){
   
   df_samples_matrix <- as.matrix(sample_data, ncol = ncol(sampledata))
   # df_samples_matrix[1:5,]
   
   df_excel_1 <- matrix("", 
-                       nrow = nrow(df_samples_matrix) + 3, 
+                       nrow = nrow(df_samples_matrix) + n_extra, 
                        ncol = ncol(df_samples_matrix))
   
   # dim(df_excel_1)
-  df_excel_1[3, ] <- colnames(df_samples_matrix)
-  df_excel_1[-(1:3),] <- df_samples_matrix[]
+  df_excel_1[n_extra, ] <- colnames(df_samples_matrix)
+  df_excel_1[-(1:n_extra),] <- df_samples_matrix[]
   
   df_excel_1
   
@@ -55,23 +55,25 @@ if (FALSE){
       ), 
     row.names = c(NA, 3L), class = "data.frame") 
   
-  make_sheet_bottomleft(df_samples_test)
+  make_sheet_bottomleft(df_samples_test, n_extra = 5)
   
 }
 
-make_sheet_bottomright <- function(parameter_data, sample_data, unit){
+make_sheet_bottomright <- function(parameter_data, sample_data, param_group, unit = "", n_extra = 5){
   
   df_pars <- parameter_data %>%
-    select(Parameter, IPUAC_no) %>%
+    filter(Group %in% param_group) %>%
+    mutate(IPUAC_no = as.character(IPUAC_no)) %>%
+    select(Parameter_NILU, IPUAC_no, Parameter_LIMS, Analysis) %>%
     t()
   
   # dim(df_pars)
   
   df_excel_2 <- matrix("", 
-                       nrow = nrow(sample_data) + 3, 
+                       nrow = nrow(sample_data) + n_extra, 
                        ncol = ncol(df_pars))
-  df_excel_2[1:2,] <- df_pars
-  df_excel_2[3,] <- unit
+  df_excel_2[1:4,] <- df_pars   # as df_pars has 4 rows = variables
+  df_excel_2[5,] <- unit
   
   df_excel_2
   
@@ -79,27 +81,32 @@ make_sheet_bottomright <- function(parameter_data, sample_data, unit){
 
 if (FALSE) {
   
-  df_pars_test <- structure(
-    list(
-      Parameter = c("TBA", "2,2',4-TriBDE", "2,4,4'-TriBDE"), 
-      IPUAC_no = c(NA, "17", "28"), 
-      NIVA_name = c("TBA", "BDE-17", "BDE-28")), 
-    row.names = c(NA, 3L), class = "data.frame")
+  df_parameters <- readxl::read_excel(
+    "Input_files_2020/NILU_template/Parameters_NILU_NIVA_2020.xlsx")
   
-  make_sheet_bottomright(parameter_data = df_pars_test, sample_data = df_samples_test, unit = "ng/g")
+  make_sheet_bottomright(parameter_data = df_parameters, 
+                         sample_data = df_samples_test, 
+                         param_group = "HBCD", 
+                         unit = "ng/g", n_extra = 5)
   
 }
 
 
-make_nilu_template_sheet <- function(sample_data, parameter_data, parametergroup_name, 
+make_nilu_template_sheet <- function(sample_data, 
+                                     parameter_data, 
+                                     parametergroup_name, 
                                      unit = "",
                                      prosjektnr = "O-99999"){
   
-  excel_bottomleft <- make_sheet_bottomleft(sample_data)
-  excel_bottomright <- make_sheet_bottomright(parameter_data = parameter_data, 
-                                              sample_data = sample_data, 
-                                              unit = unit)
+  n_extra <- 5
   
+  excel_bottomleft <- make_sheet_bottomleft(sample_data, 
+                                            n_extra = n_extra)
+  excel_bottomright <- make_sheet_bottomright(parameter_data = parameter_data, 
+                                              sample_data = sample_data,
+                                              param_group = parametergroup_name,
+                                              unit = unit,
+                                              n_extra = n_extra)
   
   #
   # left + right part of sheet (df_excel_bottom)  
@@ -110,6 +117,11 @@ make_nilu_template_sheet <- function(sample_data, parameter_data, parametergroup
   }
   
   df_excel_bottom <- cbind(excel_bottomleft, excel_bottomright)
+  
+  # Add "headings" to the left of df_excel_2 (i.e. on the last column of df_excel_1):
+  df_excel_bottom[1:5, ncol(excel_bottomleft)] <- 
+    c("Parameter", "IUPAC no.", "NIVA_parameter", "NIVA_analysis", "Unit")
+  
   
   #
   # combine to entire sheet (df_excel) 
@@ -136,10 +148,11 @@ if (FALSE){
   
   # df_samples_test, df_pars_test are defined above
   
+  # debugonce(make_nilu_template_sheet)
   make_nilu_template_sheet(
     sample_data = df_samples_test, 
-    parameter_data = df_pars_test, 
-    parametergroup_name = "PBDE", 
-    unit = "ng/g")[1:8, 1:7]
+    parameter_data = df_parameters, 
+    parametergroup_name = "HBCD", 
+    unit = "ng/g")
   
 }
