@@ -12,7 +12,6 @@
 
 library(dplyr)
 library(purrr)
-library(niRvana)    # github 
 library(lubridate)
 library(openxlsx)
 
@@ -38,31 +37,41 @@ df_parameters <- readxl::read_excel(
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
-# Get samples for last year
-sql <- paste(
-  "select *",
-  "from NIVADATABASE.LABWARE_CHECK_SAMPLE",
-  "where PROSJEKT =", sQuote(lims_project_name),
-  "and SPECIES = 'Somateria mollissima'")
+read_samples_from_labware <- FALSE
 
-sql <- paste(
-  "select ANALYSEOPPDRAG, TEXT_ID, SAMPLED_DATE, DESCRIPTION, TISSUE, BIOTA_SAMPLENO",
-  "from NIVADATABASE.LABWARE_CHECK_SAMPLE",
-  "where PROSJEKT =", sQuote(lims_project_name),
-  "and SPECIES = 'Somateria mollissima'")
+if (read_samples_from_labware){
+  
+  library(niRvana)    # github 
+  
+  # Get samples for last year
+  sql <- paste(
+    "select ANALYSEOPPDRAG, TEXT_ID, SAMPLED_DATE, DESCRIPTION, TISSUE, BIOTA_SAMPLENO",
+    "from NIVADATABASE.LABWARE_CHECK_SAMPLE",
+    "where PROSJEKT =", sQuote(lims_project_name),
+    "and SPECIES = 'Somateria mollissima'")
+  
+  # sql
+  
+  lims_eiderduck <- get_nivabase_data(sql) %>% arrange(TEXT_ID)
+  
+  df_samples <- lims_eiderduck %>%
+    mutate(Prøvetype = paste("Ærfugl", substring(TISSUE, 4)),
+           NILU_ID = "",
+           Kommentar = "",
+           Vekt = "") %>%
+    rename(NIVA_ID = TEXT_ID) %>%
+    select(NILU_ID, NIVA_ID, Prøvetype, Kommentar, Vekt)
+  
+  write.csv(df_samples, "NILU_template/NILU_eiderduck_samples2021.csv", 
+            row.names = FALSE, quote = FALSE, fileEncoding = "UTF-8")
 
-# sql
+} else {
 
-lims_eiderduck <- get_nivabase_data(sql) %>% arrange(TEXT_ID)
-
-df_samples <- lims_eiderduck %>%
-  mutate(Prøvetype = paste("Ærfugl", substring(TISSUE, 4)),
-         NILU_ID = "",
-         Kommentar = "",
-         Vekt = "") %>%
-  rename(NIVA_ID = TEXT_ID) %>%
-  select(NILU_ID, NIVA_ID, Prøvetype, Kommentar, Vekt)
-
+  df_samples <- read.csv(
+    "NILU_template/NILU_eiderduck_samples2021.csv", 
+    encoding = "UTF-8")
+  
+}
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
