@@ -146,16 +146,13 @@ for (i in 1:length(sheet_list)){
   openxlsx::setColWidths(wb, sheet = i, cols = c(1:3,5), widths = 18)
   addStyle(wb, sheet = i, style = style_big, rows = c(1,3,4), cols = 1)
   addStyle(wb, sheet = i, style = style_shaded, rows = 5:9, cols = 5)
-  # Locking cells. This didn't work
-  # addStyle(wb, sheet = i, style = style_bold, rows = 9, cols = 1:4)
-  # for (row in 5:8){
-  #   addStyle(wb, sheet = i, style = style_locked, 
-  #            rows = row, cols = seq_len(ncol(sheet_list[[i]])) + 4)
-  #   }
-  # for (col in 2:3){
-  #   addStyle(wb, sheet = i, style = style_locked, 
-  #            rows = seq_len(nrow(sheet_list[[i]])) + 8, cols = col)
-  # }
+  # Protects the whole sheet:
+  protectWorksheet(wb, i, protect = TRUE)
+  # Unlocks the necessary columns. Unlocked a long number of 
+  # rows and colums
+  addStyle(wb, i, style = createStyle(locked = FALSE), 
+           rows = 10:50, cols = c(1,4:50), gridExpand = TRUE)
+  
 }
 openxlsx::saveWorkbook(wb, fn, overwrite = TRUE)
 
