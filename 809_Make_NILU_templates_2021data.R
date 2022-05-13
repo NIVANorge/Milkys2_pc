@@ -16,7 +16,7 @@ library(niRvana)    # github
 library(lubridate)
 library(openxlsx)
 
-source("809_Make_NILU_templates_functions.R")
+source("809_Make_NILU_templates_functions.R", encoding = "UTF-8")
 
 lims_project_name <- "O 210330;ANA21 - MILKYS 2021; Hovedanalyser 2021"
 
@@ -75,14 +75,6 @@ df_samples <- lims_eiderduck %>%
 
 parametergroups <- unique(df_parameters$Group)
 
-parametergroups_list[["CP"]]
-parametergroups_list[["Siloxans"]] <- data.frame(
-  Parameter = c("D4", "D5", "D6"),
-  IPUAC_no = NA) %>%
-  mutate(
-    NIVA_name = Parameter)
-
-)
 
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
@@ -93,8 +85,6 @@ parametergroups_list[["Siloxans"]] <- data.frame(
 # . - List of parameter groups for excel sheets ----
 
 # Will be one excel sheet per group
-
-parametergroups <- unique(df_parameters$Group)
 
 
 # . - Test function ----  
@@ -108,6 +98,8 @@ test <- make_nilu_template_sheet(
 
 # dim(test)
 # test[1:12, 1:7]
+
+# END of test
 
 # . - Make list of sheet data ---- 
 
@@ -137,11 +129,24 @@ wb <- openxlsx::write.xlsx(
 #
 
 style_big <- createStyle(fontSize = 15)
+style_bold <- createStyle(textDecoration = "bold")
+style_locked <- createStyle(locked = TRUE)
 
 for (i in 1:length(sheet_list)){
   # Set column with for less-than columns and rewrite  
-  openxlsx::setColWidths(wb, sheet = i, cols = 1:3, widths = 18)
+  openxlsx::setColWidths(wb, sheet = i, cols = c(1:3,5), widths = 18)
   addStyle(wb, sheet = i, style = style_big, rows = c(1,3,4), cols = 1)
+  addStyle(wb, sheet = i, style = style_shaded, rows = 5:9, cols = 5)
+  # Locking cells. This didn't work
+  # addStyle(wb, sheet = i, style = style_bold, rows = 9, cols = 1:4)
+  # for (row in 5:8){
+  #   addStyle(wb, sheet = i, style = style_locked, 
+  #            rows = row, cols = seq_len(ncol(sheet_list[[i]])) + 4)
+  #   }
+  # for (col in 2:3){
+  #   addStyle(wb, sheet = i, style = style_locked, 
+  #            rows = seq_len(nrow(sheet_list[[i]])) + 8, cols = col)
+  # }
 }
 openxlsx::saveWorkbook(wb, fn, overwrite = TRUE)
 
