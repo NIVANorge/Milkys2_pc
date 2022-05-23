@@ -24,7 +24,7 @@
     - Has some weight on checking measurement (analysis) error
     - Reads files from hard-coded folders  
     
-* App_806 - Use fior searching on a big SQL join? (see script 821)
+* App_806 - Use for searching on a big SQL join? (see script 821)
     
     
 * App_807 - Reading data directly from Nivabasen including Labware tables     
@@ -32,4 +32,18 @@
     - Goes from project towards parameters (cannot search for parameter first)   
     - Select first project, then stations and/or years (but needs one of them), then parameter 
     - Can be made a bit quicker if samples are selected using a join in the database   
+    
+* Notes for Milkys app:  
+    - Menu for parameter group + menu for parameter + station type (species/tissue) station  
+    - That menu shold be in left margin  
+    - Overview plot for levels (boxplot) + boxplot for EQS if possible (showing trends in some way?) 
+    - Overview plot for trends (short/long)  
+    - Stations sorted from N to S (prioritized before showing all old stations) 
+    - Median numbers in add. to graph - show less-thans    
+    - PROREF + EQS + long + short trend (this year + last year)  
+    - Time series graph w/ ability to see only last x years  
+    - Map 
+    - Matrix plot (scatter) for parameters within parameter group  
+    - Download button  
+    
     
