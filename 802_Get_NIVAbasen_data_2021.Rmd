@@ -1,0 +1,120 @@
+---
+title: "802 Get chemical data from NIVAbasen"
+output: html_document
+---
+
+## Libraries
+```{r setup, include=FALSE}
+# install.packages("niRvana")
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+
+# And then the niRvana package. If you need to install it, then run thee next line also:
+# devtools::install_github("NIVANorge/niRvana")
+library(niRvana)
+
+source("802_Get_NIVAbasen_data_functions.R")
+
+```
+
+
+## Get new(er) data
+
+### Give your username and password to R (only once per R session):
+```{r}
+set_credentials()
+```
+
+### Get the list of projects
+
+```{r}
+
+df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+
+```
+
+### Get a list of the stations in the CEMP_Biota project
+
+```{r}
+
+df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+
+```
+
+### Get all specimens collected at these stations (20 seconds or so)
+- Includes LATIN_NAME  
+```{r}
+
+df_specimens <- get_specimens_from_stationdata(df_stations, years = 2020:2021)
+
+```
+
+### Plot sample dates in 2020 (or later)    
+```{r, fig.height=6, fig.width=7}
+
+df_specimens %>%
+  filter(year(DATE_CAUGHT) >= 2020) %>%
+  ggplot(aes(DATE_CAUGHT)) +
+  geom_histogram(binwidth = 3600*24*10) +   # 10 days
+  scale_x_datetime(date_breaks = "1 month", date_labels = "%m %Y") +
+  facet_wrap(vars(LATIN_NAME), ncol = 1, scales = "free_y")
+
+```
+
+
+
+## Get the data itself  
+Get data frame of chemical data for all samples from the measurement year 2016 (30 seconds or so)  
+- LATIN_NAME is included  
+```{r, results = FALSE}
+
+# debugonce(get_biota_chemistry)
+# debugonce(get_samples_from_sampleid)
+
+df_2020 <- get_biota_chemistry(
+  years = 2020:2021,              # in case some specimens wrongly  
+                                  #    have date_caught = 2020
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+```
+
+
+
+
+
+### Save 
+```{r}
+#
+# 2020 data
+#
+# dir.create("Files_to_Jupyterhub_2020")
+
+# Make timestamp (date stamp actually)
+t <- Sys.time()
+timestamp <- substr(t, 1, 10)
+filename <- paste0("Files_to_Jupyterhub_2020/01_df_2020_notstandard_", timestamp, ".rds")
+
+# Set to TRUE/FALSE depending on whether file should be saved or not  
+if (FALSE){
+
+  saveRDS(df_2020, file = filename)
+  cat("2020 data saved as rds,", sQuote(filename), "\n")
+  filename_txt <- sub("rds", "csv", filename)
+  write.csv(df_2020, file = filename_txt, fileEncoding = "UTF-8")
+  cat("2020 data saved as csv,", sQuote(filename_txt), "\n")
+
+}
+
+# Set to TRUE/FALSE depending on whether file should be read or not  
+if (FALSE){
+  # df_2020 <- readRDS(filename)
+  df_2020 <- readRDS("Files_to_Jupyterhub_2020/01_df_2020_notstandard_2021-09-30.rds")
+}
+
+```
+
+
