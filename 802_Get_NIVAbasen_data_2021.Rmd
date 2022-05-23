@@ -24,7 +24,7 @@ source("802_Get_NIVAbasen_data_functions.R")
 
 ### Give your username and password to R (only once per R session):
 ```{r}
-set_credentials()
+# set_credentials()
 ```
 
 ### Get the list of projects
@@ -55,7 +55,7 @@ df_specimens <- get_specimens_from_stationdata(df_stations, years = 2020:2021)
 ```{r, fig.height=6, fig.width=7}
 
 df_specimens %>%
-  filter(year(DATE_CAUGHT) >= 2020) %>%
+  filter(year(DATE_CAUGHT) >= 2021) %>%
   ggplot(aes(DATE_CAUGHT)) +
   geom_histogram(binwidth = 3600*24*10) +   # 10 days
   scale_x_datetime(date_breaks = "1 month", date_labels = "%m %Y") +
@@ -73,8 +73,8 @@ Get data frame of chemical data for all samples from the measurement year 2016 (
 # debugonce(get_biota_chemistry)
 # debugonce(get_samples_from_sampleid)
 
-df_2020 <- get_biota_chemistry(
-  years = 2020:2021,              # in case some specimens wrongly  
+df_2021 <- get_biota_chemistry(
+  years = 2021:2022,              # in case some specimens wrongly  
                                   #    have date_caught = 2020
   specimendata = df_specimens, 
   stationdata = df_stations,
@@ -89,30 +89,57 @@ df_2020 <- get_biota_chemistry(
 ### Save 
 ```{r}
 #
-# 2020 data
+# 2021 data
 #
-# dir.create("Files_to_Jupyterhub_2020")
+# Do this ONCE:
+# dir.create("Files_to_Jupyterhub_2021")
 
 # Make timestamp (date stamp actually)
 t <- Sys.time()
 timestamp <- substr(t, 1, 10)
-filename <- paste0("Files_to_Jupyterhub_2020/01_df_2020_notstandard_", timestamp, ".rds")
+filename <- paste0("Files_to_Jupyterhub_2021/01_df_2021_notstandard_", timestamp, ".rds")
 
 # Set to TRUE/FALSE depending on whether file should be saved or not  
 if (FALSE){
 
-  saveRDS(df_2020, file = filename)
-  cat("2020 data saved as rds,", sQuote(filename), "\n")
+  saveRDS(df_2021, file = filename)
+  cat("2021 data saved as rds,", sQuote(filename), "\n")
   filename_txt <- sub("rds", "csv", filename)
-  write.csv(df_2020, file = filename_txt, fileEncoding = "UTF-8")
-  cat("2020 data saved as csv,", sQuote(filename_txt), "\n")
+  write.csv(df_2021, file = filename_txt, fileEncoding = "UTF-8")
+  cat("2021 data saved as csv,", sQuote(filename_txt), "\n")
 
 }
 
 # Set to TRUE/FALSE depending on whether file should be read or not  
 if (FALSE){
-  # df_2020 <- readRDS(filename)
-  df_2020 <- readRDS("Files_to_Jupyterhub_2020/01_df_2020_notstandard_2021-09-30.rds")
+  # df_2021 <- readRDS(filename)
+  df_2021 <- readRDS("Files_to_Jupyterhub_2021/01_df_2021_notstandard_2022-05-23.rds")
+}
+
+```
+
+```{r}
+
+# For app 804
+
+if (FALSE){
+  
+  
+  df_2020 <- readRDS("Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
+  
+  names(df_2021)
+  names(df_2020)
+  
+  df_2021_test <- bind_rows(
+    df_2020,
+    df_2021 %>%
+      mutate(MYEAR = lubridate::year(SAMPLE_DATE),
+             VALUE_WW = VALUE)
+  )
+  
+  saveRDS(df_2021_test, "Files_from_Jupyterhub_2020/Raw_data/802_testdata_2022-05-23.rds")
+  
+  
 }
 
 ```
