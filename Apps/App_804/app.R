@@ -23,7 +23,10 @@ library(forcats)
 # NIVA people can find it on Jupyterhub (DHJ/Milkys2)
 # 
 
-dat <- readRDS("../../Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds") %>%
+dat_orig <- readRDS("../../Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
+dat_orig <- readRDS("../../Files_from_Jupyterhub_2020/Raw_data/802_testdata_2022-05-23.rds")
+
+dat <- dat_orig %>%
   mutate(
     VALUE_ORIG = VALUE_WW,     # cheating a bit here
     Basis = "W"                # ... and here
