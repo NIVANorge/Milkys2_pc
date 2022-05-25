@@ -34,8 +34,8 @@
     - Can be made a bit quicker if samples are selected using a join in the database   
     
 * Notes for Milkys app:  
-    - Menu for parameter group + menu for parameter + station type (species/tissue) station  
-    - That menu shold be in left margin  
+    - Menu for parameter group + menu for parameters (w/ defaults) + station type (species/tissue) stations (defaults)     
+    - That menu should be in left margin  
     - Overview plot for levels (boxplot) + boxplot for EQS if possible (showing trends in some way?) 
     - Overview plot for trends (short/long)  
     - Stations sorted from N to S (prioritized before showing all old stations) 
