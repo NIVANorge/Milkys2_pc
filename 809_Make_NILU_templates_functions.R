@@ -131,6 +131,7 @@ make_nilu_template_sheet <- function(sample_data,
   df_excel_top[1,1] <- paste(parametergroup_name, "i biologisk materiale")
   df_excel_top[3,1] <- paste("Prosjektnr:", prosjektnr)
   df_excel_top[4,1] <- paste("Rapportnr:")
+  df_excel_top[3,5] <- paste("Verdier under LOQ kan skrives enten med '<' eller som negative tall. Eksempel: '<0.05' eller '-0.05'.")
   
   df_excel <- rbind(df_excel_top, df_excel_bottom)
   
