@@ -139,6 +139,7 @@ wb <- openxlsx::write.xlsx(
 
 style_big <- createStyle(fontSize = 15)
 style_bold <- createStyle(textDecoration = "bold")
+style_shaded <- createStyle(textDecoration = "bold", fgFill = "#7CB9E8")
 style_locked <- createStyle(locked = TRUE)
 
 for (i in 1:length(sheet_list)){
@@ -165,11 +166,11 @@ openxlsx::saveWorkbook(wb, fn, overwrite = TRUE)
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
-df_parameters <- readxl::read_excel(
-  "Input_files_2020/NILU_template/Parameters_NILU_NIVA_2020.xlsx")
-
 
 if (FALSE){
+  
+  df_parameters <- readxl::read_excel(
+    "Input_files_2020/NILU_template/Parameters_NILU_NIVA_2020.xlsx")
   
   # . - NILU data ----
   dat_eiderduck_2020 <- readRDS("Data/808_dat_eiderduck_2020.rds")
@@ -223,74 +224,77 @@ if (FALSE){
 #
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
-param_group <- "PBDE"
-prosjektnr <- "O 210330"
-
-#
-# . - left part of sheet (df_excel_1) ---- 
-#
-
-# Number of extra rows on top:
-n_extra <- 5   
-
-df_samples_matrix <- as.matrix(df_samples, ncol = ncol(df_samples))
-# df_samples_matrix[1:5,]
-
-df_excel_1 <- matrix("", 
-                     nrow = nrow(df_samples_matrix) + n_extra, 
-                     ncol = ncol(df_samples_matrix))
-
-# dim(df_excel_1)
-df_excel_1[n_extra, ] <- colnames(df_samples_matrix)
-df_excel_1[-(1:n_extra),] <- df_samples_matrix[]
-df_excel_1[1:7, 1:5]
-
-#
-# . - right part of sheet (df_excel_2) ---- 
-#
-
-df_pars <- df_parameters %>%
-  filter(Group %in% param_group) %>%
-  mutate(IPUAC_no = as.character(IPUAC_no)) %>%
-  select(Parameter_NILU, IPUAC_no, Parameter_LIMS, Analysis) %>%
-  t()
-
-dim(df_pars)
-
-df_excel_2 <- matrix("", 
-                     nrow = nrow(df_samples) + n_extra,
-                     ncol = ncol(df_pars))
-df_excel_2[1:4,] <- df_pars
-df_excel_2[5,] <- "ng/g"
-
-df_excel_2[1:8,1:5]
-# colnames(df_excel_2) <- df_pars_tall$Parameter
-
-#
-# . - left + right part of sheet (df_excel_bottom) ---- 
-#
-
-if (nrow(df_excel_1) != nrow(df_excel_2)){
-  stop("The two df_excel parts have different number of rows!")
+if (FALSE){
+  
+  param_group <- "PBDE"
+  prosjektnr <- "O 210330"
+  
+  #
+  # . - left part of sheet (df_excel_1) ---- 
+  #
+  
+  # Number of extra rows on top:
+  n_extra <- 5   
+  
+  df_samples_matrix <- as.matrix(df_samples, ncol = ncol(df_samples))
+  # df_samples_matrix[1:5,]
+  
+  df_excel_1 <- matrix("", 
+                       nrow = nrow(df_samples_matrix) + n_extra, 
+                       ncol = ncol(df_samples_matrix))
+  
+  # dim(df_excel_1)
+  df_excel_1[n_extra, ] <- colnames(df_samples_matrix)
+  df_excel_1[-(1:n_extra),] <- df_samples_matrix[]
+  df_excel_1[1:7, 1:5]
+  
+  #
+  # . - right part of sheet (df_excel_2) ---- 
+  #
+  
+  df_pars <- df_parameters %>%
+    filter(Group %in% param_group) %>%
+    mutate(IPUAC_no = as.character(IPUAC_no)) %>%
+    select(Parameter_NILU, IPUAC_no, Parameter_LIMS, Analysis) %>%
+    t()
+  
+  dim(df_pars)
+  
+  df_excel_2 <- matrix("", 
+                       nrow = nrow(df_samples) + n_extra,
+                       ncol = ncol(df_pars))
+  df_excel_2[1:4,] <- df_pars
+  df_excel_2[5,] <- "ng/g"
+  
+  df_excel_2[1:8,1:5]
+  # colnames(df_excel_2) <- df_pars_tall$Parameter
+  
+  #
+  # . - left + right part of sheet (df_excel_bottom) ---- 
+  #
+  
+  if (nrow(df_excel_1) != nrow(df_excel_2)){
+    stop("The two df_excel parts have different number of rows!")
+  }
+  
+  df_excel_bottom <- cbind(df_excel_1, df_excel_2)
+  
+  df_excel_bottom[1:5, ncol(df_excel_1)] <- 
+    c("Parameter", "IUPAC no.", "NIVA_parameter", "NIVA_analysis", "Unit")
+  
+  df_excel_bottom[1:8, 1:9]
+  
+  #
+  # . - combine to entire sheet (df_excel) ---- 
+  #
+  
+  df_excel_top <- matrix("", nrow = 4, ncol = ncol(df_excel_bottom))
+  df_excel_top[1,1] <- paste(param_group, "i biologisk materiale")
+  df_excel_top[3,1] <- paste("Prosjektnr:", prosjektnr)
+  df_excel_top[4,1] <- paste("Rapportnr:")
+  
+  df_excel <- rbind(df_excel_top, df_excel_bottom)
+  df_excel[1:10, 1:7]
+  
 }
-
-df_excel_bottom <- cbind(df_excel_1, df_excel_2)
-
-df_excel_bottom[1:5, ncol(df_excel_1)] <- 
-  c("Parameter", "IUPAC no.", "NIVA_parameter", "NIVA_analysis", "Unit")
-
-df_excel_bottom[1:8, 1:9]
-
-#
-# . - combine to entire sheet (df_excel) ---- 
-#
-
-df_excel_top <- matrix("", nrow = 4, ncol = ncol(df_excel_bottom))
-df_excel_top[1,1] <- paste(param_group, "i biologisk materiale")
-df_excel_top[3,1] <- paste("Prosjektnr:", prosjektnr)
-df_excel_top[4,1] <- paste("Rapportnr:")
-
-df_excel <- rbind(df_excel_top, df_excel_bottom)
-df_excel[1:10, 1:7]
-
 
