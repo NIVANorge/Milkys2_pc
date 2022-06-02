@@ -19,6 +19,13 @@ source("802_Get_NIVAbasen_data_functions.R")
 
 ```
 
+### Settings  
+```{r}
+
+sampling_year <- 2021
+
+```
+
 
 ## Get new(er) data
 
@@ -47,15 +54,22 @@ df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
 - Includes LATIN_NAME  
 ```{r}
 
-df_specimens <- get_specimens_from_stationdata(df_stations, years = 2020:2021)
+df_specimens <- get_specimens_from_stationdata(df_stations, years = sampling_year)
+cat("df_specimens:", nrow(df_specimens), "rows\n")
+
+# Checking wrong year
+df_specimens_nextyear <- get_specimens_from_stationdata(df_stations, years = sampling_year + 1)
+
+cat("df_specimens_nextyear:", nrow(df_specimens_nextyear), "rows\n")
 
 ```
 
-### Plot sample dates in 2020 (or later)    
+### Plot sample dates in 2021 (or later)
+
 ```{r, fig.height=6, fig.width=7}
 
 df_specimens %>%
-  filter(year(DATE_CAUGHT) >= 2021) %>%
+  filter(year(DATE_CAUGHT) >= sampling_year) %>%
   ggplot(aes(DATE_CAUGHT)) +
   geom_histogram(binwidth = 3600*24*10) +   # 10 days
   scale_x_datetime(date_breaks = "1 month", date_labels = "%m %Y") +
@@ -66,16 +80,15 @@ df_specimens %>%
 
 
 ## Get the data itself  
-Get data frame of chemical data for all samples from the measurement year 2016 (30 seconds or so)  
+Get data frame of chemical data for all samples for the measurement year   
 - LATIN_NAME is included  
 ```{r, results = FALSE}
 
 # debugonce(get_biota_chemistry)
 # debugonce(get_samples_from_sampleid)
 
-df_2021 <- get_biota_chemistry(
-  years = 2021:2022,              # in case some specimens wrongly  
-                                  #    have date_caught = 2020
+df_data <- get_biota_chemistry(
+  years = sampling_year,
   specimendata = df_specimens, 
   stationdata = df_stations,
   report_samples = TRUE)
@@ -97,6 +110,8 @@ df_2021 <- get_biota_chemistry(
 # Make timestamp (date stamp actually)
 t <- Sys.time()
 timestamp <- substr(t, 1, 10)
+
+# HARD_CODED YEARS
 filename <- paste0("Files_to_Jupyterhub_2021/01_df_2021_notstandard_", timestamp, ".rds")
 
 # Set to TRUE/FALSE depending on whether file should be saved or not  

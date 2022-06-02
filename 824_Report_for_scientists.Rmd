@@ -1,0 +1,316 @@
+---
+title: "Kortrapport - eksempler"
+author: "DHJ"
+date: "27 4 2022"
+output: 
+  bookdown::html_document2: default  
+    
+---
+
+* Basert på 'Mal_for_kortrapport'  
+
+```{r, echo=FALSE}
+
+# The template (mal) is here:
+# Info/Rapportering/Vedlegg_6_-_Mal_for_kortrapport.pdf  
+
+#
+# Note: we use bookdown, which should allow for table + figure cross-references  
+# https://bookdown.org/yihui/bookdown/cross-references.html
+#
+# BUT should use Quarto instead, for the cross-references?
+# See here: https://quarto.org/docs/get-started/authoring/jupyter.html#cross-references
+#
+# In the words of Yihui himself:
+#   "One example is the implementation of figure cross-references. I have to admit that I never liked my own implementation #    in bookdown, which was hackish. That’s why I have never ported this important and useful feature back into rmarkdown." # https://yihui.org/en/2022/04/quarto-r-markdown/
+#
+# Quarto can also make tabsets:
+# https://quarto.org/docs/presentations/revealjs/index.html#tabsets
+# (but: "Note that one significant disadvantage to tabsets is that only the first tab
+#  will be visible when printing to PDF")
+
+
+```
+    
+
+
+```{r, echo=FALSE}
+
+knitr::opts_chunk$set(echo = FALSE)  
+
+```
+
+
+```{r packages, results='hide', message=FALSE, warning=FALSE}
+
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(flextable)
+library(glue)
+
+library(safejoin) # https://github.com/moodymudskipper/safejoin
+
+# source("01_Get_chemical_data_NIVAbasen_functions.R")  # for get_standard_parametername()
+
+```
+
+```{r selected_year}
+
+selected_year <- 2020
+
+```
+
+## Report contents        
+
+This report is based on Milkys data through **`r selected_year`**.     
+
+```{r read_data}
+
+fn <- "Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds"                         # data FROM Milkys2 on PC 
+dat <- readRDS(fn)
+
+```
+
+### Sampling    
+
+```{r number_of_samples"}
+
+dat %>%
+  filter(MYEAR == selected_year) %>%
+  distinct(LATIN_NAME, TISSUE_NAME, SAMPLE_ID) %>%
+  count(LATIN_NAME, TISSUE_NAME) %>%
+  pivot_wider(names_from = TISSUE_NAME, values_from = n, values_fill = 0) %>%
+  flextable() %>%
+  set_caption(glue("Number of samples, by species and tissue ({selected_year})"))
+  
+
+```
+
+
+#### Number of stations  
+```{r}
+
+dat %>%
+  filter(MYEAR == selected_year) %>%
+  distinct(LATIN_NAME, TISSUE_NAME, STATION_ID) %>%
+  count(LATIN_NAME, TISSUE_NAME) %>%
+  pivot_wider(names_from = TISSUE_NAME, values_from = n, values_fill = 0) %>%
+  flextable() %>%
+  set_caption(glue("Number of stations, by species and tissue ({selected_year})"))
+  
+```
+
+
+## Key findings  
+
+
+### Proportion of data over LOQ ('Ratio of detected chemicals')     
+
+
+```{r}
+
+# Define terms for species and tissue for table
+
+if (FALSE){
+  dat %>%
+    filter(MYEAR >= (selected_year - 2)) %>% 
+    xtabs(~PARAM, .)
+  dat %>%
+    filter(MYEAR >= (selected_year - 2)) %>% 
+    xtabs(~LATIN_NAME, .) # %>% names() 
+  dat %>%
+    filter(MYEAR >= (selected_year - 2)) %>% 
+    xtabs(~TISSUE_NAME, .) #   %>% names() 
+}
+
+lookup_species <- tribble(
+  ~LATIN_NAME,             ~Species,
+  "Gadus morhua",          "Cod",
+  "Littorina littorea",   "Periwinkle",
+  "Mytilus edulis",       "Blue mussel",
+  "Nucella lapillus",     "Dog whelk",
+  "Platichthys flesus",   "Flatfish",
+  "Somateria mollissima", "Eider duck"
+)
+
+lookup_tissue <- tribble(
+  ~TISSUE_NAME,             ~Tissue,
+  "Blod",                   "Blood",
+  "Egg",                    "Egg",
+  "Galle",                  "Bile",
+  "Lever",                  "Liver",
+  "Liver - microsome",      "Liver - microsome",
+  "Muskel",                 "Muscle",
+  "Whole soft body",        "Soft body"
+)
+
+```
+
+```{r, results='hide'}
+
+# Create data set to print
+
+selected_params <- c("AS", "CD", "CR", "CU", "HG", "NI", "PB", "ZN")
+selected_params <- c("CD", "HG", "CB118", "CB180", "BAP", "PYR", "FLU", "PFOS", "PFOA", "PFOSA", "BDE47", "BDE99")
+
+tab1 <- dat %>%
+  left_join(lookup_species, by = "LATIN_NAME") %>%
+  left_join(lookup_tissue, by = "TISSUE_NAME") %>%
+  filter(
+    MYEAR >= (selected_year - 2),
+    LATIN_NAME %in% c("Gadus morhua", "Mytilus edulis", "Somateria mollissima"),
+    PARAM %in% selected_params) %>%
+  mutate(
+    Matrix = case_when(
+      Species %in% "Blue mussel" ~ Species,
+      TRUE ~ paste(Species, tolower(Tissue)))
+      ) %>%
+  group_by(PARAM, MYEAR, Matrix) %>%
+  summarise(Detection_perc = round(mean(is.na(FLAG1))*100, digits = 0),
+            .groups = "drop") 
+
+tab2 <- tab1 %>%
+  pivot_wider(names_from = "Matrix", values_from = "Detection_perc")
+
+tab1
+
+
+```
+
+#### *Table 3 - version a.* 
+
+```{r flextable3a}
+
+# Make flextable using 'tabulator'  
+#   - Nice layout in left column  
+# From this example:
+#   https://ardata-fr.github.io/flextable-book/get-flextable-from-objects.html
+
+
+matrix_order <- c("Blue mussel", "Cod liver", "Cod muscle", 
+                  "Eider duck egg", "Eider duck blood")
+                  
+tab1_for_flextable <- tab1 %>% 
+  mutate(Year = as.character(MYEAR),
+         Matrix = factor(Matrix, levels = matrix_order)) %>%
+  rename(Parameter = PARAM) %>%
+  arrange(Matrix)
+
+myformat <- function(x){
+  ifelse(is.na(x), "-",
+         as.character(round(x))
+  )
+}
+
+# debugonce(tabulator)
+# debugonce(as_flextable)
+ct <- tabulator(
+  x = tab1_for_flextable, 
+  rows = c("Parameter", "Year"),
+  columns = "Matrix",
+  row_compose = list(
+    Parameter = as_paragraph(as_chunk(Parameter))
+  ),
+  `z stats` = as_paragraph(
+    as_chunk(Detection_perc, formatter = myformat)
+  )
+)
+ft <- as_flextable(ct, separate_with = "Parameter")
+ft
+
+
+```
+
+#### *Table 3 - version b.*   
+
+```{r flextable3b}
+
+# Make flextable without 'tabulator'  
+#   - Not so nice layout in left column (picked just one year of data)   
+#   - But we can have colored cells  
+# From this example:
+#   https://ardata-fr.github.io/flextable-book/get-flextable-from-objects.html
+
+tab1 <- dat %>%
+  left_join(lookup_species, by = "LATIN_NAME") %>%
+  left_join(lookup_tissue, by = "TISSUE_NAME") %>%
+  filter(
+    MYEAR >= (selected_year - 2),
+    LATIN_NAME %in% c("Gadus morhua", "Mytilus edulis", "Somateria mollissima"),
+    PARAM %in% selected_params) %>%
+  mutate(
+    Matrix = case_when(
+      Species %in% "Blue mussel" ~ Species,
+      TRUE ~ paste(Species, tolower(Tissue)))
+      ) %>%
+  group_by(PARAM, MYEAR, Matrix) %>%
+  summarise(Detection_perc = round(mean(is.na(FLAG1))*100, digits = 0),
+            .groups = "drop")
+
+tab2 <- tab1 %>%
+  filter(MYEAR == 2020) %>%
+  select(PARAM, Matrix, Detection_perc) %>%
+  pivot_wider(names_from = Matrix, values_from = Detection_perc)
+# tab2
+
+flextable(tab2) %>%
+  # background color
+  bg(j = 2:6, bg = scales::col_numeric(palette = "viridis", domain = c(-0, 100))) %>%
+  # font color white for the darkest cells  
+  color(j = 2:6, color = function(x) {ifelse(x < 50, "white", "black")})
+
+```
+
+## Box plot   
+
+```{r}
+
+df_boxplot <- dat %>%
+  left_join(lookup_species, by = "LATIN_NAME") %>%
+  left_join(lookup_tissue, by = "TISSUE_NAME") %>%
+  filter(
+    MYEAR == 2020,
+    #PARAM %in% c("AS", "CD", "CR", "CU", "HG", "NI", "PB", "ZN")
+    ) %>%
+  mutate(
+    Matrix = case_when(
+      Species %in% "Blue mussel" ~ Species,
+      TRUE ~ paste(Species, tolower(Tissue)))
+      ) %>%
+  group_by(PARAM, MYEAR, Matrix, STATION_CODE, .groups = "drop") %>%
+  summarise(Median_value = median(VALUE_WW))   
+
+```
+
+```{r }
+
+if (FALSE){
+  
+  # Boxplot with ggiraph - didn't work
+  library(ggiraph)
+ 
+  gg <- ggplot(df_boxplot, aes(PARAM, Median_value, 
+                               tooltip = STATION_CODE, data_id = STATION_CODE)) +
+    geom_point_interactive(width = 0.07)
+  girafe(ggobj = gg) 
+  
+}
+
+gg <- df_boxplot %>%
+  filter(
+      Matrix %in% "Cod liver",
+      substring(PARAM, 1, 2) == "CB" & PARAM != "CB_S7") %>%
+  mutate(PARAM = factor(PARAM, levels = c("CB28", "CB52", "CB101", "CB118", 
+                                     "CB138", "CB153", "CB180"))) %>%
+  ggplot(aes(PARAM, Median_value)) +
+  geom_boxplot() +
+  geom_jitter(width = 0.07)
+
+gg
+
+```
+
+
+
