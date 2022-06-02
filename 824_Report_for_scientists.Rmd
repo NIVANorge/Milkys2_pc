@@ -28,6 +28,7 @@ library(lubridate)
 library(flextable)
 library(glue)
 library(readxl)
+library(purrr)
 
 library(safejoin) # https://github.com/moodymudskipper/safejoin
 
@@ -60,7 +61,7 @@ dat_all <- readRDS(fn)
 lookup_paramgroup <- read_excel("Input_files_2020/Lookup table - substance groups.xlsx")
 lookup_stations <- read_excel("Files_from_Jupyterhub_2020/Lookup for big excel - stations.xlsx")
 
-dat <- dat_all %>%
+dat_1 <- dat_all %>%
   left_join(lookup_paramgroup %>% select(PARAM, Substance.Group)) %>%
   filter(Substance.Group %in% params$paramgroup) %>%
   add_count(PARAM) %>%
@@ -68,291 +69,317 @@ dat <- dat_all %>%
   left_join(lookup_stations %>% select(STATION_CODE, Station.Name)) %>%
   mutate(Station = paste(STATION_CODE, Station.Name))
 
-params <- unique(dat_sel$PARAM)
+param_values <- unique(dat_1$PARAM)
   
 #
 # Big excel file
 #
 # datxl <- readr::read_csv("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-10-08_ver04.csv")
 datxl <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver03.rds") %>%
-  filter(PARAM %in% params)
+  filter(PARAM %in% param_values)
   
-table(dat$PARAM)
+table(dat_1$PARAM)
 table(datxl$PARAM)  
 
 ```
 
-## CD  
-```{r}
+```{r lookup_eqs_ww}
 
-param <- "CD"
+lookup_eqs_ww <- datxl %>%
+  filter(
+    !is.na(EQS),
+    Basis %in% "WW"
+    ) %>%
+  distinct(PARAM, LATIN_NAME, TISSUE_NAME, EQS) %>%
+  mutate(TISSUE_NAME = case_when(
+    TISSUE_NAME == "Muscle" ~ "Muskel",
+    TISSUE_NAME == "Liver" ~ "Lever",
+    TRUE ~ TISSUE_NAME)
+    ) %>%
+  rename(EQS_WW = EQS)
 
-dat_sel <- dat %>%
-  filter(PARAM %in% param)
-datxl_sel <- datxl %>%
-  filter(PARAM %in% param)
+check <- lookup_eqs_ww %>% 
+  add_count(PARAM, LATIN_NAME, TISSUE_NAME) %>%
+  filter(n > 1)
+
+if (nrow(check) > 0){
+  stop("More than one EQS per parameter!")
+}
+
+dat_2 <- dat_1 %>%
+  left_join(lookup_eqs_ww, by = c("PARAM", "LATIN_NAME", "TISSUE_NAME")) %>%
+  mutate(
+    Above_EQS = case_when(
+      VALUE_WW > EQS_WW ~ "Over",
+      VALUE_WW <= EQS_WW ~ "Under",
+      TRUE ~ as.character(NA))
+  ) 
+
 
 ```
 
 
-### Overview plot    
-```{r, fig.width=9, fig.height=7}
+```{r calc_medians}  
 
-dat_sel %>%
+dat_medium <- dat_2 %>%
   group_by(Station) %>%
   mutate(n_after_2018 = sum(MYEAR >= 2018)) %>%
   filter(
-    n_after_2018 > 0,
-    MYEAR >= 2010) %>%
-  group_by(Station, MYEAR) %>%
-  summarize(VALUE_WW_med = median(VALUE_WW, na.rm = TRUE)) %>%
-  ggplot(aes(MYEAR, Station, fill = VALUE_WW_med)) +
-  geom_tile() +
-  scale_fill_viridis_c(trans = "log10", breaks = c(0.1,1,10,100)) 
+    n_after_2018 > 0) %>%
+  group_by(PARAM, LATIN_NAME, TISSUE_NAME, Station, MYEAR) %>%
+  summarize(VALUE_WW_med = median(VALUE_WW, na.rm = TRUE), .groups = "drop") %>%
+  left_join(lookup_eqs_ww, by = c("PARAM", "LATIN_NAME", "TISSUE_NAME")) %>%
+  mutate(
+    Above_EQS = case_when(
+      VALUE_WW_med > EQS_WW ~ "Over",
+      VALUE_WW_med <= EQS_WW ~ "Under",
+      TRUE ~ as.character(NA))
+  )
+
 
 ```
 
 
-## Data 
 
-### Sampling    
+```{r trend_ww_1}
 
-```{r number_of_samples"}
+#
+# Linear trend
+# Full time series  
+#
 
-dat %>%
-  filter(MYEAR == selected_year) %>%
-  distinct(LATIN_NAME, TISSUE_NAME, SAMPLE_ID) %>%
-  count(LATIN_NAME, TISSUE_NAME) %>%
-  pivot_wider(names_from = TISSUE_NAME, values_from = n, values_fill = 0) %>%
-  flextable() %>%
-  set_caption(glue("Number of samples, by species and tissue ({selected_year})"))
-  
-
-```
-
-
-#### Number of stations  
-```{r}
-
-dat %>%
-  filter(MYEAR == selected_year) %>%
-  distinct(LATIN_NAME, TISSUE_NAME, STATION_ID) %>%
-  count(LATIN_NAME, TISSUE_NAME) %>%
-  pivot_wider(names_from = TISSUE_NAME, values_from = n, values_fill = 0) %>%
-  flextable() %>%
-  set_caption(glue("Number of stations, by species and tissue ({selected_year})"))
-  
-```
-
-
-## Key findings  
-
-
-### Proportion of data over LOQ ('Ratio of detected chemicals')     
-
-
-```{r}
-
-# Define terms for species and tissue for table
-
-if (FALSE){
-  dat %>%
-    filter(MYEAR >= (selected_year - 2)) %>% 
-    xtabs(~PARAM, .)
-  dat %>%
-    filter(MYEAR >= (selected_year - 2)) %>% 
-    xtabs(~LATIN_NAME, .) # %>% names() 
-  dat %>%
-    filter(MYEAR >= (selected_year - 2)) %>% 
-    xtabs(~TISSUE_NAME, .) #   %>% names() 
+get_trend_for_selected_data <- function(data){
+  mod <- lm(VALUE_WW_med ~ MYEAR, data = data)
+  summary(mod)$coef["MYEAR",]
 }
 
-lookup_species <- tribble(
-  ~LATIN_NAME,             ~Species,
-  "Gadus morhua",          "Cod",
-  "Littorina littorea",   "Periwinkle",
-  "Mytilus edulis",       "Blue mussel",
-  "Nucella lapillus",     "Dog whelk",
-  "Platichthys flesus",   "Flatfish",
-  "Somateria mollissima", "Eider duck"
-)
+dat_medium %>%
+  filter(PARAM == "HG", Station == "51A Byrkjenes") %>%
+  get_trend_for_selected_data()
 
-lookup_tissue <- tribble(
-  ~TISSUE_NAME,             ~Tissue,
-  "Blod",                   "Blood",
-  "Egg",                    "Egg",
-  "Galle",                  "Bile",
-  "Lever",                  "Liver",
-  "Liver - microsome",      "Liver - microsome",
-  "Muskel",                 "Muscle",
-  "Whole soft body",        "Soft body"
-)
-
-```
-
-```{r, results='hide'}
-
-# Create data set to print
-
-selected_params <- c("AS", "CD", "CR", "CU", "HG", "NI", "PB", "ZN")
-selected_params <- c("CD", "HG", "CB118", "CB180", "BAP", "PYR", "FLU", "PFOS", "PFOA", "PFOSA", "BDE47", "BDE99")
-
-tab1 <- dat %>%
-  left_join(lookup_species, by = "LATIN_NAME") %>%
-  left_join(lookup_tissue, by = "TISSUE_NAME") %>%
-  filter(
-    MYEAR >= (selected_year - 2),
-    LATIN_NAME %in% c("Gadus morhua", "Mytilus edulis", "Somateria mollissima"),
-    PARAM %in% selected_params) %>%
-  mutate(
-    Matrix = case_when(
-      Species %in% "Blue mussel" ~ Species,
-      TRUE ~ paste(Species, tolower(Tissue)))
-      ) %>%
-  group_by(PARAM, MYEAR, Matrix) %>%
-  summarise(Detection_perc = round(mean(is.na(FLAG1))*100, digits = 0),
-            .groups = "drop") 
-
-tab2 <- tab1 %>%
-  pivot_wider(names_from = "Matrix", values_from = "Detection_perc")
-
-tab1
-
-
-```
-
-#### *Table 3 - version a.* 
-
-```{r flextable3a}
-
-# Make flextable using 'tabulator'  
-#   - Nice layout in left column  
-# From this example:
-#   https://ardata-fr.github.io/flextable-book/get-flextable-from-objects.html
-
-
-matrix_order <- c("Blue mussel", "Cod liver", "Cod muscle", 
-                  "Eider duck egg", "Eider duck blood")
-                  
-tab1_for_flextable <- tab1 %>% 
-  mutate(Year = as.character(MYEAR),
-         Matrix = factor(Matrix, levels = matrix_order)) %>%
-  rename(Parameter = PARAM) %>%
-  arrange(Matrix)
-
-myformat <- function(x){
-  ifelse(is.na(x), "-",
-         as.character(round(x))
-  )
+get_trend <- function(param, species, tissue, station, firstyear = NULL, data){
+  data_sel <- data %>%
+    filter(PARAM == param, LATIN_NAME == species, 
+           TISSUE_NAME == tissue, Station == station)
+  if (!is.null(firstyear)){
+    data_sel <- data_sel %>%
+      filter(MYEAR >= firstyear)
+  }
+  if (nrow(data_sel) >= 3){
+    mod <- lm(log(VALUE_WW_med)  ~ MYEAR, data = data_sel)
+    coef <- data.frame(summary(mod)$coef)
+    result <- coef[2,]
+    names(result) <- c("Est", "SE", "t", "P")
+    result_meta <- data.frame(
+      PARAM = param, LATIN_NAME = species, 
+      TISSUE_NAME = tissue, Station = station)
+    result <- cbind(result_meta, result)
+  } else {
+    result <- NULL
+  }
+  result
 }
 
-# debugonce(tabulator)
-# debugonce(as_flextable)
-ct <- tabulator(
-  x = tab1_for_flextable, 
-  rows = c("Parameter", "Year"),
-  columns = "Matrix",
-  row_compose = list(
-    Parameter = as_paragraph(as_chunk(Parameter))
-  ),
-  `z stats` = as_paragraph(
-    as_chunk(Detection_perc, formatter = myformat)
-  )
-)
-ft <- as_flextable(ct, separate_with = "Parameter")
-ft
+# Test 
+
+# debugonce(get_trend)
+# get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium)
+# get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium, firstyear = 2011)
+# get_trend("HG", "Gadus morhua", "Muskel", "02B Kirkøy (north)", data = dat_medium)
 
 
 ```
 
-#### *Table 3 - version b.*   
+```{r trend_ww_2}
 
-```{r flextable3b}
+# Get all regression estimates as list
 
-# Make flextable without 'tabulator'  
-#   - Not so nice layout in left column (picked just one year of data)   
-#   - But we can have colored cells  
-# From this example:
-#   https://ardata-fr.github.io/flextable-book/get-flextable-from-objects.html
+get_all_trends <- function(series, firstyear = NULL, data){
+  
+  trend_coef_list <- list(
+    param = series$PARAM,
+    species = series$LATIN_NAME,
+    tissue = series$TISSUE_NAME,
+    station = series$Station) %>% purrr::pmap(get_trend, firstyear = firstyear, data = data)
+  
+  # Find those that failed  
+  failed <- trend_coef_list %>% map_lgl(~is.null(.))
+  mean(failed)
+  
+  # Put togethr to a data frame  
+  trend_coef <- trend_coef_list[!failed] %>% 
+    bind_rows() %>%
+    mutate(CI_lo = Est - 2*SE, 
+           CI_up = Est + 2*SE,
+           Trend = case_when(
+             CI_lo > 0 ~ "Up",
+             CI_up < 0 ~ "Down",
+             TRUE ~ "Inconclusive")
+    )
+  
+  trend_coef
+  
+}
 
-tab1 <- dat %>%
-  left_join(lookup_species, by = "LATIN_NAME") %>%
-  left_join(lookup_tissue, by = "TISSUE_NAME") %>%
-  filter(
-    MYEAR >= (selected_year - 2),
-    LATIN_NAME %in% c("Gadus morhua", "Mytilus edulis", "Somateria mollissima"),
-    PARAM %in% selected_params) %>%
-  mutate(
-    Matrix = case_when(
-      Species %in% "Blue mussel" ~ Species,
-      TRUE ~ paste(Species, tolower(Tissue)))
-      ) %>%
-  group_by(PARAM, MYEAR, Matrix) %>%
-  summarise(Detection_perc = round(mean(is.na(FLAG1))*100, digits = 0),
-            .groups = "drop")
-
-tab2 <- tab1 %>%
-  filter(MYEAR == 2020) %>%
-  select(PARAM, Matrix, Detection_perc) %>%
-  pivot_wider(names_from = Matrix, values_from = Detection_perc)
-# tab2
-
-flextable(tab2) %>%
-  # background color
-  bg(j = 2:6, bg = scales::col_numeric(palette = "viridis", domain = c(-0, 100))) %>%
-  # font color white for the darkest cells  
-  color(j = 2:6, color = function(x) {ifelse(x < 50, "white", "black")})
 
 ```
 
-## Box plot   
 
+```{r trend_ww_3}
+
+trend_series <- dat_medium %>%
+  filter(!is.na(VALUE_WW_med)) %>%
+  count(PARAM, LATIN_NAME, TISSUE_NAME, Station) %>%
+  filter(n >= 3)
+
+trend_coef_long <- get_all_trends(series = trend_series, data = dat_medium)
+trend_coef_10yr <- get_all_trends(series = trend_series, data = dat_medium, firstyear = 2011)
+
+
+```
+
+
+
+## HG  
 ```{r}
 
-df_boxplot <- dat %>%
-  left_join(lookup_species, by = "LATIN_NAME") %>%
-  left_join(lookup_tissue, by = "TISSUE_NAME") %>%
+param <- "HG"
+species <- "Mytilus edulis" 
+tissue <- "Whole soft body" 
+
+param <- "HG"
+species <- "Gadus morhua" 
+tissue <- "Muskel" 
+
+
+datxl_sel <- datxl %>%
   filter(
-    MYEAR == 2020,
-    #PARAM %in% c("AS", "CD", "CR", "CU", "HG", "NI", "PB", "ZN")
-    ) %>%
-  mutate(
-    Matrix = case_when(
-      Species %in% "Blue mussel" ~ Species,
-      TRUE ~ paste(Species, tolower(Tissue)))
-      ) %>%
-  group_by(PARAM, MYEAR, Matrix, STATION_CODE, .groups = "drop") %>%
-  summarise(Median_value = median(VALUE_WW))   
+    PARAM %in% param, 
+    LATIN_NAME %in% species,
+    TISSUE_NAME %in% tissue)
 
-```
+dat_sel <- dat_2 %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species)  
 
-```{r }
+dat_sel_medium <- dat_medium %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species)
 
-if (FALSE){
-  
-  # Boxplot with ggiraph - didn't work
-  library(ggiraph)
+station_order <- c(
+  "19B NA", "10B Varangerfjord", "45B2 Hammerfest (havn)", "43B2 Tromsø harbour",
+  "98B1 Lofoten, Skrova", "96B Helgelandskysten area by Sandnessjøen", 
+   "80B Munkholmen", "13B Kristiansand harbour", "28B Ålesund area by Hundsvær",
+  "24B Bergen havn", "23B Bømlo north", "53B Inner Sørfjord", 
+  "15B Farsund area", "71B Grenlandsfjorden Breviks area", 
+  "36B Færder area", "30B Inner Oslofjord", "02B Kirkøy (north)")
  
-  gg <- ggplot(df_boxplot, aes(PARAM, Median_value, 
-                               tooltip = STATION_CODE, data_id = STATION_CODE)) +
-    geom_point_interactive(width = 0.07)
-  girafe(ggobj = gg) 
-  
-}
+dat_sel_medium$Station <- factor(dat_sel_medium$Station, levels = rev(station_order))
 
-gg <- df_boxplot %>%
-  filter(
-      Matrix %in% "Cod liver",
-      substring(PARAM, 1, 2) == "CB" & PARAM != "CB_S7") %>%
-  mutate(PARAM = factor(PARAM, levels = c("CB28", "CB52", "CB101", "CB118", 
-                                     "CB138", "CB153", "CB180"))) %>%
-  ggplot(aes(PARAM, Median_value)) +
-  geom_boxplot() +
-  geom_jitter(width = 0.07)
-
-gg
 
 ```
 
 
 
+
+### Overview plot    
+```{r, fig.width=11, fig.height=7}
+
+yrs <- 2005:2021
+  
+ggplot(dat_sel_medium %>% filter(MYEAR %in% yrs), aes(MYEAR, Station, fill = VALUE_WW_med)) +
+  geom_tile() +
+  geom_tile(data = dat_sel_medium %>% filter(MYEAR %in% yrs, Above_EQS %in% "Over"),
+            color = "red", size = 1.5) +
+  geom_text(aes(label = round(VALUE_WW_med, 3)), size = 3) +
+  scale_fill_viridis_c(trans = "log10", breaks = c(0.1,1,10,100)) +
+  scale_color_manual(values = c("red", "white")) +
+  scale_alpha_manual(values = c(1, 0)) +
+  scale_x_continuous(breaks = seq(2005, 2020, 2))
+
+# unique(dat_sel_medium$Station) %>% dput()
+
+
+```
+
+
+
+```{r}
+
+trend_coef_long_sel <- trend_coef_long %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species)
+
+trend_coef_10yr_sel <- trend_coef_10yr %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species)
+
+trend_coef_long_sel$Station <- factor(trend_coef_long_sel$Station, levels = rev(station_order))
+trend_coef_10yr_sel$Station <- factor(trend_coef_10yr_sel$Station, levels = rev(station_order))
+
+ggplot(trend_coef_long_sel, aes(x = Station)) +
+  geom_pointrange(aes(y = Est, ymin = CI_lo, ymax = CI_up, color = Trend)) +
+  scale_color_manual(values = c("green2", "grey20", "red2")) +
+  coord_flip(ylim = range(trend_coef_long_sel$Est))
+
+ggplot(trend_coef_10yr_sel, aes(x = Station)) +
+  geom_pointrange(aes(y = Est, ymin = CI_lo, ymax = CI_up, color = Trend)) +
+  scale_color_manual(values = c("green2", "grey20", "red2")) +
+  coord_flip(ylim = range(trend_coef_10yr_sel$Est))
+
+```
+### Combine  
+```{r, fig.width=13, fig.height=9}
+
+yrs <- 2004:2020
+
+dat_sel_medium_plot <- dat_sel_medium %>%
+  mutate(Station2 = substr(Station, 1, 15),
+         Station2 = factor(Station2, levels = rev(substr(station_order, 1, 15))))
+
+gg1 <- ggplot(dat_sel_medium_plot %>% filter(MYEAR %in% yrs), 
+              aes(MYEAR, Station2, fill = VALUE_WW_med)) +
+  geom_tile() +
+  geom_tile(data = dat_sel_medium_plot %>% filter(MYEAR %in% yrs, 
+                                             Above_EQS %in% "Over"),
+            color = "red", size = 1.5) +
+  geom_text(aes(label = round(VALUE_WW_med, 3)), size = 3) +
+  scale_fill_viridis_c(trans = "log10", breaks = c(0.1,1,10,100)) +
+  scale_color_manual(values = c("red", "white")) +
+  scale_alpha_manual(values = c(1, 0)) +
+  scale_x_continuous(breaks = seq(2004, 2020, 2)) +
+  theme(legend.position = "none")
+
+gg_list <- list(trend_coef_long_sel, trend_coef_10yr_sel) %>%
+  map(
+    ~ggplot(., aes(x = Station)) +
+      geom_pointrange(aes(y = Est, ymin = CI_lo, ymax = CI_up, color = Trend)) +
+      scale_color_manual(values = c("green2", "grey20", "red2")) +
+      geom_hline(yintercept = 0) +
+      coord_flip(ylim = range(.$Est)) +
+      theme_bw())
+
+gg_list[[1]] <- gg_list[[1]] 
+  
+
+# Test
+# cowplot::plot_grid(gg1, 
+#                    gg2, 
+#                    nrow = 1)
+
+cowplot::plot_grid(gg1, 
+                   gg_list[[1]] + 
+                     theme(axis.title.y = element_blank(),
+                           axis.text.y = element_blank(),
+                           legend.position = "none"), 
+                   gg_list[[2]] + 
+                     theme(axis.title.y = element_blank(),
+                           axis.text.y = element_blank()), 
+                   rel_widths = c(2.8, 0.6, 1),
+                   nrow = 1)
+
+```
