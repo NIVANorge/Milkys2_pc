@@ -2,36 +2,14 @@
 title: "Kortrapport - eksempler"
 author: "DHJ"
 date: "27 4 2022"
+params:
+  paramgroup: Metals and metalloids
 output: 
   bookdown::html_document2: default  
     
 ---
 
 * Basert på 'Mal_for_kortrapport'  
-
-```{r, echo=FALSE}
-
-# The template (mal) is here:
-# Info/Rapportering/Vedlegg_6_-_Mal_for_kortrapport.pdf  
-
-#
-# Note: we use bookdown, which should allow for table + figure cross-references  
-# https://bookdown.org/yihui/bookdown/cross-references.html
-#
-# BUT should use Quarto instead, for the cross-references?
-# See here: https://quarto.org/docs/get-started/authoring/jupyter.html#cross-references
-#
-# In the words of Yihui himself:
-#   "One example is the implementation of figure cross-references. I have to admit that I never liked my own implementation #    in bookdown, which was hackish. That’s why I have never ported this important and useful feature back into rmarkdown." # https://yihui.org/en/2022/04/quarto-r-markdown/
-#
-# Quarto can also make tabsets:
-# https://quarto.org/docs/presentations/revealjs/index.html#tabsets
-# (but: "Note that one significant disadvantage to tabsets is that only the first tab
-#  will be visible when printing to PDF")
-
-
-```
-    
 
 
 ```{r, echo=FALSE}
@@ -49,6 +27,7 @@ library(ggplot2)
 library(lubridate)
 library(flextable)
 library(glue)
+library(readxl)
 
 library(safejoin) # https://github.com/moodymudskipper/safejoin
 
@@ -62,16 +41,79 @@ selected_year <- 2020
 
 ```
 
+
 ## Report contents        
 
 This report is based on Milkys data through **`r selected_year`**.     
 
 ```{r read_data}
 
+#
+# Raw data
+#
 fn <- "Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds"                         # data FROM Milkys2 on PC 
-dat <- readRDS(fn)
+dat_all <- readRDS(fn)
+
+#
+# Parameter groups
+#
+lookup_paramgroup <- read_excel("Input_files_2020/Lookup table - substance groups.xlsx")
+lookup_stations <- read_excel("Files_from_Jupyterhub_2020/Lookup for big excel - stations.xlsx")
+
+dat <- dat_all %>%
+  left_join(lookup_paramgroup %>% select(PARAM, Substance.Group)) %>%
+  filter(Substance.Group %in% params$paramgroup) %>%
+  add_count(PARAM) %>%
+  filter(n >= 100) %>%
+  left_join(lookup_stations %>% select(STATION_CODE, Station.Name)) %>%
+  mutate(Station = paste(STATION_CODE, Station.Name))
+
+params <- unique(dat_sel$PARAM)
+  
+#
+# Big excel file
+#
+# datxl <- readr::read_csv("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-10-08_ver04.csv")
+datxl <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver03.rds") %>%
+  filter(PARAM %in% params)
+  
+table(dat$PARAM)
+table(datxl$PARAM)  
 
 ```
+
+## CD  
+```{r}
+
+param <- "CD"
+
+dat_sel <- dat %>%
+  filter(PARAM %in% param)
+datxl_sel <- datxl %>%
+  filter(PARAM %in% param)
+
+```
+
+
+### Overview plot    
+```{r, fig.width=9, fig.height=7}
+
+dat_sel %>%
+  group_by(Station) %>%
+  mutate(n_after_2018 = sum(MYEAR >= 2018)) %>%
+  filter(
+    n_after_2018 > 0,
+    MYEAR >= 2010) %>%
+  group_by(Station, MYEAR) %>%
+  summarize(VALUE_WW_med = median(VALUE_WW, na.rm = TRUE)) %>%
+  ggplot(aes(MYEAR, Station, fill = VALUE_WW_med)) +
+  geom_tile() +
+  scale_fill_viridis_c(trans = "log10", breaks = c(0.1,1,10,100)) 
+
+```
+
+
+## Data 
 
 ### Sampling    
 
