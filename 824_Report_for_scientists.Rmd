@@ -29,6 +29,7 @@ library(flextable)
 library(glue)
 library(readxl)
 library(purrr)
+library(leftcensored)   # DHJ's package (https://github.com/DagHjermann/leftcensored)
 
 library(safejoin) # https://github.com/moodymudskipper/safejoin
 
@@ -127,7 +128,15 @@ dat_medium <- dat_2 %>%
   filter(
     n_after_2018 > 0) %>%
   group_by(PARAM, LATIN_NAME, TISSUE_NAME, Station, MYEAR) %>%
-  summarize(VALUE_WW_med = median(VALUE_WW, na.rm = TRUE), .groups = "drop") %>%
+  summarize(
+    VALUE_WW_med = median(VALUE_WW, na.rm = TRUE),
+    N = n(),
+    N_underLOQ = sum(FLAG1 %in% "<"),
+    Prop_underLOQ = N_underLOQ/N,
+    FLAG1 = case_when(
+      Prop_underLOQ < 0.5 ~ as.character(NA),
+      Prop_underLOQ >= 0.5 ~ "<"),
+    .groups = "drop") %>%
   left_join(lookup_eqs_ww, by = c("PARAM", "LATIN_NAME", "TISSUE_NAME")) %>%
   mutate(
     Above_EQS = case_when(
@@ -136,7 +145,7 @@ dat_medium <- dat_2 %>%
       TRUE ~ as.character(NA))
   )
 
-
+?leftcensored_lm
 ```
 
 
@@ -148,45 +157,34 @@ dat_medium <- dat_2 %>%
 # Full time series  
 #
 
-get_trend_for_selected_data <- function(data){
-  mod <- lm(VALUE_WW_med ~ MYEAR, data = data)
-  summary(mod)$coef["MYEAR",]
-}
-
-dat_medium %>%
-  filter(PARAM == "HG", Station == "51A Byrkjenes") %>%
-  get_trend_for_selected_data()
-
-get_trend <- function(param, species, tissue, station, firstyear = NULL, data){
-  data_sel <- data %>%
-    filter(PARAM == param, LATIN_NAME == species, 
-           TISSUE_NAME == tissue, Station == station)
-  if (!is.null(firstyear)){
-    data_sel <- data_sel %>%
-      filter(MYEAR >= firstyear)
-  }
-  if (nrow(data_sel) >= 3){
-    mod <- lm(log(VALUE_WW_med)  ~ MYEAR, data = data_sel)
-    coef <- data.frame(summary(mod)$coef)
-    result <- coef[2,]
-    names(result) <- c("Est", "SE", "t", "P")
-    result_meta <- data.frame(
-      PARAM = param, LATIN_NAME = species, 
-      TISSUE_NAME = tissue, Station = station)
-    result <- cbind(result_meta, result)
-  } else {
-    result <- NULL
-  }
-  result
-}
 
 # Test 
 
-# debugonce(get_trend)
-# get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium)
-# get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium, firstyear = 2011)
-# get_trend("HG", "Gadus morhua", "Muskel", "02B Kirkøy (north)", data = dat_medium)
+if (FALSE){
+  # debugonce(get_trend)
+  get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium)
+  get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_2, y = "VALUE_WW")
+  milkys_select_rows("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium)
+  
+  get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium, firstyear = 2011)
+  get_trend("HG", "Gadus morhua", "Muskel", "02B Kirkøy (north)", data = dat_medium)
+  
+  get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium)
+  
+}
 
+?leftcensored_prepare
+
+xtabs(~PARAM + addNA(FLAG1), dat_medium %>% filter(LATIN_NAME == "Mytilus edulis"))
+
+test1 <- milkys_select_rows("AG", "Mytilus edulis", data = dat_medium)
+xtabs(~Station + addNA(FLAG1), test1)
+ggplot(test1, aes(MYEAR, VALUE_WW_med, color = FLAG1)) + 
+  geom_point() + 
+  facet_wrap("Station") +
+  scale_y_log10()
+
+test2 <- leftcensored_prepare(test1, var_year = "MYEAR", var_concentration = VALUE_WW_med)
 
 ```
 
@@ -381,5 +379,15 @@ cowplot::plot_grid(gg1,
                            axis.text.y = element_blank()), 
                    rel_widths = c(2.8, 0.6, 1),
                    nrow = 1)
+
+# tidstrend punkter: pil/trekant opp/ned avhengig av retning
+# < som ekstra tegn over konsentrasjon
+# farger i hht, proref
+# følg grense på 5 år for trender  
+#  
+# For siste år: boksplott (med proref lagt på som linjer)  
+#
+# "Stor excel" også - trenger ikke være formatert
+# 
 
 ```
