@@ -14,6 +14,10 @@ NOTE:
 * SAMPLED_DATE is sometimes empty. Therefore, it is safe to collect data on the basis of PROSJEKT or ACCOUNT   
 * Data may be from to types of accounts: Milkys and 'lange tidsserier'. The same sample may be registered in one or both (see 4c)      
     - However, X_BULK_BIO should be the same for both (see 4b-4c 4b below)    
+    
+ALSO NOTE:  
+* This script needs a bit of change every year - specifically, one needs to copy one of the parts 4-7 and change year in it  
+* Also remember to change 20  
 
 
 
@@ -59,14 +63,20 @@ if (FALSE){
 ```
 
 
-## 2. Set username and pasword for Nivabasen  
+## 2. Set username and pasword for Nivabasen   
+
+* Not needed if credentials have been set using keyring::key_set  
+    - See ?get_nivabase_selection for walk-through 
+
 ```{r}
 
-set_credentials()
+# Not needed for DHJ
+# set_credentials()
 
 ```
 
 ## 3. Check samples from all years  
+
 ```{r}
 
 # Get projects, but doesn't really make sense since the projects names fiffer from those in PROJECT in table LABWARE_CHECK_SAMPLE
@@ -225,7 +235,7 @@ labware_2019 %>%
 ```
 
 
-## 5. 2020 data  
+## 6. 2020 data  
 
 ### a. Checking values of PROSJEKT  
 * PROSJEKT including 'MILKYS': one found, 'MILKYS2019'   
@@ -285,8 +295,87 @@ labware_2020 <- get_nivabase_data(
 ```
 
 
-## 6. Save  
-Data should then be uploaded to Jupyterhub Milkys2, folder 'Input_data', for use there       
+
+## 7. 2021 data  
+
+### a. Checking values of PROSJEKT  
+* PROSJEKT including 'MILKYS': one found, 'MILKYS2019'   
+* PROSJEKT including 'tidsserier': none found     
+```{r}
+
+check1 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where upper(PROSJEKT) like '%MILKYS%'")
+check1 %>%
+  count(ACCOUNT_NUMBER, PROSJEKT)
+  
+
+check2 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where lower(PROSJEKT) like '%tidsserier%'")
+table(check2$PROSJEKT)
+check2 %>%
+  count(ACCOUNT_NUMBER, PROSJEKT)
+
+# 2021 data - NOTE: HARD-CODED
+dat_2021 <- dat %>%
+  filter(grepl("2021", TEXT_ID))
+
+# tail(dat$SAMPLED_DATE, 200)
+sel <- grepl("2020", dat$TEXT_ID)
+sum(sel)   # 656
+mean(sel)  # 0.18
+
+# None fitting (only "O 190142; BL_ID - Lange tidsserier i kystvann; Bl<f8>tbunnsidentifisering")
+```
+
+
+### b. Get data    
+```{r}
+
+prosj <- unique(dat_2021$PROSJEKT)
+cat("Name of project", prosj, " \n\n")
+
+#
+# Approach a
+# 
+labware_2021_a <- get_nivabase_selection(
+  "*",
+  "LABWARE_CHECK_SAMPLE", 
+  "TEXT_ID",
+  dat_2021$TEXT_ID, values_are_text = TRUE)
+
+#
+# Approach b
+# 
+search_string <- paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT =", sQuote(prosj)
+)
+
+labware_2021_b <- get_nivabase_data(search_string) %>%
+  mutate(PROSJEKT = oracle_fix_norw_letters(PROSJEKT),
+         DESCRIPTION = oracle_fix_norw_letters(DESCRIPTION)
+         )
+
+#
+# Check approach a vs approach b
+#
+nrow(labware_2021_a)
+nrow(labware_2021_b)
+
+table(labware_2021_a$AQUAMONITOR_CODE)
+table(labware_2021_b$AQUAMONITOR_CODE)
+
+# 
+# Use approach b
+#
+labware_2021 <- labware_2021_b
+
+```
+
+
+## 20. Save   
+
+* Data should then be uploaded to Jupyterhub Milkys2, folder 'Input_data', for use there  
+
 ```{r}
 
 # Needs only be save if different from previously downloaded data
@@ -304,11 +393,16 @@ if (FALSE){
   saveRDS(labware_2019, paste0("Data_to_upload_to_Jupyterhub/", filename))
   cat("File", sQuote(filename), "saved for 2019 \n")
   
+  filename <- paste0("Labware_samples_2020_", file_date, ".rds")
+  saveRDS(labware_2020, paste0("Files_to_Jupyterhub_2020/", filename))
+  cat("File", sQuote(filename), "saved for 2020 \n")
+  
 }
 
-filename <- paste0("Labware_samples_2020_", file_date, ".rds")
-saveRDS(labware_2020, paste0("Files_to_Jupyterhub_2020/", filename))
-cat("File", sQuote(filename), "saved for 2020 \n")
+filename <- paste0("Labware_samples_2021_", file_date, ".rds")
+saveRDS(labware_2021, paste0("Files_to_Jupyterhub_2021/", filename))
+cat("File", sQuote(filename), "saved for 2021 \n")
+
 
 ```
 
