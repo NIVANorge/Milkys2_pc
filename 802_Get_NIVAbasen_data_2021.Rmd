@@ -3,6 +3,17 @@ title: "802 Get chemical data from NIVAbasen"
 output: html_document
 ---
 
+## Download raw data for use in Jupyterhub  
+
+* Data are fetched from Nivadatabase (Aquamonitor, but not *using* Aquamonitor)    
+
+* From 04.06.2022, we also started add data from Labware (part 5)  
+    - the final data (df_2021_both) were combining Nivadatabase data (df_2021) with Labware data with status C, P and I
+    to create the final data set saved in step 6 (before, part 4 was the final part) 
+    - This was done to also include data "stalled" in Labware because some parameters (PFAS) had not been entered into LIMS     
+    - Thus, "01_df_2021_notstandard_2022-06-04.rds" contains many more rows (19875 vs 5547) and
+    two more variables (STATUS + STATUSX) compared to the file made two days before (2022-06-02)  
+
 ## 1. Libraries
 ```{r setup, include=FALSE}
 # install.packages("niRvana")
@@ -102,48 +113,50 @@ df_data <- get_biota_chemistry(
 
 ## 4. Save data from Nivadatabase  
 
+* Note: from 06.04.2022, we go one step further and add data from Labware (part 5) and save tht combined data in step 6 
+
 ```{r}
-#
-# Latest data data
-#
-
-# Folder name
-name_folder <- paste0("Files_to_Jupyterhub_", sampling_year)
-
-# Make folder, if it doesn't already exist:
-if (!dir.exists(name_folder)){
-  dir.create(name_folder)
-}
-
-# Make timestamp (date stamp actually)
-t <- Sys.time()
-timestamp <- substr(t, 1, 10)
-
-# File name
-name_file <- paste0("01_df_", sampling_year, "_notstandard_", timestamp, ".rds")
-
-name_fullpath <- paste0(name_folder, "/", name_file)
-
-# Set to TRUE/FALSE depending on whether file should be saved or not  
-if (FALSE){
-
-  saveRDS(df_2021, file = name_fullpath)
-  cat("2021 data saved as rds,", sQuote(name_fullpath), "\n")
-  name_fullpath_txt <- sub("rds", "csv", name_fullpath)
-  write.csv(df_2021, file = name_fullpath_txt, fileEncoding = "UTF-8")
-  cat("2021 data saved as csv,", sQuote(name_fullpath_txt), "\n")
-
-}
-
-# Set to TRUE/FALSE depending on whether file should be read or not  
-if (FALSE){
-  
-  # Depends only on part 1 above
-  name_folder <- paste0("Files_to_Jupyterhub_", sampling_year)
-  fn_rds <- dir(name_folder, pattern = paste0("01_df_", sampling_year, "_notstandard.+.rds$"))
-  df_2021 <- readRDS(paste0(name_folder, "/", tail(fn_rds, 1)))
-  
-}
+# #
+# # Latest data data
+# #
+# 
+# # Folder name
+# name_folder <- paste0("Files_to_Jupyterhub_", sampling_year)
+# 
+# # Make folder, if it doesn't already exist:
+# if (!dir.exists(name_folder)){
+#   dir.create(name_folder)
+# }
+# 
+# # Make timestamp (date stamp actually)
+# t <- Sys.time()
+# timestamp <- substr(t, 1, 10)
+# 
+# # File name
+# name_file <- paste0("01_df_", sampling_year, "_notstandard_", timestamp, ".rds")
+# 
+# name_fullpath <- paste0(name_folder, "/", name_file)
+# 
+# # Set to TRUE/FALSE depending on whether file should be saved or not  
+# if (FALSE){
+# 
+#   saveRDS(df_2021, file = name_fullpath)
+#   cat("2021 data saved as rds,", sQuote(name_fullpath), "\n")
+#   name_fullpath_txt <- sub("rds", "csv", name_fullpath)
+#   write.csv(df_2021, file = name_fullpath_txt, fileEncoding = "UTF-8")
+#   cat("2021 data saved as csv,", sQuote(name_fullpath_txt), "\n")
+# 
+# }
+# 
+# # Set to TRUE/FALSE depending on whether file should be read or not  
+# if (FALSE){
+#   
+#   # Depends only on part 1 above
+#   name_folder <- paste0("Files_to_Jupyterhub_", sampling_year)
+#   fn_rds <- dir(name_folder, pattern = paste0("01_df_", sampling_year, "_notstandard.+.rds$"))
+#   df_2021 <- readRDS(paste0(name_folder, "/", tail(fn_rds, 1)))
+#   
+# }
 
 ```
 
@@ -338,7 +351,10 @@ full_join(tab_lab, tab_nivadatabase, by = "STATION_CODE")
 
 ```
 
-### Combine  
+### Combine   
+
+* Use status C, P and I only - this avoids adding data already in 'df_2021'  
+
 ```{r}
 
 df_2021_both <- bind_rows(
@@ -350,7 +366,32 @@ df_2021_both <- bind_rows(
 ```
 
 
-## 4. Save data from Nivadatabase + LIMS   
+### Check some data  
+```{r}
+
+df_2021 %>% filter(STATION_CODE %in% "53B") %>% View()
+# Muscle (Hg) data only
+
+df_2021_both %>% filter(STATION_CODE %in% "53B") %>% View()
+
+
+```
+
+
+### Check for duplicates  
+```{r}
+
+check <- df_2021_both %>%
+  count(STATION_CODE, LATIN_NAME, TISSUE_NAME, NAME, SAMPLE_NO) %>%
+  filter(n > 1)
+
+nrow(check)  # should be zero
+
+```
+
+
+
+## 6. Save data from Nivadatabase + LIMS   
 
 ```{r}
 #
@@ -377,10 +418,10 @@ name_fullpath <- paste0(name_folder, "/", name_file)
 # Set to TRUE/FALSE depending on whether file should be saved or not  
 if (FALSE){
 
-  saveRDS(df_2021, file = name_fullpath)
+  saveRDS(df_2021_both, file = name_fullpath)
   cat("2021 data saved as rds,", sQuote(name_fullpath), "\n")
   name_fullpath_txt <- sub("rds", "csv", name_fullpath)
-  write.csv(df_2021, file = name_fullpath_txt, fileEncoding = "UTF-8")
+  write.csv(df_2021_both, file = name_fullpath_txt, fileEncoding = "UTF-8")
   cat("2021 data saved as csv,", sQuote(name_fullpath_txt), "\n")
 
 }
