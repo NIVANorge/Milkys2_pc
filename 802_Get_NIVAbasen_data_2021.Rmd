@@ -3,13 +3,14 @@ title: "802 Get chemical data from NIVAbasen"
 output: html_document
 ---
 
-## Libraries
+## 1. Libraries
 ```{r setup, include=FALSE}
 # install.packages("niRvana")
 
 library(dplyr)
 library(ggplot2)
 library(lubridate)
+library(stringr)
 
 # And then the niRvana package. If you need to install it, then run thee next line also:
 # devtools::install_github("NIVANorge/niRvana")
@@ -27,7 +28,7 @@ sampling_year <- 2021
 ```
 
 
-## Get new(er) data
+## 2. Get new(er) data
 
 ### Give your username and password to R (only once per R session):
 ```{r}
@@ -79,7 +80,7 @@ df_specimens %>%
 
 
 
-## Get the data itself  
+## 3. Get the data itself  
 Get data frame of chemical data for all samples for the measurement year   
 - LATIN_NAME is included  
 ```{r, results = FALSE}
@@ -99,7 +100,8 @@ df_data <- get_biota_chemistry(
 
 
 
-### Save 
+## 4. Save data from Nivadatabase  
+
 ```{r}
 #
 # Latest data data
@@ -113,12 +115,12 @@ if (!dir.exists(name_folder)){
   dir.create(name_folder)
 }
 
-# File name
-name_file <- paste0("01_df_", sampling_year, "_notstandard_", timestamp, ".rds")
-
 # Make timestamp (date stamp actually)
 t <- Sys.time()
 timestamp <- substr(t, 1, 10)
+
+# File name
+name_file <- paste0("01_df_", sampling_year, "_notstandard_", timestamp, ".rds")
 
 name_fullpath <- paste0(name_folder, "/", name_file)
 
@@ -136,6 +138,7 @@ if (FALSE){
 # Set to TRUE/FALSE depending on whether file should be read or not  
 if (FALSE){
   
+  # Depends only on part 1 above
   name_folder <- paste0("Files_to_Jupyterhub_", sampling_year)
   fn_rds <- dir(name_folder, pattern = paste0("01_df_", sampling_year, "_notstandard.+.rds$"))
   df_2021 <- readRDS(paste0(name_folder, "/", tail(fn_rds, 1)))
@@ -143,6 +146,259 @@ if (FALSE){
 }
 
 ```
+
+
+
+## 5. Add data from Labware  
+
+### Get data  
+```{r}
+
+# From QC_Chemistry app. Failed with "table or view does not exist"
+# df_labware <- get_nivabase_data("select * from labware.v_app_chemistry_qc_project where PROSJEKT = 'O 210200.ANAIN'")  
+
+test <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where rownum < 5")
+test <- get_nivabase_data("select * from NIVADATABASE.STATIONS where rownum < 5")
+
+df_labware <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN'")
+nrow(df_labware) # 20153
+
+df_labware_meta <- get_nivabase_data("select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT = 'O 210200.ANAIN'")
+nrow(df_labware_meta) # 982
+
+# Save safety copy  
+if (FALSE){
+
+  sampling_year <- 2021
+  
+    # Make timestamp (date stamp actually)
+  t <- Sys.time()
+  timestamp <- substr(t, 1, 10)
+  
+  # File name, data  
+  name_file <- paste0("01_labware_", sampling_year, "_", timestamp, ".rds")
+  name_fullpath <- paste0(name_folder, "/", name_file)
+  
+  # Save
+  saveRDS(df_labware, name_fullpath)
+
+  # File name, metadata
+  name_file <- paste0("01_labwaremeta_", sampling_year, "_", timestamp, ".rds")
+  name_fullpath <- paste0(name_folder, "/", name_file)
+  
+  # Save
+  saveRDS(df_labware_meta, name_fullpath)
+}
+
+
+```
+
+
+### Check 1: Sample dates  
+
+```{r}
+
+df_labware %>%
+  count(AQUAMONITOR_CODE, SAMPLED_DATE) %>%
+  ggplot() +
+  geom_text(aes(x = SAMPLED_DATE, y = 1, label = AQUAMONITOR_CODE), position = "jitter") 
+
+```
+
+
+### Check 2: Parameter names    
+
+* Compare the names sent to Milkys2 on Jupyterhub (n1) to those that we find in REPORTED_NAME (n3)    
+* n1 contains many that we don't find inn3, but n1 is much longer
+     - n1 contains for instance botn "BDE-49" (not found in n3) and "BDE49" (found in n3)   
+     - all the n1 names are names that are standardized in the scripts on Jupyterhub  
+     - so it's more important that there are few (and unimportant) parameters that are Labware but not in Nivabase 2020 (the last list)  
+
+```{r}
+
+# 2020 data sent to Milkys2 on Jupyterhub
+fn <- "Files_to_Jupyterhub_2020/01_df_2020_notstandard_2022-01-05.rds"         # data sent FROM Milkys2_pc to Milkys2 on Jupyterhub 
+df_2020 <- readRDS(fn)
+# table(df_2020$SAMPLE_DATE)
+
+n1 <- unique(df_2020$NAME) %>% sort()
+n2 <- unique(df_2021$NAME) %>% sort()
+n3 <- unique(df_labware$REPORTED_NAME) %>% sort()
+
+cat("length(n1):", length(n1), "\n")
+cat("length(n2):", length(n2), "\n")
+cat("length(n3):", length(n3), "\n")
+
+# Test setdiff
+# setdiff(1:10, 5:20)
+
+cat("In Nivabase 2020 and not in Labware: \n")
+# setdiff(n1, n3)  
+# - long list (109 names). 
+# - contains for instance
+
+cat("In Nivabase 2021 and not in Labware: \n")
+setdiff(n2, n3)
+
+cat("In Labware and not in Nivabase 2020: \n")
+setdiff(n3, n1)
+
+#  [1] "1,2,4,5-Tetraklorbenzen"              "a-Endosulfan"                        
+#  [3] "Dicofol"                              "Heksaklorbutadien"                   
+#  [5] "Heksakloretan"                        "Isodrin"                             
+#  [7] "Pentaklorfenol"                       "Sum av analysert NonaBDEs (eks. LOQ)"
+#  [9] "Sum av analysert OctaBDEs (eks. LOQ)" "Sum DDT"                             
+# [11] "Telodrin" 
+
+
+```
+
+### Start 'df_2021_labware' by renaming variables  
+
+* Mostly renaming, except TISSUE_NAME and APPROVED   
+* Also including Status, used in next chunk  
+
+```{r}
+
+if (FALSE){
+  # Used for writing code below
+  names(df_2021)
+  cat("\n")
+  names(df_labware)
+  cat("\n")
+}
+
+df_2021_labware <- df_labware %>%
+  left_join(df_labware_meta %>% select(TEXT_ID, SPECIES, TISSUE, BIOTA_SAMPLENO), 
+            by = "TEXT_ID") %>%
+  mutate(
+    TISSUE_NAME = str_sub(TISSUE, start = 4),
+    APPROVED = 0
+  ) %>%
+  rename(
+    STATION_CODE = AQUAMONITOR_CODE,
+    STATION_NAME = AQUAMONITOR_NAME,
+    LATIN_NAME = SPECIES,
+    SAMPLE_DATE = SAMPLED_DATE,
+    SAMPLE_NO = BIOTA_SAMPLENO,
+    NAME = REPORTED_NAME,
+    VALUE = NUMERIC_ENTRY,
+    FLAG1 = ENTRY_QUALIFIER,
+    UNIT = UNITS,
+    STATION_ID = AQUAMONITOR_ID
+    ) %>% 
+  mutate(
+    REPNO = SAMPLE_NO
+  ) %>%
+  select(
+    STATION_CODE, STATION_NAME, LATIN_NAME, SAMPLE_DATE, TISSUE_NAME, SAMPLE_NO, REPNO,
+    NAME, VALUE, FLAG1, UNIT, 
+    APPROVED, STATION_ID, STATUS, STATUSX)
+
+names(df_2021_labware)
+  
+if (FALSE){
+  
+  # some checks
+  
+  table(df_2021$TISSUE_NAME)
+  table(df_2021_labware$TISSUE_NAME)
+  
+  sel <- df_2021$SAMPLE_NO == df_2021$REPNO
+  mean(sel)
+  
+  table(df_2021$UNIT)
+  table(df_labware$UNITS)
+  table(df_labware$AQUAMONITOR_UNIT)
+  
+  table(df_2021$APPROVED)
+  
+  df_labware_meta %>% names()  
+
+}
+
+
+```
+
+### Check status vs. sent to Nivabase   
+```{r}
+
+# table(df_2021_labware$STATION_CODE, df_2021_labware$STATUS)
+# table(df_2021_labware$STATION_CODE, df_2021_labware$STATUSX)
+# table(df_2021_labware$STATUS, df_2021_labware$STATUSX)
+
+tab_lab <- df_2021_labware %>%
+  count(STATION_CODE, STATUS) %>%
+  tidyr::pivot_wider(names_from = STATUS, values_from = n)
+
+tab_nivadatabase <- df_2021 %>%
+  count(STATION_CODE, name = "Nivabase")
+
+full_join(tab_lab, tab_nivadatabase, by = "STATION_CODE")
+
+```
+
+### Combine  
+```{r}
+
+df_2021_both <- bind_rows(
+  df_2021,             # Nivadatabase data from Nivadatabasen  
+  df_2021_labware %>%
+    filter(STATUS %in% c("C", "P", "I"))
+)
+
+```
+
+
+## 4. Save data from Nivadatabase + LIMS   
+
+```{r}
+#
+# Latest data data
+#
+
+# Folder name
+name_folder <- paste0("Files_to_Jupyterhub_", sampling_year)
+
+# Make folder, if it doesn't already exist:
+if (!dir.exists(name_folder)){
+  dir.create(name_folder)
+}
+
+# Make timestamp (date stamp actually)
+t <- Sys.time()
+timestamp <- substr(t, 1, 10)
+
+# File name
+name_file <- paste0("01_df_", sampling_year, "_notstandard_", timestamp, ".rds")
+
+name_fullpath <- paste0(name_folder, "/", name_file)
+
+# Set to TRUE/FALSE depending on whether file should be saved or not  
+if (FALSE){
+
+  saveRDS(df_2021, file = name_fullpath)
+  cat("2021 data saved as rds,", sQuote(name_fullpath), "\n")
+  name_fullpath_txt <- sub("rds", "csv", name_fullpath)
+  write.csv(df_2021, file = name_fullpath_txt, fileEncoding = "UTF-8")
+  cat("2021 data saved as csv,", sQuote(name_fullpath_txt), "\n")
+
+}
+
+# Set to TRUE/FALSE depending on whether file should be read or not  
+if (FALSE){
+  
+  # Depends only on part 1 above
+  name_folder <- paste0("Files_to_Jupyterhub_", sampling_year)
+  fn_rds <- dir(name_folder, pattern = paste0("01_df_", sampling_year, "_notstandard.+.rds$"))
+  df_2021 <- readRDS(paste0(name_folder, "/", tail(fn_rds, 1)))
+  
+}
+
+```
+
+
+## APPENDIX: Test data 2020-2021   
 
 ```{r}
 
@@ -165,55 +421,5 @@ if (FALSE){
   
   
 }
-
-```
-
-
-## Add data from Labware  
-
-### Get data  
-```{r}
-
-# From QC_Chemistry app. Failed with "table or view does not exist"
-# df_labware <- get_nivabase_data("select * from labware.v_app_chemistry_qc_project where PROSJEKT = 'O 210200.ANAIN'")  
-
-df_labware <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN'")
-nrow(df_labware) # 20153
-
-```
-### Sample dates  
-```{r}
-df_labware %>%
-  count(AQUAMONITOR_CODE, SAMPLED_DATE) %>%
-  ggplot() +
-  geom_text(aes(x = SAMPLED_DATE, y = 1, label = AQUAMONITOR_CODE), position = "jitter")
-
-```
-
-
-### Parameter names  
-```{r}
-
-n1 <- unique(df_2021$NAME) %>% sort()
-n2 <- unique(df_labware$REPORTED_NAME) %>% sort()
-
-cat("Only in Nivabase: \n")
-setdiff(n1, n2)
-cat("\nOnly in Labware: \n")
-setdiff(n2, n1)
-
-```
-
-### Check Nivabasen data for same  
-```{r}
-
-if (FALSE){
-  df_2021 %>%
-    distinct(STATION_CODE, NAME) %>%
-    count(STATION_CODE) %>%
-    arrange(desc(n))
-}
-
-
 
 ```
