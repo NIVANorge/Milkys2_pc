@@ -91,17 +91,25 @@ get_data <- function(paramgroup, speciesgroup, min_obs = 100){
   
   X <- get_data_tables(paramgroup)
   
+  X$lookup_stations <- X$lookup_stations %>%
+    arrange(Station_order) %>%
+    mutate(
+      Station = paste(STATION_CODE, Station_short),        # This will be shown in graphs - make changes here
+      Station2 = substr(Station, 1, 15),                   # This will be shown in graphs - make changes here
+      Station_name = forcats::fct_inorder(Station_name),
+      Station = forcats::fct_inorder(Station),
+      Station2 = forcats::fct_inorder(Station2),
+      Water_region = forcats::fct_inorder(Water_region)
+    )
+  
   dat_1 <- X$dat_all %>%
     left_join(X$lookup_paramgroup %>% select(PARAM, Substance.Group), 
               by = "PARAM") %>%
     add_count(PARAM) %>%
     filter(n >= min_obs) %>%
     # Add 'Station.Name'
-    left_join(X$lookup_stations %>% select(STATION_CODE, Station.Name), 
-              by = "STATION_CODE") %>%
-    # Add 'Station.Name'
-    mutate(Station = paste(STATION_CODE, Station.Name))
-
+    left_join(X$lookup_stations, by = "STATION_CODE")
+  
   dat_2 <- dat_1 %>%
     left_join(X$lookup_eqs_ww, by = c("PARAM", "LATIN_NAME", "TISSUE_NAME")) %>%
     mutate(
@@ -114,25 +122,20 @@ get_data <- function(paramgroup, speciesgroup, min_obs = 100){
   if (speciesgroup == "fish"){
     
     result <- dat_2 %>%
-      filter(LATIN_NAME %in% c("Gadus morhua", "Platichthys flesus")) %>%
-      left_join(lookup_region_fish, by = "Station") %>%    # Adds Region
-      mutate(
-        Station = factor(Station, levels = rev(station_order_fish)),
-        Station2 = substr(Station, 1, 15),
-        Station2 = factor(Station2, levels = rev(substr(station_order_fish, 1, 15))),
-        Region = factor(Region, levels = region_order_fish)
-        )
+      filter(LATIN_NAME %in% c("Gadus morhua", "Platichthys flesus"))
     
-  } else if (speciesgroup == "mussel"){
+  } else if (grepl("mussel", speciesgroup)){
     
     result <- dat_2 %>%
-    filter(LATIN_NAME %in% c("Mytilus edulis")) %>%
-    mutate(
-      Station = factor(Station, levels = rev(station_order_mussel)),
-      Station2 = substr(Station, 1, 15),
-      Station2 = factor(Station2, levels = rev(substr(station_order_mussel, 1, 15))))
-  } %>%
-    mutate(Region = as.character(NA))    # TO FIX
+      filter(LATIN_NAME %in% c("Mytilus edulis"))
+    
+  } else {
+    
+    result <- dat_2
+  }
+  
+  for (col in c("Station_name", "Station", "Station2", "Water_region"))
+    result[[col]] <- droplevels(result[[col]])
   
   result
 
@@ -140,6 +143,7 @@ get_data <- function(paramgroup, speciesgroup, min_obs = 100){
 
 # Test
 if (FALSE){
+  # debugonce(get_data)
   x1 <- get_data("metals", "fish")
   x2 <- get_data("metals", "mussel")
 }
@@ -160,7 +164,7 @@ get_medians <- function(data_samplelevel_fish, data_samplelevel_mussel){
     filter(
       n_after_2018 > 0) %>%
     ungroup() %>%
-    group_by(PARAM, LATIN_NAME, TISSUE_NAME, STATION_CODE, Station, Region, MYEAR, UNIT, EQS_WW, Proref) %>%
+    group_by(PARAM, LATIN_NAME, TISSUE_NAME, STATION_CODE, Station, Station2, Water_region, MYEAR, UNIT, EQS_WW, Proref) %>%
     summarize(
       VALUE_WW_med = median(VALUE_WW, na.rm = TRUE),
       VALUE_WW_min = min(VALUE_WW, na.rm = TRUE),
@@ -191,3 +195,147 @@ get_medians <- function(data_samplelevel_fish, data_samplelevel_mussel){
   
 }
 
+# Test
+if (FALSE){
+  debugonce(get_medians)
+  x1 <- get_data("metals", "fish")
+  x2 <- get_data("metals", "mussel")
+  test <- get_medians(x1, x2)
+}
+
+#
+# Tables ----
+#
+
+# For ineractive use (tooltip, something doesn't work for some reason)
+pargroup_median_table_TEST <- function(data_medians, fill, year, interactive = TRUE){
+  
+  data_medians$fill <- data_medians[[fill]]
+
+  dat_plot <- data_medians %>%
+    filter(MYEAR %in% year) %>%
+    arrange(desc(PARAM)) %>%
+    mutate(PARAM = forcats::fct_inorder(PARAM))
+
+  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
+            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
+  col_func <- function(x){cols[x]}
+  
+  if (interactive){
+    gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
+      geom_tile_interactive(tooltip = VALUE_WW_med)
+  } else {
+    gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
+      geom_tile()
+  }
+  gg <- gg +
+    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+              color = "red", size = 1, height = 0.9, width = 0.9) +
+    geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
+    geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
+    #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+    #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+    scale_fill_stepsn(breaks = c(0.01,1,2,3,5,10,100), colours = cols) +
+    scale_color_manual(values = c("red", "white")) +
+    scale_alpha_manual(values = c(1, 0)) +
+    scale_y_discrete() +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = -45, hjust = 0))
+    labs(
+      title = "Medians"
+    )
+  
+  gg
+  
+}
+
+pargroup_median_table <- function(data_medians, fill, year){
+  
+  data_medians$fill <- data_medians[[fill]]
+  
+  dat_plot <- data_medians %>%
+    filter(MYEAR %in% year) %>%
+    arrange(desc(PARAM)) %>%
+    mutate(PARAM = forcats::fct_inorder(PARAM))
+  
+  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
+            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
+  col_func <- function(x){cols[x]}
+  
+  gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
+      geom_tile()
+  gg <- gg +
+    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+              color = "red", size = 1, height = 0.9, width = 0.9) +
+    geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
+    geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
+    #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+    #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+    scale_fill_stepsn(breaks = c(0.01,1,2,3,5,10,100), colours = cols) +
+    scale_color_manual(values = c("red", "white")) +
+    scale_alpha_manual(values = c(1, 0)) +
+    scale_y_discrete() +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = -45, hjust = 0))
+  labs(
+    title = "Medians"
+  )
+  
+  gg
+  
+}
+
+if (F){
+  # debugonce(pargroup_median_table)
+  pargroup_median_table(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
+}
+
+
+make_boxplots <- function(data_medians, y, year, ylabel = NULL, main_title = NULL){
+  
+  data_medians$y <- data_medians[[y]]
+  
+  if (is.null(ylabel))
+    ylabel = y
+  
+  dat_prorefplot2 <- data_medians %>%    # Change here for fish vs. mussel
+    filter(MYEAR == year) %>%
+    mutate(
+      Unit = gsub("_P_", "/", UNIT, fixed = TRUE) %>% tolower(),
+      Tooltip = paste0(Station, "<br>Conc.: (min-median-max): ", VALUE_WW_min, "-", VALUE_WW_med, "-", VALUE_WW_max, " ", Unit))
+  
+  # str(dat_prorefplot2)
+  
+  gg <- ggplot(dat_prorefplot2, aes(PARAM, y = y)) +
+    geom_hline(yintercept = 1) +
+    geom_boxplot() +
+    geom_jitter_interactive(aes(fill = Water_region, tooltip = Tooltip, data_id = STATION_CODE), pch = 21, size = 2, width = 0.1) +
+    # scale_fill_distiller("Along coast\n(far N/E = blue)", palette = "RdBu", direction = 1) +  # Geogr_position
+    scale_fill_brewer("Water region", palette = "RdBu", direction = 1) +
+    theme_bw() +
+    ggeasy::easy_rotate_x_labels(angle = -45) +
+    labs(y = ylabel, title = main_title)
+  # gg
+  
+  # gg <- gg + coord_flip()
+  # gg
+  
+  ggr <- girafe(ggobj = plot_grid(gg + guides(fill = "none") + labs(subtitle = "Medians, ordinary scale"),
+                                  gg + scale_y_log10() + labs(subtitle = "Medians, log scale"), 
+                                  rel_widths = c(1,1.35)), 
+                width_svg = 10, height_svg = 4)
+  
+  ggr <- girafe_options(ggr, opts_hover(css = "fill:wheat;stroke:orange;r:5pt;") )
+  
+  ggr
+  
+}
+
+if (FALSE){
+  debugonce(make_boxplots)
+  
+  make_boxplots(dat_median_fish, y = "EQS_ratio_WW", year = 2021)
+
+  make_boxplots(dat_median_mussel, y = "Proref_ratio_WW", year = 2021)
+  
+}

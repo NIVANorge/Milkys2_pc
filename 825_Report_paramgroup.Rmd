@@ -2,6 +2,8 @@
 title: "Report for parameter group"
 author: "DHJ"
 date: "22 6 2022"
+params:
+  chemical_group: "metals"
 output: 
   html_document:
     keep_md: true
@@ -49,13 +51,14 @@ source("825_Report_paramgroup_functions.R", encoding = "UTF-8")
 ```
 
 
+
 ```{r get_data, warning=FALSE}
 
-params <- get_parametervalues("metals")
+chem_params <- get_parametervalues(params$chemical_group)
 
 # debugonce(get_data_tables)
-dat_sample_fish <- get_data("metals", "fish")
-dat_sample_muss <- get_data("metals", "mussel")
+dat_sample_fish <- get_data(params$chemical_group, "fish")
+dat_sample_muss <- get_data(params$chemical_group, "mussel")
 
 dat_median <- get_medians(dat_sample_fish, dat_sample_muss)
 
@@ -68,107 +71,134 @@ dat_median_mussel <- dat_median %>%
 ```
 
 
+## Medians last year  
+
+### Fish  
+
+```{r,  fig.height=6, fig.width=11}
+
+pargroup_median_table(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
+
+```
+
+
+### Blue mussel  
+
+```{r,  fig.height=6, fig.width=11}
+
+pargroup_median_table(dat_median_mussel, fill = "Proref_ratio_WW", year = 2021)
+
+```
 
 ## Ratio to proref in last year       
 
-
 ### Fish  
 * Note: 
-    - Region for colour  
     - Concentrations given in tooltip (should do something for the < values for minimum values)   
 ```{r, fig.height=6, fig.width=11, warning=FALSE}
 
-# **Bruk farger for geografi (kalde farger for nord, varme farger for sør)**  
-
-dat_prorefplot2 <- dat_median_fish %>% 
-  filter(MYEAR == current_year) %>%
-  mutate(
-    Prorefratio = VALUE_WW_med/Proref,
-    Unit = gsub("_P_", "/", UNIT, fixed = TRUE) %>% tolower(),
-    Tooltip = paste0(Station, "<br>Conc.: (min-median-max): ", VALUE_WW_min, "-", VALUE_WW_med, "-", VALUE_WW_max, " ", Unit))
-
-# str(dat_prorefplot2)
-
-gg <- ggplot(dat_prorefplot2, aes(PARAM, y = Prorefratio)) +
-  geom_hline(yintercept = 1) +
-  geom_boxplot() +
-  geom_jitter_interactive(aes(fill = Region, tooltip = Tooltip, data_id = STATION_CODE), pch = 21, size = 2, width = 0.1) +
-  # scale_fill_distiller("Along coast\n(far N/E = blue)", palette = "RdBu", direction = 1) +  # Geogr_position
-  scale_fill_brewer("Along coast\n(far N/E = blue)", palette = "RdBu", direction = 1) +
-  theme_bw() +
-  ggeasy::easy_rotate_x_labels(angle = -45) +
-  labs(title = "Ratio concentration/proref, metals in fish 2021")
-# gg
-
-# gg <- gg + coord_flip()
-# gg
-
-ggr <- girafe(ggobj = plot_grid(gg + guides(fill = "none") + labs(subtitle = "Medians, ordinary scale"),
-                         gg + scale_y_log10() + labs(subtitle = "Medians, log scale"), 
-                         rel_widths = c(1,1.35)), 
-       width_svg = 10, height_svg = 4)
-
-ggr <- girafe_options(ggr, opts_hover(css = "fill:wheat;stroke:orange;r:5pt;") )
-
-ggr
-                       
-```
-
-
-```{r test_dotplot}
-
-if (FALSE){
-  
-  # Looks nice but has no colours for geogrphy
-  ggplot(dat_prorefplot2, aes(x = PARAM, y = Prorefratio)) +
-    geom_dotplot(binaxis = "y", stackdir = "center", position = "dodge", binwidth = 0.07)
-  
-  # Looks nice but has no colours for geogrphy
-  ggplot(dat_prorefplot2, aes(x = PARAM, fill = Area, y = Prorefratio)) +
-    geom_dotplot(binaxis = "y", stackdir = "center", position = "dodge", binwidth = 0.07, )
-  
-}
-
-
+make_boxplots(dat_median_fish, y = "Proref_ratio_WW", year = current_year,
+              ylabel = "Ratio conc. w.w. / proref",
+              main_title = paste0("Ratio concentration/proref, metals in fish ", current_year))
 
 ```
+
+
 
 
 ### Mussel    
-*Regions to be added*  
-```{r, fig.height=7, fig.width=9, warning=FALSE}
+```{r, fig.height=6, fig.width=11, warning=FALSE}
 
-# **Bruk farger for geografi (kalde farger for nord, varme farger for sør)**  
-
-dat_prorefplot2 <- dat_median_mussel %>% 
-  filter(MYEAR == current_year) %>%
-  mutate(Geogr_position = as.numeric(Station))
-
-gg <- ggplot(dat_prorefplot2, aes(PARAM, VALUE_WW_med/Proref)) +
-  geom_hline(yintercept = 1) +
-  geom_boxplot() +
-  geom_jitter_interactive(aes(fill = Geogr_position, tooltip = Station), pch = 21, size = 2, width = 0.1) +
-  scale_fill_distiller("Along coast\n(far N/E = blue)", palette = "RdBu", direction = 1) +
-  theme_bw() +
-  ggeasy::easy_rotate_x_labels(angle = -45) +
-  labs(title = "Ratio concentration/proref, metals in mussel 2021")
-
-girafe(ggobj = plot_grid(gg + guides(fill = "none") + labs(subtitle = "Medians, ordinary scale"),
-                         gg + scale_y_log10() + labs(subtitle = "Medians, log scale"), 
-                         rel_widths = c(1,1.35)), 
-       width_svg = 10, height_svg = 4)
-
-
+make_boxplots(dat_median_mussel, y = "Proref_ratio_WW", year = current_year,
+              ylabel = "Ratio conc. w.w. / proref",
+              main_title = paste0("Ratio concentration/proref, metals in mussel ", current_year))
 
 ```
 
 
 
+## Ratio to EQS in last year       
+
+### Fish  
+* Note: 
+    - Concentrations given in tooltip (should do something for the < values for minimum values)   
+```{r, fig.height=6, fig.width=11, warning=FALSE}
+
+make_boxplots(dat_median_fish, y = "EQS_ratio_WW", year = current_year,
+              ylabel = "Ratio conc. w.w. / EQS",
+              main_title = paste0("Ratio concentration/EQS, metals in fish ", current_year))
+
+```
+### Blue mussels  
+* Note: 
+    - Concentrations given in tooltip (should do something for the < values for minimum values)   
+```{r, fig.height=6, fig.width=11, warning=FALSE}
+
+make_boxplots(dat_median_mussel, y = "EQS_ratio_WW", year = current_year,
+              ylabel = "Ratio conc. w.w. / EQS",
+              main_title = paste0("Ratio concentration/EQS, metals in mussel ", current_year))
+
+```
+
+
+## HG  
+
+### Table medians for each year / station  
+
+* Test interctive tiles  
 
 ```{r}
 
-```
 
+df <- data.frame(
+  id = rep(c("a", "b", "c", "d", "e"), 2),
+  x = rep(c(2, 5, 7, 9, 12), 2),
+  y = rep(c(1, 2), each = 5),
+  z = factor(rep(1:5, each = 2)),
+  w = rep(diff(c(0, 4, 6, 8, 10, 14)), 2)
+)
+
+p <- ggplot(df, aes(x, y, tooltip = id)) + geom_tile_interactive(aes(fill = z))
+x <- girafe(ggobj = p)
+
+# x
+
+param <- "HG"
+species_category <- "fish"
+tissue <- "muscle"
+dat_plot <- dat_median_fish %>% 
+  filter(PARAM %in% param)
+
+gg <- ggplot(dat_plot, aes(MYEAR, Station, fill = Proref_ratio_WW)) +
+  geom_tile() +
+  geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+            color = "red", size = 1, height = 0.9, width = 0.9) +
+  geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
+  geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
+  #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+  #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+  scale_fill_stepsn(breaks = c(0.01,1,2,3,5,10,100), colours = cols) +
+  scale_color_manual(values = c("red", "white")) +
+  scale_alpha_manual(values = c(1, 0)) +
+  scale_x_continuous(breaks = seq(2006, 2020, 2)) +
+  theme_bw() +
+  labs(
+    title = paste0(param, " in ", species_category, " (", tissue, ")")
+  )
+
+gg <- ggplot(dat_plot, aes(MYEAR, Station, fill = Proref_ratio_WW)) +
+  geom_tile_interactive(aes(tooltip = VALUE_WW_med))
+girafe(gg)
+
+X$lookup_stations %>% dput()
+gg <- ggplot(dat_plot %>% filter(MYEAR > 2012)) +
+  geom_tile_interactive(aes(x = MYEAR, y = Station, fill = Proref_ratio_WW, tooltip = VALUE_WW_med))
+girafe(gg)
+
+ggplot(dat_plot %>% filter(MYEAR > 2012)) +
+  geom_tile(aes(x = MYEAR, y = Station, fill = Proref_ratio_WW))
+
+```
 
 
 
