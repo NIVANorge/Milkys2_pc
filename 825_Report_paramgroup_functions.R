@@ -34,7 +34,7 @@ if (FALSE){
 get_data_tables <- function(paramgroup, 
                             filename_109 = "Files_from_Jupyterhub_2021/109_adjusted_data_2022-06-04.rds",
                             filename_lookup_substancegroups = "Input_files_2020/Lookup table - substance groups.xlsx",
-                            filename_lookup_stations= "Files_from_Jupyterhub_2020/Lookup for big excel - stations.xlsx",
+                            filename_lookup_stations= "Files_to_Jupyterhub_2019/Kartbase_edit.xlsx",
                             filename_bigexcel = "Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver03.rds"){
   
 
@@ -49,10 +49,7 @@ get_data_tables <- function(paramgroup,
     filter(PARAM %in% param_values)
 
   # Stations
-  lookup_stations <- read_excel(filename_lookup_stations) %>% # View()
-    bind_rows(data.frame(STATION_CODE = "19B", Station.Name = "Isfjorden", County = "Svalbard")) %>%
-    bind_rows(data.frame(STATION_CODE = "20B", Station.Name = "Longyearbyen", County = "Svalbard")) %>%
-    bind_rows(data.frame(STATION_CODE = "97A3", Station.Name = "Mjelle, Bodø area", County = "Nordland"))
+  lookup_stations <- read_excel(filename_lookup_stations)
   
   # EQS and proref
   lookup_eqs_ww <- readRDS(filename_bigexcel) %>%
@@ -72,7 +69,7 @@ get_data_tables <- function(paramgroup,
   check <- lookup_eqs_ww %>%
     add_count(PARAM, LATIN_NAME, TISSUE_NAME) %>%
     filter(n > 1)
-
+  
   if (nrow(check) > 0){
     stop("More than one EQS per parameter!")
   }
@@ -193,53 +190,4 @@ get_medians <- function(data_samplelevel_fish, data_samplelevel_mussel){
   result
   
 }
-
-
-#
-# Station order ----
-#
-
-station_order_fish <- c(
-  "19B Isfjorden", "20B Longyearbyen", "10B Varangerfjord", "45B2 Hammerfest (havn)", "43B2 Tromsø harbour",
-  "98B1 Lofoten, Skrova", "96B Helgelandskysten area by Sandnessjøen", 
-  "80B Munkholmen", "13B Kristiansand harbour", "28B Ålesund area by Hundsvær",
-  "24B Bergen havn", "23B Bømlo north", "53B Inner Sørfjord", 
-  "15B Farsund area", "71B Grenlandsfjorden Breviks area", 
-  "36B Færder area", "30B Inner Oslofjord", "02B Kirkøy (north)")
-
-# NOTE: must be in same order as 'station_order_fish'  
-# https://www.huvo.no/filer/bilder/kart-vannregioner-i-full-storrelse.jpg?i=063
-# We skip Kemijoki which makes up part of Varangerfjord
-station_order_fish_region <- c(
-  "Svalbard", "Svalbard", "Troms+Finnmark", "Troms+Finnmark", "Troms+Finnmark",
-  "Nordland", "Nordland", 
-  "Trøndelag", "Møre+Romsdal", "Møre+Romsdal",
-  "Vestland", "Vestland", "Vestland", 
-  "Agder", "Vestfold+Telemark", 
-  "Vestfold+Telemark", "Innlandet+Viken", "Innlandet+Viken")
-
-# station_region_fish %>% unique() %>% dput()
-region_order_fish <- c("Svalbard", "Troms+Finnmark", "Nordland", "Trøndelag", "Møre+Romsdal", 
-                       "Vestland", "Agder", "Vestfold+Telemark", "Innlandet+Viken")
-
-# Only made "regions" for fish  
-lookup_region_fish <- data.frame(
-  Station = station_order_fish, 
-  Region = station_order_fish_region)
-
-
-
-# MUST CHECK/FIX: 76A2 and 28A2  
-station_order_mussel <- c(
-  "11X Brashavn", "10A2 Skallneset", "98A2 Lofoten, Svolvær", 
-  "56A Kvalnes", 
-  "97A3 Mjele, Bodø area", "97A2 Bodø harbour", 
-  "22A Espevær",
-  "91A2 Outer Trondheimsfjord", "26A2 Måløy", "I241 Nordnes", "64A Utne", 
-  "76A2 NA", "28A2 NA",
-  "65A Vikingneset", 
-  "I131A Lastad", "71A Bjørkøya", "I304 Gåsøya", "15A Gåsøy", 
-  "36A1 Tjøme", "I024 Kirkøy", "I023 Singlekalven", "31A Solbergstrand", 
-  "I301 Akershuskaia", "30A Gressholmen" 
-)
 
