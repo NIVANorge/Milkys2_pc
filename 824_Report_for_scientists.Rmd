@@ -1,16 +1,70 @@
 ---
-title: "Kortrapport - eksempler"
+title: "Kortrapport - eksempler på grafer"
 author: "DHJ"
 date: "27 4 2022"
 params:
   paramgroup: Metals and metalloids
-output: 
-  bookdown::html_document2: default  
+output:  
+  html_document:
+    code_folding: hide  
+    keep_md: true  
+    toc: true  
+    toc_float: true  
+  
     
 ---
 
-* Basert på 'Mal_for_kortrapport'  
 
+## Diverse notater 
+
+* Also see 'Mal_for_kortrapport' from Miljødir.   
+
+
+* tidstrend punkter: pil/trekant opp/ned avhengig av retning
+* < som ekstra tegn over konsentrasjon
+* farger i hht, proref
+
+* eget "kart" over deteksjonsfrekvens - akser = stasjoner + stoffer (for siste år)   
+
+* følg grense på 5 år for trender   
+*  
+* For siste år: boksplott (med Proref lagt på som linjer) med stasjoner som punkt   
+* For siste år: boksplott (med EQS lagt på som linjer) med stasjoner som punkt   
+
+* "Stor excel" også - trenger ikke være formatert  
+
+* Data til mosaic plot for antall tidsserier med trend opp og ned -> Merete kan lage pltt i år    
+
+* Fargeskala "Vik" for deteksjonsgrense   
+ 
+* Bruk range og ikke boxplot når det kun er 3 prøver  
+
+* Der punkter er stasjoner: bruk farger for geografi (kalde farger for nord, varme farger for sør)  
+
+* bookdown::html_document2: default  
+
+**møte 30 Juni**
+
+Deteksjonstabell: snu (parameter nedover)
+
+Deteksjonstabell for artsgruppe/vev (på tvers av 
+- en kjempetabell for all 
+
+EQS-overskridelser (antall) total og per organismegruppe (fisk, blåskjell, snegl??, og ærfugl)  
+
+EQS-ratio på graf  
+- sette stasjonsnavn på definerte utliggere  
+- 
+
+Vannregion (eller fylke)  
+
+
+
+
+
+
+
+## Packages etc.   
 
 ```{r, echo=FALSE}
 
@@ -30,16 +84,19 @@ library(glue)
 library(readxl)
 library(purrr)
 library(leftcensored)   # DHJ's package (https://github.com/DagHjermann/leftcensored)
+library(scico)          # colour palettes incl. "Vik" (https://github.com/thomasp85/scico)
 
 library(safejoin) # https://github.com/moodymudskipper/safejoin
 
 # source("01_Get_chemical_data_NIVAbasen_functions.R")  # for get_standard_parametername()
+source("824_Report_for_scientists_functions.R")
 
 ```
 
+### Settings  
 ```{r selected_year}
 
-selected_year <- 2020
+selected_year <- 2021
 
 ```
 
@@ -48,27 +105,37 @@ selected_year <- 2020
 
 This report is based on Milkys data through **`r selected_year`**.     
 
+### Get data for parameter group    
 ```{r read_data}
 
 #
 # Raw data
 #
 fn <- "Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds"                         # data FROM Milkys2 on PC 
+fn <- "Files_from_Jupyterhub_2021/109_adjusted_data_2022-06-04.rds"          
 dat_all <- readRDS(fn)
 
 #
 # Parameter groups
 #
 lookup_paramgroup <- read_excel("Input_files_2020/Lookup table - substance groups.xlsx")
-lookup_stations <- read_excel("Files_from_Jupyterhub_2020/Lookup for big excel - stations.xlsx")
+lookup_stations <- read_excel("Files_from_Jupyterhub_2020/Lookup for big excel - stations.xlsx") %>% # View()
+  bind_rows(data.frame(STATION_CODE = "19B", Station.Name = "Isfjorden", County = "Svalbard")) %>%
+  bind_rows(data.frame(STATION_CODE = "20B", Station.Name = "Longyearbyen", County = "Svalbard")) %>%
+  bind_rows(data.frame(STATION_CODE = "97A3", Station.Name = "Mjelle, Bodø area", County = "Nordland"))
 
 dat_1 <- dat_all %>%
   left_join(lookup_paramgroup %>% select(PARAM, Substance.Group)) %>%
   filter(Substance.Group %in% params$paramgroup) %>%
   add_count(PARAM) %>%
   filter(n >= 100) %>%
+  # Add 'Station.Name'  
   left_join(lookup_stations %>% select(STATION_CODE, Station.Name)) %>%
+  # Add 'Station.Name'  
   mutate(Station = paste(STATION_CODE, Station.Name))
+
+if (F)
+  xtabs(~Station, dat_1 %>% filter(MYEAR == 2021))
 
 param_values <- unique(dat_1$PARAM)
   
@@ -79,19 +146,19 @@ param_values <- unique(dat_1$PARAM)
 datxl <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver03.rds") %>%
   filter(PARAM %in% param_values)
   
-table(dat_1$PARAM)
-table(datxl$PARAM)  
+# table(dat_1$PARAM)
+# table(datxl$PARAM)  
 
 ```
-
+### EQS and Proref (Q95)  
 ```{r lookup_eqs_ww}
 
 lookup_eqs_ww <- datxl %>%
+  rename(Proref = Q95) %>%
   filter(
-    !is.na(EQS),
     Basis %in% "WW"
     ) %>%
-  distinct(PARAM, LATIN_NAME, TISSUE_NAME, EQS) %>%
+  distinct(PARAM, LATIN_NAME, TISSUE_NAME, EQS, Proref) %>%
   mutate(TISSUE_NAME = case_when(
     TISSUE_NAME == "Muscle" ~ "Muskel",
     TISSUE_NAME == "Liver" ~ "Lever",
@@ -119,75 +186,350 @@ dat_2 <- dat_1 %>%
 
 ```
 
+## Data for cod and mussel separately  
+
+### Station names and order   
+
+* 
+```{r}
+
+station_order_fish <- c(
+  "19B Isfjorden", "20B Longyearbyen", "10B Varangerfjord", "45B2 Hammerfest (havn)", "43B2 Tromsø harbour",
+  "98B1 Lofoten, Skrova", "96B Helgelandskysten area by Sandnessjøen", 
+   "80B Munkholmen", "13B Kristiansand harbour", "28B Ålesund area by Hundsvær",
+  "24B Bergen havn", "23B Bømlo north", "53B Inner Sørfjord", 
+  "15B Farsund area", "71B Grenlandsfjorden Breviks area", 
+  "36B Færder area", "30B Inner Oslofjord", "02B Kirkøy (north)")
+
+# MUST CHECK/FIX:
+station_order_mussel <- c(
+  "11X Brashavn", "10A2 Skallneset", "98A2 Lofoten, Svolvær", 
+  "56A Kvalnes", 
+  "97A3 Mjele, Bodø area", "97A2 Bodø harbour", 
+  "22A Espevær",
+  "91A2 Outer Trondheimsfjord", "26A2 Måløy", "I241 Nordnes", "64A Utne", 
+  "76A2 NA", "28A2 NA",
+  "65A Vikingneset", 
+  "I131A Lastad", "71A Bjørkøya", "I304 Gåsøya", "15A Gåsøy", 
+  "36A1 Tjøme", "I024 Kirkøy", "I023 Singlekalven", "31A Solbergstrand", 
+  "I301 Akershuskaia", "30A Gressholmen" 
+)
+
+
+
+dat_3_fish <- dat_2 %>%
+  filter(LATIN_NAME == c("Gadus morhua", "Platichthys flesus")) %>%
+  mutate(
+    Station = factor(Station, levels = rev(station_order_fish)),
+    Station2 = substr(Station, 1, 15),
+    Station2 = factor(Station2, levels = rev(substr(station_order_fish, 1, 15))))
+
+dat_3_mussel <- dat_2 %>%
+  filter(LATIN_NAME == c("Mytilus edulis")) %>%
+  mutate(
+    Station = factor(Station, levels = rev(station_order_mussel)),
+    Station2 = substr(Station, 1, 15),
+    Station2 = factor(Station2, levels = rev(substr(station_order_mussel, 1, 15))))
+
+if (FALSE){
+  table(addNA(dat_3_fish$Station))
+  table(addNA(dat_3_mussel$Station))
+  dat_2 %>%
+    filter(LATIN_NAME == c("Mytilus edulis") & MYEAR == 2021) %>%
+    pull(Station) %>% unique() %>%
+    dput()
+}
+
+# dat_3_fish %>% filter(is.na(Station)) %>% xtabs(~MYEAR + STATION_CODE, .)
+# dat_3_fish %>% filter(is.na(Station)) %>% View()
+
+if (FALSE){
+  
+  dat_3_fish %>%
+    writexl::write_xlsx("Data/Rawdata_w_eqs_proref.xlsx")
+  
+}
+
+```
+
+
+### Medians   
+
+* Including 'dat_medium_fish' and 'dat_medium_mussel' which will be used for "all-parameters + all-stations + last year" overviews  
 
 ```{r calc_medians}  
 
-dat_medium <- dat_2 %>%
+dat_median <- bind_rows(dat_3_fish, dat_3_mussel) %>%
   group_by(Station) %>%
   mutate(n_after_2018 = sum(MYEAR >= 2018)) %>%
   filter(
     n_after_2018 > 0) %>%
-  group_by(PARAM, LATIN_NAME, TISSUE_NAME, Station, MYEAR) %>%
+  ungroup() %>%
+  group_by(PARAM, LATIN_NAME, TISSUE_NAME, Station, MYEAR, UNIT, EQS_WW, Proref) %>%
   summarize(
     VALUE_WW_med = median(VALUE_WW, na.rm = TRUE),
     N = n(),
     N_underLOQ = sum(FLAG1 %in% "<"),
+    .groups = "drop") %>%
+  mutate(
+    Proref_ratio_WW = VALUE_WW_med/Proref,
+    EQS_ratio_WW = VALUE_WW_med/EQS_WW,
     Prop_underLOQ = N_underLOQ/N,
     FLAG1 = case_when(
       Prop_underLOQ < 0.5 ~ as.character(NA),
       Prop_underLOQ >= 0.5 ~ "<"),
-    .groups = "drop") %>%
-  left_join(lookup_eqs_ww, by = c("PARAM", "LATIN_NAME", "TISSUE_NAME")) %>%
-  mutate(
     Above_EQS = case_when(
-      VALUE_WW_med > EQS_WW ~ "Over",
-      VALUE_WW_med <= EQS_WW ~ "Under",
-      TRUE ~ as.character(NA))
+      EQS_ratio_WW > 1 ~ "Over",
+      EQS_ratio_WW <= 1 ~ "Under",
+      TRUE ~ as.character(NA)),
+    LOQ_label = ifelse(Prop_underLOQ >= 0.5, "<", "")
   )
 
-?leftcensored_lm
+check <- xtabs(~MYEAR, dat_median %>% filter(PARAM == "HG" & grepl("30A", Station)))
+if (sum(check > 1) > 0){
+  stop("Error in median: mpre than one measurement per parameter/station/year")
+}
+
+
+
+dat_median_fish <- dat_median %>%
+  filter(LATIN_NAME %in% c("Gadus morhua", "Platichthys flesus"))
+dat_median_mussel <- dat_median %>%
+  filter(LATIN_NAME %in% c("Mytilus edulis"))
+
+# ?leftcensored_lm
+
+saveRDS(dat_median, "Data/824_dat_median.rds")
+
+```
+
+## Overview medians + EQS      
+
+### Mussel sample   
+
+* Examplifying use how to show when >= 50% of the data are under LOQ  
+
+```{r, fig.width=11, fig.height=8}
+
+if (FALSE){
+  xtabs(~PARAM + LOQ_label, dat_median_mussel)
+  xtabs(~PARAM + LOQ_label, dat_median_fish)
+}
+
+param <- "SN"
+species_category <- "Blue mussel"
+
+if (species_category == "Blue mussel"){
+  species <- "Mytilus edulis"  
+  tissue <- "Whole soft body"
+  dat_median_group <- dat_median_mussel
+} else if (species_category == "Fish"){
+  species <- c("Gadus morhua", "Platichthys flesus") 
+  dat_median_group <- dat_median_fish
+  if (param == "HG"){
+    tissue <- "Muskel" 
+  } else {
+    tissue <- "Lever" 
+  }
+}
+
+yrs <- 2005:2021
+
+dat_plot <- dat_median_group %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species,
+    TISSUE_NAME %in% get_tissue(param, species)) %>% 
+  filter(MYEAR %in% yrs)
+
+
+cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
+          RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
+col_func <- function(x){cols[x]}
+
+ggplot(dat_plot, aes(MYEAR, Station, fill = Proref_ratio_WW)) +
+  geom_tile() +
+  geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+            color = "red", size = 1, height = 0.9, width = 0.9) +
+  geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
+  geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
+  #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+  #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+  scale_fill_stepsn(breaks = c(0.01,1,2,3,5,10,100), colours = cols) +
+  scale_color_manual(values = c("red", "white")) +
+  scale_alpha_manual(values = c(1, 0)) +
+  scale_x_continuous(breaks = seq(2006, 2020, 2)) +
+  theme_bw() +
+  labs(
+    title = paste0(param, " in ", species_category, " (", tissue, ")")
+  )
+
+# unique(dat_sel_medium$Station) %>% dput()
+
+
 ```
 
 
-
-```{r trend_ww_1}
-
-#
-# Linear trend
-# Full time series  
-#
-
-
-# Test 
+### Fish sample  
+```{r, fig.width=11, fig.height=8, warning=FALSE}
 
 if (FALSE){
-  # debugonce(get_trend)
-  get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium)
-  get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_2, y = "VALUE_WW")
-  milkys_select_rows("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium)
+  xtabs(~PARAM + LOQ_label, dat_median_mussel)
+  xtabs(~PARAM + LOQ_label, dat_median_fish)
+}
+
+param <- "PB"
+species_category <- "Fish"
+
+yrs <- 2005:2021
+
+if (species_category == "Blue mussel"){
+  species <- "Mytilus edulis"  
+  tissue <- "Whole soft body"
+  dat_median_group <- dat_median_mussel
+} else if (species_category == "Fish"){
+  species <- c("Gadus morhua", "Platichthys flesus") 
+  dat_median_group <- dat_median_fish
+  if (param == "HG"){
+    tissue <- "Muskel" 
+  } else {
+    tissue <- "Lever" 
+  }
+}
+
+yrs <- 2005:2021
+
+dat_plot <- dat_median_group %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species,
+    TISSUE_NAME %in% get_tissue(param, species)) %>% 
+  filter(MYEAR %in% yrs)
+
+
+
+cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
+          RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
+col_func <- function(x){cols[x]}
+
+ggplot(dat_plot, aes(MYEAR, Station, fill = Proref_ratio_WW)) +
+  geom_tile() +
+  geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+            color = "red", size = 1, height = 0.9, width = 0.9) +
+  geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
+  geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
+  #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+  #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+  scale_fill_stepsn(breaks = c(0.01,1,2,3,5,10,100), colours = cols) +
+  scale_color_manual(values = c("red", "white")) +
+  scale_alpha_manual(values = c(1, 0)) +
+  scale_x_continuous(breaks = seq(2006, 2020, 2)) +
+  theme_bw() +
+  labs(
+    title = paste0(param, " in ", species_category, " (", tissue, ")")
+  )
+
+# unique(dat_sel_medium$Station) %>% dput()
+
+
+```
+
+
+## 1 parameter + 1 species/tissue + all stations      
+
+### Select parameter/species  
+
+```{r DEF_dat_sel_medium}
+
+selection <- 1
+
+if (selection == 1){
   
-  get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium, firstyear = 2011)
-  get_trend("HG", "Gadus morhua", "Muskel", "02B Kirkøy (north)", data = dat_medium)
+  param <- "HG"
+  species_category <- "Blue mussel"
+
+} else if (selection == 2){
   
-  get_trend("HG", "Mytilus edulis", "Whole soft body", "51A Byrkjenes", data = dat_medium)
+  param <- "HG"
+  species_category <- "Fish"
+  
+} else if (selection == 3){
+  
+  param <- "PB"
+  species_category <- "Fish"
+  
+} else if (selection == 4){
+  
+  param <- "PB"
+  species_category <- "Blue mussel"
   
 }
 
-?leftcensored_prepare
-
-xtabs(~PARAM + addNA(FLAG1), dat_medium %>% filter(LATIN_NAME == "Mytilus edulis"))
-
-test1 <- milkys_select_rows("AG", "Mytilus edulis", data = dat_medium)
-xtabs(~Station + addNA(FLAG1), test1)
-ggplot(test1, aes(MYEAR, VALUE_WW_med, color = FLAG1)) + 
-  geom_point() + 
-  facet_wrap("Station") +
-  scale_y_log10()
-
-test2 <- leftcensored_prepare(test1, var_year = "MYEAR", var_concentration = VALUE_WW_med)
+if (species_category == "Blue mussel"){
+  species <- "Mytilus edulis"  
+  tissue <- "Whole soft body"
+} else if (species_category == "Fish"){
+  species <- c("Gadus morhua", "Platichthys flesus") 
+  if (param == "HG"){
+    tissue <- "Muskel" 
+  } else {
+    tissue <- "Lever" 
+  }
+}
 
 ```
 
+### Select data  
+```{r}
+
+datxl_sel <- datxl %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species,
+    TISSUE_NAME %in% tissue)
+
+dat_sel <- dat_2 %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species)  
+
+dat_sel_medium <- dat_median %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species,
+    TISSUE_NAME %in% tissue)
+
+# station_order <- c(
+#   "19B NA", "10B Varangerfjord", "45B2 Hammerfest (havn)", "43B2 Tromsø harbour",
+#   "98B1 Lofoten, Skrova", "96B Helgelandskysten area by Sandnessjøen", 
+#    "80B Munkholmen", "13B Kristiansand harbour", "28B Ålesund area by Hundsvær",
+#   "24B Bergen havn", "23B Bømlo north", "53B Inner Sørfjord", 
+#   "15B Farsund area", "71B Grenlandsfjorden Breviks area", 
+#   "36B Færder area", "30B Inner Oslofjord", "02B Kirkøy (north)")
+#  
+# dat_sel_medium$Station <- factor(dat_sel_medium$Station, levels = rev(station_order))
+
+```
+
+
+
+
+
+### Trends ordinary linear regression    
+
+#### Test get_trend  
+```{r}
+
+# milkys_select_rows(param = "HG", species = "Gadus morhua", tissue = "Muskel", 
+#                    station = "Osl", firstyear = 2011, data = dat_median)
+                    
+get_trend(param = "HG", species = "Gadus morhua", tissue = "Muskel", station = "30B",
+          firstyear = 2011, data = dat_median)
+
+```
+
+
+#### Function  
 ```{r trend_ww_2}
 
 # Get all regression estimates as list
@@ -219,149 +561,369 @@ get_all_trends <- function(series, firstyear = NULL, data){
   
 }
 
-
 ```
 
 
-```{r trend_ww_3}
+#### Estimation  
 
-trend_series <- dat_medium %>%
+```{r trend_ww_3, warning=FALSE}
+
+trend_series <- dat_median %>%
   filter(!is.na(VALUE_WW_med)) %>%
   count(PARAM, LATIN_NAME, TISSUE_NAME, Station) %>%
   filter(n >= 3)
 
-trend_coef_long <- get_all_trends(series = trend_series, data = dat_medium)
-trend_coef_10yr <- get_all_trends(series = trend_series, data = dat_medium, firstyear = 2011)
+# Commented out to save time (not used)
+# trend_coef_long <- get_all_trends(series = trend_series, data = dat_median)
+# trend_coef_10yr <- get_all_trends(series = trend_series, data = dat_median, firstyear = 2011)
 
+# xtabs(~PARAM, dat_2 %>% filter(VALUE_WW == 0))
+# xtabs(~PARAM, dat_2 %>% filter(VALUE_WW == 0))
 
 ```
 
 
+### Trend left-censored (linear)  
 
-## HG  
+#### Checks  
 ```{r}
 
-param <- "HG"
-species <- "Mytilus edulis" 
-tissue <- "Whole soft body" 
+if (FALSE){
 
-param <- "HG"
-species <- "Gadus morhua" 
-tissue <- "Muskel" 
-
-
-datxl_sel <- datxl %>%
-  filter(
-    PARAM %in% param, 
-    LATIN_NAME %in% species,
-    TISSUE_NAME %in% tissue)
-
-dat_sel <- dat_2 %>%
-  filter(
-    PARAM %in% param, 
-    LATIN_NAME %in% species)  
-
-dat_sel_medium <- dat_medium %>%
-  filter(
-    PARAM %in% param, 
-    LATIN_NAME %in% species)
-
-station_order <- c(
-  "19B NA", "10B Varangerfjord", "45B2 Hammerfest (havn)", "43B2 Tromsø harbour",
-  "98B1 Lofoten, Skrova", "96B Helgelandskysten area by Sandnessjøen", 
-   "80B Munkholmen", "13B Kristiansand harbour", "28B Ålesund area by Hundsvær",
-  "24B Bergen havn", "23B Bømlo north", "53B Inner Sørfjord", 
-  "15B Farsund area", "71B Grenlandsfjorden Breviks area", 
-  "36B Færder area", "30B Inner Oslofjord", "02B Kirkøy (north)")
- 
-dat_sel_medium$Station <- factor(dat_sel_medium$Station, levels = rev(station_order))
-
-
-```
-
-
-
-
-### Overview plot    
-```{r, fig.width=11, fig.height=7}
-
-yrs <- 2005:2021
+  xtabs(~PARAM + is.na(FLAG1), dat_median)
+  xtabs(~Station + is.na(FLAG1), subset(dat_median, PARAM == "PB"))
+  xtabs(~PARAM + is.na(FLAG1), subset(dat_median, grepl("10B", Station)))
+  xtabs(~Station + is.na(FLAG1), dat_median)
   
-ggplot(dat_sel_medium %>% filter(MYEAR %in% yrs), aes(MYEAR, Station, fill = VALUE_WW_med)) +
-  geom_tile() +
-  geom_tile(data = dat_sel_medium %>% filter(MYEAR %in% yrs, Above_EQS %in% "Over"),
-            color = "red", size = 1.5) +
-  geom_text(aes(label = round(VALUE_WW_med, 3)), size = 3) +
-  scale_fill_viridis_c(trans = "log10", breaks = c(0.1,1,10,100)) +
-  scale_color_manual(values = c("red", "white")) +
-  scale_alpha_manual(values = c(1, 0)) +
-  scale_x_continuous(breaks = seq(2005, 2020, 2))
-
-# unique(dat_sel_medium$Station) %>% dput()
-
+}
 
 ```
 
 
+#### Test   
+```{r, warning=FALSE, results='hold'}
+
+select_series <- 2
+
+if (select_series == 1){
+  dat_sel <- milkys_select_rows("HG", "Mytilus edulis", "Whole soft body", "56A",
+                                data = dat_median)   
+} else if (select_series == 2){
+  dat_sel <- milkys_select_rows("PB", "Gadus morhua", "Lever", "13B",
+                                data = dat_median)   
+}
+
+plot(log(VALUE_WW_med) ~ MYEAR, dat_sel)
+points(log(VALUE_WW_med) ~ MYEAR, subset(dat_sel, FLAG1 %in% "<"), pch = 20, col = 2)
+
+# test <- get_trend_cens(dat_sel, firstyear = 2011)
+test <- get_trend_cens(dat_sel)
+
+abline(test$intercept["50%"], test$slope["50%"])
+
+cat("-------------------------------------\n")
+cat("Confidence interval for the slope: \n")
+test$slope[c("2.5%","97.5%")]
+cat("-------------------------------------\n")
+
+```
+
+#### Test time series plot  
 
 ```{r}
 
-trend_coef_long_sel <- trend_coef_long %>%
-  filter(
-    PARAM %in% param, 
-    LATIN_NAME %in% species)
+#
+# 1. Natural numbers (VALUE_WW_med)  
+#
 
-trend_coef_10yr_sel <- trend_coef_10yr %>%
-  filter(
-    PARAM %in% param, 
-    LATIN_NAME %in% species)
+series_label <- paste0(
+  unique(dat_sel$PARAM), " in ", 
+  unique(dat_sel$LATIN_NAME), ", ", 
+  unique(dat_sel$Station) 
+)
 
-trend_coef_long_sel$Station <- factor(trend_coef_long_sel$Station, levels = rev(station_order))
-trend_coef_10yr_sel$Station <- factor(trend_coef_10yr_sel$Station, levels = rev(station_order))
+unit_label <- tolower(unique(dat_sel$UNIT)) %>% gsub("_p_", "/", ., fixed = TRUE)
+# unit_label
 
-ggplot(trend_coef_long_sel, aes(x = Station)) +
-  geom_pointrange(aes(y = Est, ymin = CI_lo, ymax = CI_up, color = Trend)) +
-  scale_color_manual(values = c("green2", "grey20", "red2")) +
-  coord_flip(ylim = range(trend_coef_long_sel$Est))
+gg <- ggplot(dat_sel %>% mutate(LOQ = ifelse(is.na(FLAG1), "Over LOQ", "Under LOQ")), 
+             aes(MYEAR, VALUE_WW_med)) + 
+  geom_point(aes(shape = LOQ, fill = LOQ, size = LOQ)) +
+  scale_shape_manual("", values = c(21, 25)) +
+  scale_fill_manual("", values = c("grey50", "red")) +
+  scale_size_manual("", values = c(3, 2)) +
+  geom_path(data = test$plot_data, aes(x = x, y = exp(y_lo)), linetype = "dashed", color = "green4") +
+  geom_path(data = test$plot_data, aes(x = x, y = exp(y_hi)), linetype = "dashed", color = "green4") +
+  labs(title = series_label)
 
-ggplot(trend_coef_10yr_sel, aes(x = Station)) +
-  geom_pointrange(aes(y = Est, ymin = CI_lo, ymax = CI_up, color = Trend)) +
-  scale_color_manual(values = c("green2", "grey20", "red2")) +
-  coord_flip(ylim = range(trend_coef_10yr_sel$Est))
+# Natural numbers, using ordinary scale
+gg +
+  geom_path(data = test$plot_data, aes(x = x, y = exp(y)), color = "green4") +
+  labs(title = series_label, y = paste0("Median w.w. concentration (", unit_label, ")"))
+
+#
+# The rest is not shown by default
+#
+if (FALSE){
+  
+  # Natural numbers, using ordinary scale
+  gg +
+    geom_path(data = test$plot_data, aes(x = x, y = exp(y)), color = "green4") +
+    labs(title = "1.1 Natural numbers, using ordinary scale")
+  
+  
+  
+  # Natural numbers, using scale_y_log10
+  gg + 
+    geom_path(data = test$plot_data, aes(x = x, y = exp(y)), color = "green4") +
+    scale_y_log10() +
+    labs(title = "1.2 Natural numbers, using scale_y_log10")
+  
+  # Make a "smooth" predicted line (based on intercept and slope)
+  test$plot_data <- test$plot_data %>%
+    mutate(
+      y_expect_logscale = test$intercept["50%"] + test$slope["50%"]*x,
+      y_expect = exp(y_expect_logscale)
+    )
+  
+  # Natural numbers, using ordinary scale + smooth predicted line
+  gg +
+    geom_path(data = test$plot_data, aes(x = x, y = y_expect), color = "green4") +
+    labs(title = "1.3 Natural numbers, using ordinary scale + smooth predicted line")
+  
+  #
+  # 2. Log numbers (log VALUE_WW_med)  
+  #
+  gg <- ggplot(dat_sel, aes(MYEAR, log(VALUE_WW_med))) + 
+    geom_point(aes(shape = is.na(FLAG1))) +
+    geom_path(data = test$plot_data, aes(x = x, y = y_lo), linetype = "dashed", color = "green4") +
+    geom_path(data = test$plot_data, aes(x = x, y = y_hi), linetype = "dashed", color = "green4")
+  
+  # 2.1 Log numbers using ordinary scale
+  gg +
+    geom_abline(intercept = test$intercept["50%"], slope = test$slope["50%"], color = "green4") +
+    labs(title = "2.1 Log numbers, using ordinary scale")
+  
+  # Set breaks for use as labels. 2 approaches.  
+  # from ?axTicks  
+  label_alternative <- 1
+  if (label_alternative == 1){
+    y_breaks <- pretty(dat_sel$VALUE_WW_med, min.n = 5)
+    y_breaks <- y_breaks[y_breaks > 0]   # remove zero
+    min <- min(dat_sel$VALUE_WW_med)
+    if (min < min(y_breaks)*0.5){
+      y_breaks2 <- pretty(min, min(y_breaks), min.n = 3)
+      y_breaks <- sort(union(y_breaks, y_breaks2))
+    }
+  } else if (label_alternative == 2){
+    (ylims <- range(dat_sel$VALUE_WW_med))
+    get_axp <- function(x) 10^c(ceiling(x[1]), floor(x[2]))
+    ## mimic par("yaxs") == "i"
+    usr.i <- log10(ylims)
+    (y_breaks <- axTicks(side = 2, usr = usr.i,
+                         axp = c(get_axp(usr.i), n = 3), log = TRUE, nintLog = 5))
+  }
+  
+  # 2.2 Log numbers using ordinary scale, but labels manipulated
+  gg +
+    geom_abline(intercept = test$intercept["50%"], slope = test$slope["50%"], color = "green4") +
+    scale_y_continuous(breaks = log(y_breaks), labels = y_breaks) +
+    labs(y = "W.w. concentration",
+         title = "2.2 Log numbers, using ordinary scale but labels manipulated") 
+  
+  
+  # 2.3 Log numbers using back-transformed scale, and labels manipulated
+  gg + 
+    geom_path(data = test$plot_data, aes(x = x, y = y_expect_logscale), color = "green4") +
+    scale_y_continuous(trans = "exp", breaks = log(y_breaks), labels = y_breaks) +
+    labs(
+      y = "W.w. concentration",
+      title = "2.3 Log numbers using back-transformed scale, and labels manipulated")
+  
+  
+} # if FALSE
 
 ```
-### Combine  
+
+
+#### Function 'get_trendobj_station'     
+
+* Selects only station - meant to be used for data with only one parameter (and species/tissue)  
+
+```{r, warning=FALSE}
+
+# Function moved to 
+# keep = the parts of the object we want to keep (to decrease memory usage)
+# - set keep = "all" to keep all parts   
+
+get_trendobj_station <- function(station, data, 
+                                 keep = c("intercept", "slope", "plot_data"),
+                                 several_series_is_error = TRUE,
+                                 ...
+                                 ){   
+  data_select <- milkys_select_rows(station = station, data = data) 
+  
+  check <- unique(data_select$PARAM)
+  if (length(check) > 1 & several_series_is_error){
+    stop("Series contains several parameters: ", paste(check, collapse = ", "))
+  }
+  check <- unique(data_select$LATIN_NAME)
+  if (length(check) > 1 & several_series_is_error){
+    stop("Series contains several species: ", paste(check, collapse = ", "))
+  }
+  check <- unique(data_select$TISSUE_NAME)
+  if (length(check) > 1 & several_series_is_error){
+    stop("Series contains several tissues: ", paste(check, collapse = ", "))
+  }
+
+  trendobj_complete <- get_trend_cens(data_select, ...) 
+  # data_select
+  
+  if (keep == "all"){
+    trendobj_complete
+  } else {
+    trendobj_complete[keep]
+  }
+}
+
+# test
+# trendobj1 <- get_trendobj_station("56A", dat_sel_medium)
+# trendobj2 <- get_trendobj_station("56A", dat_sel_medium, firstyear = 2011)
+#
+# Should make error:
+# test <- get_trendobj_station("56A", subset(dat_median, PARAM %in% c("CD", "PB")))
+
+```
+
+#### Get all trends  
+
+* For 1 parameter (still)  
+* Creates df_slope which is a list of two data frames (long- and short-term trends)
+
+```{r, warning=FALSE}
+
+# Safe version (doesn't stop the procedure when there is an error)  
+# see ?safely for explnation  
+get_trendobj_station_s <- purrr::safely(get_trendobj_station)
+
+# Vector of stations
+stations <- unique(dat_sel_medium$Station) %>% 
+  set_names() # set names of 'stations' to stations (will be carried over to 'trend_results')
+
+# Filename for saving
+fn <- paste0("Trends ", unique(dat_sel_medium$PARAM), " ", species_category, ".rds")
+fn_full <- paste0("Data/824_trend_results/", fn)
+
+file_exists <- fn %in% dir("Data/824_trend_results")
+
+# If file of results exists, reada it; otherwise, perform anlysis and write it  
+if (file_exists){
+  trend_results <- readRDS(fn_full)
+} else {
+  
+  # Run all (takes some minutes)
+  trend_results <- list()
+  trend_results[[1]] <- purrr::map(stations, get_trendobj_station_s, data = dat_sel_medium)
+  trend_results[[2]] <- purrr::map(stations, get_trendobj_station_s, data = dat_sel_medium, firstyear = 2011)
+
+  saveRDS(trend_results, fn_full)
+  
+}
+
+```
+
+#### Extract slope estimates
+```{r, results='hold'}
+
+trendobj_list <- list()
+df_slope_list <- list()
+
+# Extract slope estimates for long + short term trends    
+for (i in 1:2){
+  # Pick trends that worked and make list of results  
+  ok <- trend_results[[i]] %>% map("error") %>% map_lgl(is.null)
+  trendobj_list[[i]] <- trend_results[[i]][ok] %>% map("result") 
+  df_slope_list[[i]] <- trendobj_list[[i]] %>% map("slope") %>% bind_rows()
+  df_slope_list[[i]]$Station <- names(trendobj_list[[i]])
+  df_slope_list[[i]] <- df_slope_list[[i]] %>%
+    mutate(
+      Trend = case_when(
+        `2.5%` > 0 ~ "Up",
+        `97.5%` < 0 ~ "Down",
+        TRUE ~ "No change"),
+      Trend = factor(Trend, levels = c("Up", "Down", "No change"))
+    )
+}
+
+# View(df_slope_list[[1]])
+
+df_slopes <- bind_rows(
+  data.frame(Years = "All years", df_slope_list[[1]]),
+  data.frame(Years = "Last 10 years", df_slope_list[[2]])
+)
+
+nm <- names(df_slopes)
+nm <- sub("X", "Perc", nm)
+nm <- sub("\\.$", "", nm)
+names(df_slopes) <- nm
+
+cat("Column names: \n")
+paste(names(df_slopes), collapse = ", ")
+
+```
+
+
+### Trend plot for combined plot  
+
+* We create a list of trends instead of useing facet, otherwise it's hard to ensure that each station in the overview plot (tile plot) are in teh same position as the lines for trends    
+
+```{r}
+
+gg_trend_list <- c("All years", "Last 10 years") %>%
+  map(
+    ~ggplot(subset(df_slopes, Years == .),
+            aes(x = Station, y = Perc50)) +
+      geom_linerange(aes(ymin = Perc2.5, ymax = Perc97.5, color = Trend)) +
+      geom_point(aes(fill = Trend, shape = Trend), color = "black") +
+      scale_color_manual(values = c("red2", "green4", "grey20"), drop = FALSE) +
+      scale_fill_manual(values = c("red2", "green4", "grey20"), drop = FALSE) +
+      scale_shape_manual(values = c(24, 25, 21), drop = FALSE) +
+      geom_hline(yintercept = 0) +
+      coord_flip(ylim = range(df_slopes$Perc50)) +
+      theme_bw() +
+      labs(y = .) 
+  )
+
+gg_trend_list[[1]]
+# gg_trend_list[[2]]
+
+```
+
+
+### Combined plot - medians + trends    
+
 ```{r, fig.width=13, fig.height=9}
 
-yrs <- 2004:2020
+yrs <- 2004:2021
 
 dat_sel_medium_plot <- dat_sel_medium %>%
   mutate(Station2 = substr(Station, 1, 15),
-         Station2 = factor(Station2, levels = rev(substr(station_order, 1, 15))))
+         Station2 = factor(Station2, levels = rev(substr(station_order_mussel, 1, 15))),
+         LOQ = ifelse(Prop_underLOQ >= 0.5, "<", ""))
 
 gg1 <- ggplot(dat_sel_medium_plot %>% filter(MYEAR %in% yrs), 
-              aes(MYEAR, Station2, fill = VALUE_WW_med)) +
+              aes(MYEAR, Station2, fill = Proref_ratio_WW)) +
   geom_tile() +
-  geom_tile(data = dat_sel_medium_plot %>% filter(MYEAR %in% yrs, 
-                                             Above_EQS %in% "Over"),
+  geom_tile(data = dat_sel_medium_plot %>% filter(MYEAR %in% yrs, Above_EQS %in% "Over"),
             color = "red", size = 1.5) +
   geom_text(aes(label = round(VALUE_WW_med, 3)), size = 3) +
-  scale_fill_viridis_c(trans = "log10", breaks = c(0.1,1,10,100)) +
+  geom_text(aes(label = LOQ), size = 3, nudge_y = 0.3) +
+  #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+  #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+  scale_fill_stepsn(breaks = c(0.01,1,2,3,5,10,100), colours = cols) +
   scale_color_manual(values = c("red", "white")) +
   scale_alpha_manual(values = c(1, 0)) +
-  scale_x_continuous(breaks = seq(2004, 2020, 2)) +
-  theme(legend.position = "none")
+  scale_x_continuous(breaks = seq(2006, 2020, 2))
 
-gg_list <- list(trend_coef_long_sel, trend_coef_10yr_sel) %>%
-  map(
-    ~ggplot(., aes(x = Station)) +
-      geom_pointrange(aes(y = Est, ymin = CI_lo, ymax = CI_up, color = Trend)) +
-      scale_color_manual(values = c("green2", "grey20", "red2")) +
-      geom_hline(yintercept = 0) +
-      coord_flip(ylim = range(.$Est)) +
-      theme_bw())
-
-gg_list[[1]] <- gg_list[[1]] 
   
 
 # Test
@@ -369,25 +931,300 @@ gg_list[[1]] <- gg_list[[1]]
 #                    gg2, 
 #                    nrow = 1)
 
-cowplot::plot_grid(gg1, 
-                   gg_list[[1]] + 
+cowplot::plot_grid(gg1 + theme(legend.position = "none"), 
+                   gg_trend_list[[1]] + 
                      theme(axis.title.y = element_blank(),
                            axis.text.y = element_blank(),
                            legend.position = "none"), 
-                   gg_list[[2]] + 
+                   gg_trend_list[[2]] + 
                      theme(axis.title.y = element_blank(),
                            axis.text.y = element_blank()), 
-                   rel_widths = c(2.8, 0.6, 1),
-                   nrow = 1)
+                   cowplot::get_legend(gg1),
+                   nrow = 2, ncol = 3,
+                   rel_heights = c(3,1),
+                   rel_widths = c(2.8, 0.6, 1)
+                   )
 
-# tidstrend punkter: pil/trekant opp/ned avhengig av retning
-# < som ekstra tegn over konsentrasjon
-# farger i hht, proref
-# følg grense på 5 år for trender  
-#  
-# For siste år: boksplott (med proref lagt på som linjer)  
-#
-# "Stor excel" også - trenger ikke være formatert
-# 
 
 ```
+
+
+## Detection frequency
+
+* Vik color scale used  
+
+### Detection frequency 1 (by year * station, one parameter in all years)  
+
+* This plot shows the median value for each station/year, it could instead show limit of quantification (median value of less-thans)  
+
+```{r, fig.width=11, fig.height=7}
+
+dat_detectplot1 <- dat_sel_medium %>% 
+  filter(MYEAR %in% yrs) %>%
+  mutate(Detected = 100*(1-Prop_underLOQ))
+
+ggplot(dat_detectplot1, aes(MYEAR, Station, fill = Detected)) +
+  geom_tile() +
+  geom_text(data = subset(dat_detectplot1, Detected > 35 & Detected < 65), 
+            aes(label = round(VALUE_WW_med, 3)), size = 3) +
+  geom_text(data = subset(dat_detectplot1, Detected <= 35 | Detected >= 65), 
+            aes(label = round(VALUE_WW_med, 3)), size = 3, 
+            color = "white") +
+  # scale_fill_viridis_b(breaks = seq(0,1,0.1)) +
+  scale_fill_scico(palette = "vik", direction = -1,  midpoint = 50, limits = c(0,100)) +
+  labs(
+    title = unique(dat_sel_medium$PARAM)
+  )
+
+```
+
+
+### Detection frequency 2 (by parameter * station, all parameters in last year) 
+
+#### Fish  
+```{r, fig.width=11, fig.height=7}
+
+dat_detectplot2 <- dat_median_fish %>% 
+  filter(MYEAR %in% 2021) %>%
+  mutate(Detected = 100*(1-Prop_underLOQ))
+
+ggplot(dat_detectplot2, aes(PARAM, Station, fill = Detected)) +
+  geom_tile() +
+  geom_text(data = subset(dat_detectplot2, Detected > 35 & Detected < 65), 
+            aes(label = round(VALUE_WW_med, 3)), size = 3) +
+  geom_text(data = subset(dat_detectplot2, Detected <= 35 | Detected >= 65), 
+            aes(label = round(VALUE_WW_med, 3)), size = 3, 
+            color = "white") +
+  scale_fill_scico(palette = "vik", direction = -1,  midpoint = 50, limits = c(0,100)) +
+  labs(
+    title = paste0("Fish, ", unique(dat_detectplot2$MYEAR))
+  )
+
+```
+
+#### Blue mussel    
+```{r, fig.width=11, fig.height=7}
+
+dat_detectplot2 <- dat_median_mussel %>% 
+  filter(MYEAR %in% 2021) %>%
+  mutate(Detected = 100*(1-Prop_underLOQ))
+
+ggplot(dat_detectplot2, aes(PARAM, Station, fill = Detected)) +
+  geom_tile() +
+  geom_text(data = subset(dat_detectplot2, Detected > 35 & Detected < 65), 
+            aes(label = round(VALUE_WW_med, 3)), size = 3) +
+  geom_text(data = subset(dat_detectplot2, Detected <= 35 | Detected >= 65), 
+            aes(label = round(VALUE_WW_med, 3)), size = 3, 
+            color = "white") +
+  scale_fill_scico(palette = "vik", direction = -1,  midpoint = 50, limits = c(0,100)) +
+  labs(
+    title = paste0("Blue mussel, ", unique(dat_detectplot2$MYEAR))
+  )
+    
+```
+
+## EQS plot   
+
+### Fish  
+```{r, fig.height=7, fig.width=9}
+
+param <- "HG"
+species <- c("Gadus morhua", "Platichthys flesus")
+
+dat_eqsplot <- dat_3_fish %>% 
+  filter(PARAM == param & LATIN_NAME %in% species & MYEAR == 2021)
+
+gg <- ggplot(dat_eqsplot, aes(Station, VALUE_WW/EQS_WW)) +
+  geom_hline(yintercept = 1) +
+  geom_boxplot() +
+  geom_jitter(width = 0.1) +
+  theme_bw() +
+  ggeasy::easy_rotate_x_labels(angle = -45) +
+  labs(title = paste0("Ratio concentration/EQS, ", param, " in fish"))
+
+gg
+
+# gg + scale_y_log10()
+
+```
+
+### Blue mussel     
+
+```{r, fig.height=7, fig.width=9}
+
+# **Bruk range og ikke boxplot når det kun er 3 prøver** 
+
+
+param <- "HG"
+species <- c("Mytilus edulis")
+
+dat_eqsplot <- dat_3_fish %>% 
+  filter(PARAM == param & LATIN_NAME %in% species & MYEAR == 2021)
+
+# Data for 'geom_pointrange'  
+dat_eqsplot <- dat_3_mussel %>% 
+  filter(PARAM == "HG" & LATIN_NAME %in% c("Mytilus edulis") & MYEAR == 2021) %>%
+  group_by(Station) %>%
+  summarize(
+    EQS_ratio = median(VALUE_WW/EQS_WW),
+    EQS_ratio_min = min(VALUE_WW/EQS_WW),
+    EQS_ratio_max = max(VALUE_WW/EQS_WW)
+  )
+
+gg <- ggplot(dat_eqsplot, aes(Station, EQS_ratio)) +
+  geom_hline(yintercept = 1) +
+  geom_pointrange(aes(ymin = EQS_ratio_min, ymax = EQS_ratio_max)) +
+  #geom_jitter(width = 0.1) +
+  theme_bw() +
+  ggeasy::easy_rotate_x_labels(angle = -45) +
+  labs(title = paste0("Ratio concentration/EQS, ", param, " in blue mussel"))
+
+gg
+
+# gg + scale_y_log10()
+
+``` 
+
+
+## Proref plot 1 (basert på enkeltprøver)      
+
+### Fish  
+```{r, fig.height=7, fig.width=9}
+
+param <- "HG"
+species <- c("Gadus morhua", "Platichthys flesus")
+
+dat_prorefplot1 <- dat_3_fish %>% 
+  filter(PARAM == param & LATIN_NAME %in% species & MYEAR == 2021)
+
+gg <- ggplot(dat_prorefplot1, aes(Station, VALUE_WW/Proref)) +
+  geom_hline(yintercept = 1) +
+  geom_boxplot() +
+  geom_jitter(width = 0.1) +
+  theme_bw() +
+  ggeasy::easy_rotate_x_labels(angle = -45) +
+  labs(title = paste0("Ratio concentration/proref, ", param, " in fish"))
+
+gg
+
+# gg + scale_y_log10()
+
+```
+
+### Blue mussel   
+```{r, fig.height=7, fig.width=9}
+
+param <- "HG"
+species <- c("Mytilus edulis")
+
+# Data for 'geom_pointrange'  
+dat_prorefplot1 <- dat_3_mussel %>% 
+  filter(PARAM == param & LATIN_NAME %in% species & MYEAR == 2021) %>%
+  group_by(Station) %>%
+  summarize(
+    Proref_ratio = median(VALUE_WW/Proref),
+    Proref_ratio_min = min(VALUE_WW/Proref),
+    Proref_ratio_max = max(VALUE_WW/Proref)
+  )
+
+gg <- ggplot(dat_prorefplot1, aes(Station, Proref_ratio)) +
+  geom_hline(yintercept = 1) +
+  geom_pointrange(aes(ymin = Proref_ratio_min, ymax = Proref_ratio_max)) +
+  #geom_jitter(width = 0.1) +
+  theme_bw() +
+  ggeasy::easy_rotate_x_labels(angle = -45) +
+  labs(title = paste0("Ratio concentration/proref, ", param, " in blue mussel"))
+
+gg
+
+#   gg + scale_y_log10()
+
+```
+
+
+## Proref plot 2 (basert på medianer)      
+
+
+### Fish
+```{r, fig.height=7, fig.width=9}
+
+# **Bruk farger for geografi (kalde farger for nord, varme farger for sør)**  
+
+dat_prorefplot2 <- dat_median %>% 
+  filter(LATIN_NAME %in% c("Gadus morhua", "Platichthys flesus") & MYEAR == 2021) %>%
+  mutate(Geogr_position = as.numeric(Station))
+
+gg <- ggplot(dat_prorefplot2, aes(PARAM, VALUE_WW_med/Proref)) +
+  geom_hline(yintercept = 1) +
+  geom_boxplot() +
+  geom_jitter(aes(fill = Geogr_position), pch = 21, size = 2, width = 0.1) +
+  scale_fill_distiller("Along coast\n(far N/E = blue)", palette = "RdBu", direction = 1) +
+  theme_bw() +
+  ggeasy::easy_rotate_x_labels(angle = -45) +
+  labs(title = "Ratio concentration/proref, metals in fish 2021")
+
+gg
+
+# gg + scale_y_log10()  
+
+```
+
+### Blue mussel  
+```{r, fig.height=7, fig.width=9}
+
+dat_prorefplot2 <- dat_median %>% 
+  filter(LATIN_NAME %in% c("Mytilus edulis") & MYEAR == 2021) %>%
+  mutate(Geogr_position = as.numeric(Station))
+
+
+gg <- ggplot(dat_prorefplot2, aes(PARAM, VALUE_WW_med/Proref)) +
+  geom_hline(yintercept = 1) +
+  geom_boxplot() +
+  geom_jitter(aes(fill = Geogr_position), pch = 21, size = 2, width = 0.1) +
+  scale_fill_distiller("Along coast\n(far N/E = blue)", palette = "RdBu", direction = 1) +
+  theme_bw() +
+  ggeasy::easy_rotate_x_labels(angle = -45) +
+  labs(title = "Ratio concentration/proref, metals in blue mussel 2021")
+
+gg
+
+gg + scale_y_log10()  
+
+```
+
+
+## All parameters + all stations - trend estimation    
+
+### Function for getting data for one parameter and species     
+
+* Note: data is assumed to be homogenous within station (one tissue/species per station)  
+    - This assumption is tested by the 
+    * Note: data is assumed to be homogenous within station (one tissue/species per station)  
+* Function doesn't make new data if data file (saved on Data/824_trend_results) already exists  
+
+```{r, warning=FALSE}
+1
+# get_trendobj_parameter_species
+# - moved to functions script  
+
+# get_trendobj_parameter_species 
+# - goes through all stations for that parameter, and for each of them runs
+# get_trendobj_station 
+# - which selects data for a single station, and for each of them runs
+# get_trend_cens
+# - which checks that the data actually are for a single time series
+# - converts data to a useful form using 'leftcensored_prepare'
+# - and then runs 'lc_linear'
+
+X <- get_trendobj_parameter_species("HG", "Gadus morhua", dat_median)
+str(X, 1)             # two objects: long and 10-year series
+str(X[[1]], 1)
+str(X[[1]][[1]], 1)
+
+```
+
+
+
+
+
+
