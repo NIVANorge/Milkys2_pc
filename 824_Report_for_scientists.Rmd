@@ -1192,6 +1192,46 @@ gg + scale_y_log10()
 
 ```
 
+## Dotplot test  
+
+* Testing dot plots, where we avoid overlap between points
+
+
+```{r test_dotplot, fig.width=10, fig.height=7}
+
+if (FALSE){
+
+
+  dat_prorefplot2 <- dat_median_fish %>% 
+    filter(MYEAR == 2021)
+
+  
+  # Looks nice but has no colours for geography
+  ggplot(dat_prorefplot2, aes(x = PARAM, y = Proref_ratio_WW)) +
+    geom_dotplot(binaxis = "y", stackdir = "center", position = "dodge", dotsize=0.8, binwidth = 0.07)
+  
+  # Gets colours from Water_region but "splits" data by Water_region also -> mess 
+  ggplot(dat_prorefplot2, aes(x = PARAM, y = Proref_ratio_WW, colour = Water_region)) +
+    geom_dotplot(binaxis = "y", stackdir = "center", position = "dodge", dotsize=0.8, binwidth = 0.07)
+
+  # This works
+  cols <- RColorBrewer::brewer.pal(8, name = "RdBu")
+  cols_by_region <- cols[as.numeric(dat_prorefplot2$Water_region)]
+  ggplot(dat_prorefplot2, aes(x = PARAM, y = Proref_ratio_WW)) +
+    geom_dotplot(binaxis = "y", stackdir = "center", position = "dodge", dotsize=0.8, binwidth = 0.07, fill = cols_by_region)
+  
+  # The interactive versions doesn't work, however
+  gg <- ggplot(dat_prorefplot2, aes(x = PARAM, y = Proref_ratio_WW)) +
+    geom_dotplot_interactive(binaxis = "y", stackdir = "center", position = "dodge", dotsize=0.8, binwidth = 0.07, fill = cols_by_region)
+  girafe(gg)
+  
+  # (the example in ?geom_dotplot_interactive works, so I don't know what's wrong)
+  
+}
+
+
+
+```
 
 ## All parameters + all stations - trend estimation    
 
