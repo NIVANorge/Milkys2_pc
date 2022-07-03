@@ -3,18 +3,23 @@
 # Data on sample level ----  
 #
 
-get_parametervalues <- function(paramgroup, return_group_names = FALSE){
+get_parametervalues_singlegroup <- function(paramgroup, return_group_names = FALSE){
 
   #
   # Parameter groups
   #
-  lookup_paramgroup <- read_excel("Input_files_2020/Lookup table - substance groups.xlsx")
-  
+  lookup_paramgroup <- readxl::read_excel("Input_files_2020/Lookup table - substance groups.xlsx")
+  group_names <- unique(lookup_paramgroup$Substance.Group)
+    
   if (return_group_names){
     return <- unique(lookup_paramgroup$Substance.Group)
   } else {
+    sel_paramgroup <- grep(paramgroup, group_names, value = TRUE, ignore.case = TRUE)
+    if (length(sel_paramgroup) > 1){
+      stop(paramgroup, " fits several names: ", paste(sel_paramgroup, collapse = "; "))
+    }
     lookup_paramgroup <- read_excel("Input_files_2020/Lookup table - substance groups.xlsx") %>%
-      filter(grepl(paramgroup, Substance.Group, ignore.case = TRUE))
+      filter(Substance.Group %in% sel_paramgroup)
     
     # Parameters
     return <- unique(lookup_paramgroup$PARAM)
@@ -25,11 +30,44 @@ get_parametervalues <- function(paramgroup, return_group_names = FALSE){
 }
 
 if (FALSE){
-  get_parametervalues(return_group_names = TRUE)
-  get_parametervalues("metals")
-  get_parametervalues("organobrom")
+  get_parametervalues_singlegroup(return_group_names = TRUE)
+  get_parametervalues_singlegroup("metals")
+  get_parametervalues_singlegroup("organobrom")
+  get_parametervalues_singlegroup("chlor")      # should return error
+  get_parametervalues_singlegroup("chlorobi")
+  get_parametervalues_singlegroup("biological")
+  get_parametervalues_singlegroup("biomarkers")
+  get_parametervalues_singlegroup("paraffins")
+  get_parametervalues_singlegroup("DDTs")
+  get_parametervalues_singlegroup("cyclohexanes")
+  get_parametervalues_singlegroup("organochlorine")
 }
 
+# Get parameter names for several groups
+# If no argument given, returns group names
+get_parametervalues <- function(paramgroups = NULL){
+  
+  if (is.null(paramgroups)){
+    result2 <- get_parametervalues_singlegroup(return_group_names = TRUE)
+  } else {
+    result1 <- lapply(paramgroups, get_parametervalues_singlegroup)
+    
+    for (i in 1:length(result1)){
+      if (i == 1){
+        result2 <- result1[[1]]
+      } else {
+        result2 <- c(result2, result1[[i]])
+      }
+    }
+  }
+  result2
+}
+
+if (FALSE){
+  get_parametervalues("organochlorine")
+  get_parametervalues(c("organochlorine", "cyclohexanes"))
+  get_parametervalues()
+}
 
 get_data_tables <- function(paramgroup, 
                             filename_109 = "Files_from_Jupyterhub_2021/109_adjusted_data_2022-06-04.rds",
@@ -38,12 +76,13 @@ get_data_tables <- function(paramgroup,
                             filename_bigexcel = "Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver03.rds"){
   
 
+  # Parameter names
+  param_values <- get_parametervalues(paramgroup)
+
   # Parameter groups
   lookup_paramgroup <- read_excel(filename_lookup_substancegroups) %>%
-    filter(grepl(paramgroup, Substance.Group, ignore.case = TRUE))
+    filter(PARAM %in% param_values)
   
-  param_values <- unique(lookup_paramgroup$PARAM)
-
   # Raw data
   dat_all <- readRDS(filename_109) %>%
     filter(PARAM %in% param_values)
