@@ -10,17 +10,17 @@
 #
 # ** App overview ** ----
 #
-# menu 'projects_selected' is filled using 'projects_available' (available from start-up)
+# menu 'projects_menu' is filled using 'projects_available' (available from start-up)
 # user selects projects -> 'get_stations' data frame
 #   -> creates 'get_stations_years' data frame (one line per station x year)
 #   -> creates 'get_stations_years_select' data frame (one line per station x year)
 #   -> outputs plot 'station_years_plot' and table 'station_years_datatable'  
-#   -> filling menus 'stations_selected', 'years_selected' and 'lastyear_data_series'  
+#   -> filling menus 'stations_menu', 'years_menu' and 'lastyear_data_series'  
 # user selects stations and/or years and clicks button 'download_samples'  
 #   -> creates 'get_specimens', 'get_samples' and 'get_parameters' data frames    
 #   -> outputs tables 'specimens_datatable', 'samples_datatable' and 'parameters_datatable'  
-#   -> fills menu 'parameters_selected'  
-# user selects parameters in menu 'parameters_selected'  
+#   -> fills menu 'parameters_menu'  
+# user selects parameters in menu 'parameters_menu'  
 #   -> creates 'get_measurements' data frame  
 #   -> outputs table 'measurements_datatable'  
 
@@ -84,18 +84,18 @@ ui <- fluidPage(
         sidebarPanel(
           
           # Sidebar menu ----
-          selectizeInput(inputId = "projects_selected", label = "Projects", 
+          selectizeInput(inputId = "projects_menu", label = "Projects", 
                          choices = NULL, multiple = TRUE),
           textOutput("n_years_stations"),
           br(),
-          selectizeInput(inputId = "years_selected", label = "Years", 
+          selectizeInput(inputId = "years_menu", label = "Years", 
                          choices = NULL, multiple = TRUE),
-          selectizeInput(inputId = "stations_selected", label = "Stations", 
+          selectizeInput(inputId = "stations_menu", label = "Stations", 
                          choices = NULL, multiple = TRUE),
           actionButton("download_samples", "Download available samples"),
           textOutput("n_specimens_samples"),
           br(),
-          selectizeInput(inputId = "parameters_selected", label = "Parameters", 
+          selectizeInput(inputId = "parameters_menu", label = "Parameters", 
                          choices = NULL, multiple = TRUE),
           width = 4
         ),
@@ -151,31 +151,31 @@ ui <- fluidPage(
 server <- function(input, output, session) {
   
   #
-  # fill menu 'projects_selected' ----
+  # fill menu 'projects_menu' ----
   #
   updateSelectizeInput(
     session,
-    inputId = "projects_selected",
+    inputId = "projects_menu",
     choices = projects_available,
     server = TRUE)
   
   #
   # get_stations ----
   #
-  # Used to fill menu 'stations_selected' and make 'get_stations_years' and 'get_specimens'   
+  # Used to fill menu 'stations_menu' and make 'get_stations_years' and 'get_specimens'   
   #
   # Triggered by selecting project
-  # For the menu 'stations_selected', plus 'get_stations_years', ''
+  # For the menu 'stations_menu', plus 'get_stations_years', ''
   # Returns data frame from PROJECTS_STATIONS (one line per station x project)
   #
   get_stations <- reactive({
     
     validate(
-      need(input$projects_selected != "", "Please select a project")
+      need(input$projects_menu != "", "Please select a project")
     )
     
     df_projects_sel <- df_projects %>%
-      filter(Menu_string %in% input$projects_selected)
+      filter(Menu_string %in% input$projects_menu)
     id <- df_projects_sel %>%
       pull(PROJECT_ID)
     
@@ -194,7 +194,7 @@ server <- function(input, output, session) {
   #
   # get_stations_years ----
   #
-  # Used to fill menu 'years_selected'  make 'get_stations_years_select' and 'get_specimens'   
+  # Used to fill menu 'years_menu'  make 'get_stations_years_select' and 'get_specimens'   
   #
   # Triggered by get_stations (which is triggered by selecting project)
   # Returns data frame with one line per station x year, including count of number of specimens 
@@ -282,7 +282,7 @@ server <- function(input, output, session) {
   )
   
   #
-  # fill menu 'stations_selected' ---- 
+  # fill menu 'stations_menu' ---- 
   #
   # Triggered by 'get_stations' (which is triggered by selecting project)
   # Retrieving column 'Menu_string' from get_stations()
@@ -291,14 +291,14 @@ server <- function(input, output, session) {
     df_stations <- get_stations()
     stations_available <- df_stations %>% pull(Menu_string)
     updateSelectizeInput(
-      inputId = "stations_selected",
+      inputId = "stations_menu",
       choices = stations_available
-      # selected = input$stations_selected
+      # selected = input$stations_menu
       )
   })
   
   #
-  # fill menu 'years_selected' ----  
+  # fill menu 'years_menu' ----  
   #
   # Triggered by 'get_stations_years' (which is triggered by selecting project)
   # Retrieving unique values of column 'YEAR' from get_stations_years()
@@ -310,9 +310,9 @@ server <- function(input, output, session) {
       pull(YEAR) %>%
       sort()
     updateSelectizeInput(
-      inputId = "years_selected",
+      inputId = "years_menu",
       choices = years_available
-      # selected = input$stations_selected
+      # selected = input$stations_menu
     )
   })
   
@@ -332,7 +332,7 @@ server <- function(input, output, session) {
     updateSelectizeInput(
       inputId = "lastyear_data_series",
       choices = years_available
-      # selected = input$stations_selected
+      # selected = input$stations_menu
     )
   })
   
@@ -357,7 +357,7 @@ server <- function(input, output, session) {
   get_specimens <- eventReactive(input$download_samples, {
     
     # Make sure either years or stations is selected
-    if (is.null(input$years_selected) & is.null(input$stations_selected)){
+    if (is.null(input$years_menu) & is.null(input$stations_menu)){
       validate(need(FALSE, "Please select years and/or stations"))
     }
     
@@ -366,22 +366,22 @@ server <- function(input, output, session) {
     # browser()
 
     sql_years <- paste(" and extract(YEAR from DATE_CAUGHT) in (", 
-                       paste(input$years_selected, collapse = ","),
+                       paste(input$years_menu, collapse = ","),
                        ")")  
     
-    if (is.null(input$stations_selected)){
+    if (is.null(input$stations_menu)){
       station_ids <- df_stations_years %>%
-        filter(YEAR %in% input$years_selected) %>%
+        filter(YEAR %in% input$years_menu) %>%
         pull(STATION_ID)
       extras_sql_string <- sql_years   
-    } else if (is.null(input$years_selected)){
+    } else if (is.null(input$years_menu)){
       station_ids <- df_stations %>%
-        filter(Menu_string %in% input$stations_selected) %>%
+        filter(Menu_string %in% input$stations_menu) %>%
         pull(STATION_ID)
       extras_sql_string <- ""
     } else {
       station_ids <- df_stations_years %>%
-        filter(Menu_string %in% input$stations_selected) %>%
+        filter(Menu_string %in% input$stations_menu) %>%
         pull(STATION_ID)
       extras_sql_string <- sql_years   
     }
@@ -436,7 +436,7 @@ server <- function(input, output, session) {
   get_samples <- reactive({
     
     # Make sure either years or stations is selected
-    if (is.null(input$years_selected) & is.null(input$stations_selected)){
+    if (is.null(input$years_menu) & is.null(input$stations_menu)){
       validate(need(FALSE, "Please select years and/or stations"))
     }
 
@@ -498,7 +498,7 @@ server <- function(input, output, session) {
   #
   # get_parameters ----
   #
-  # Used to fill menu 'parameters_selected', result is also shown in a table in the output
+  # Used to fill menu 'parameters_menu', result is also shown in a table in the output
   #
   # Triggered by 'get_samples' (which is triggerd when user clicks button 'download_samples')  
   # Fetches data frame 'get_samples'    
@@ -513,7 +513,7 @@ server <- function(input, output, session) {
   get_parameters <- reactive({
     
     # Make sure either years or stations is selected
-    if (is.null(input$years_selected) & is.null(input$stations_selected)){
+    if (is.null(input$years_menu) & is.null(input$stations_menu)){
       validate(need(FALSE, "Please select years and/or stations"))
     }
     
@@ -550,7 +550,7 @@ server <- function(input, output, session) {
   })
   
   #
-  # fill menu 'parameters_selected' ----  
+  # fill menu 'parameters_menu' ----  
   #
   # Using get_parameters
   #
@@ -560,9 +560,9 @@ server <- function(input, output, session) {
       pull(Menu_string) %>%
       sort()
     updateSelectizeInput(
-      inputId = "parameters_selected",
+      inputId = "parameters_menu",
       choices = params_available,
-      selected = input$parameters_selected
+      selected = input$parameters_menu
     )
   })
 
@@ -590,10 +590,10 @@ server <- function(input, output, session) {
   get_measurements <- reactive({
     
     # Make sure either years or stations is selected
-    if (is.null(input$years_selected) & is.null(input$stations_selected)){
+    if (is.null(input$years_menu) & is.null(input$stations_menu)){
       validate(need(FALSE, "Please select years and/or stations"))
     }
-    validate(need(input$parameters_selected != "", "Please select parameters"))
+    validate(need(input$parameters_menu != "", "Please select parameters"))
 
     df_samples <- get_samples()  
     df_parameters <- get_parameters()
@@ -602,7 +602,7 @@ server <- function(input, output, session) {
       pull(SAMPLE_ID) %>%
       unique()
     parameter_ids <- df_parameters %>%
-      filter(Menu_string %in% input$parameters_selected) %>%
+      filter(Menu_string %in% input$parameters_menu) %>%
       pull(METHOD_ID) %>%
       unique()
 
