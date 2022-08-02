@@ -1,0 +1,204 @@
+---
+title: "862_Get_sample_data"
+author: "DHJ"
+date: "21 9 2021"
+output: 
+  html_document:
+    toc: true
+    toc_float: 
+---
+
+Various checks of the raw data from Jupyterhub and/or Nivadatabase  
+
+* Set 'from_jupyterhub' to TRUE or FALSE depending on what you want to plot  
+    
+    
+
+## 1. Libraries
+```{r setup, include=FALSE}
+# install.packages("niRvana")
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(stringr)
+library(tidyr)
+library(ggeasy)
+
+# And then the niRvana package. If you need to install it, then run thee next line also:
+# devtools::install_github("NIVANorge/niRvana")
+library(niRvana)
+
+source("802_Get_NIVAbasen_data_functions.R")
+
+```
+
+### Settings  
+```{r}
+
+sampling_year <- 2021
+
+# Set to TRUE if you want to used data from Nivadatabasen   
+# Set to FALSE if you want to used data exported from Jupyterhub    
+from_jupyterhub <- FALSE
+
+```
+
+
+## 2a. Nivadatabase data   
+
+### Give your username and password to R (only once per R session)  
+
+*Not necessary if username and password has been set using keyring**  
+
+```{r}
+
+# set_credentials()
+
+```
+
+### Get the list of projects
+
+```{r}
+
+df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+
+```
+
+### Get a list of the stations in the CEMP_Biota project
+
+```{r}
+
+df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+
+```
+
+### Get all specimens collected at these stations (20 seconds or so)
+- Includes LATIN_NAME  
+```{r}
+
+df_specimens <- get_specimens_from_stationdata(df_stations, years = sampling_year)
+cat("df_specimens:", nrow(df_specimens), "rows\n")
+
+# Checking wrong year
+df_specimens_nextyear <- get_specimens_from_stationdata(df_stations, years = sampling_year + 1)
+
+cat("df_specimens_nextyear:", nrow(df_specimens_nextyear), "rows\n")
+
+```
+
+### Plot sample dates in 2021 (or later)
+
+```{r, fig.height=6, fig.width=7}
+
+df_specimens %>%
+  filter(year(DATE_CAUGHT) >= sampling_year) %>%
+  ggplot(aes(DATE_CAUGHT)) +
+  geom_histogram(binwidth = 3600*24*10) +   # 10 days
+  scale_x_datetime(date_breaks = "1 month", date_labels = "%m %Y") +
+  facet_wrap(vars(LATIN_NAME), ncol = 1, scales = "free_y")
+
+```
+
+
+### Get the data itself  
+Get data frame of chemical data for all samples for the measurement year   
+- LATIN_NAME is included  
+```{r, results = FALSE}
+
+# debugonce(get_biota_chemistry)
+# debugonce(get_samples_from_sampleid)
+
+dat_base <- get_biota_chemistry(
+  years = sampling_year,
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+```
+
+
+## 2b. Jupyterhub data  
+
+### a. Data from Jupyterhub   
+```{r}
+
+dat_hub <- readRDS("Files_from_Jupyterhub_2021/109_adjusted_data_2022-06-04.rds")
+
+# For coordinates   
+dat_stations <- readxl::read_excel("Files_to_Jupyterhub_2021/Kartbase_edit.xlsx")
+
+# dat_bigexcel <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver02.rds")
+
+```
+
+### b. Select time series with data in sampling_year     
+- Define dat_sel1a and dat_sel1b
+```{r}
+
+# Select time series with data in 2020   
+dat_sel1a <- dat_hub %>%
+  group_by(STATION_CODE, TISSUE_NAME, PARAM) %>%
+  mutate(Last_year = max(MYEAR)) %>%
+  filter(Last_year >= sampling_year) %>%
+  ungroup() %>%
+  mutate(LOQ = ifelse(is.na(FLAG1),"Over LOQ", "Under LOQ"))  
+
+dat_sel1b <- dat_base %>%
+    mutate(
+      LOQ = ifelse(is.na(FLAG1),"Over LOQ", "Under LOQ"),
+      PARAM = NAME,
+      MYEAR = sampling_year,
+      VALUE_WW = VALUE)  
+  
+
+```
+
+
+## 3. Check 36A/36A1/36B  
+
+```
+From: Espen Lund <espen.lund@niva.no> 
+Sent: fredag 15. juli 2022 12:20
+To: Dag Øystein Hjermann <Dag.Hjermann@niva.no>
+Cc: Merete Grung <merete.grung@niva.no>; Merete Schøyen <merete.schoyen@niva.no>
+Subject: MILKYS 2021: rettelser SIA
+
+Hei, når du er tilbake igjen, Dag: 
+Det har vært noen rettelser i stasjoner for SIA-dataene i LIMS. Vet ikke om rettelsene automatisk også blir gjort i Nivabasen, vi må sjekke at det blir riktig i Nivabasen og i våre datafiler:
+SIA-data for torsk 36B ble feilaktig plassert på  blåskjell 36A. 
+SIA-data for blåskjell 36A1 ble feilaktig plassert på blåskjell 36A. 
+Se utklipp under, hvor rødt er feil og grønt er riktig: 
+
+Espen
+```
+
+### Check samples    
+```{r}
+
+df_samples_36A <- niRvana::get_samples_by_stationcode("36A")
+xtabs(~Year, df_samples_36A)
+xtabs(~TISSUE_NAME + SPECIMEN_NO, df_samples_36A %>% filter(Year == 2021))
+
+df_samples_36B <- niRvana::get_samples_by_stationcode("36B")
+xtabs(~TISSUE_NAME + SPECIMEN_NO, df_samples_36B %>% filter(Year == 2021))
+
+df_samples_36A1 <- niRvana::get_samples_by_stationcode("36A1")
+xtabs(~Year, df_samples_36A1)
+xtabs(~TISSUE_NAME + SPECIMEN_NO, df_samples_36A1 %>% filter(Year == 2021))
+
+```
+
+### Check cod and mussel data  
+
+*  Error: there should be no 36A, all blue mussel data should be 36A1    
+*  Correct: All cod data is 36B       
+
+```{r}
+
+xtabs(~TISSUE_NAME + NAME + STATION_CODE + LATIN_NAME, 
+      dat_base %>% filter(STATION_CODE %in% c("36A", "36A1", "36B") & NAME %in% c("% C", "Delta 15N", "BDE77"))
+)
+
+```
+
