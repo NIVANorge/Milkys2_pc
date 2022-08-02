@@ -202,3 +202,37 @@ xtabs(~TISSUE_NAME + NAME + STATION_CODE + LATIN_NAME,
 
 ```
 
+## 4. Check PAH metabolites + ALAD, EROD  
+
+```{r}
+
+st <- "23B"
+st <- "53B"
+
+dat_base %>%
+  filter(STATION_CODE == st) %>%
+  View(st)
+
+dat_base %>%
+  filter(STATION_CODE == st) %>%
+  xtabs(~NAME, .)
+
+dat_base %>%
+  filter(STATION_CODE == st) %>%
+  xtabs(~TISSUE_NAME, .)
+
+dat_base %>%
+  filter(grepl("OH", NAME, ignore.case = FALSE))
+
+dat_2020 <- readRDS("Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds")
+
+dat_2020 %>%
+  filter(STATION_CODE == st) %>%
+  xtabs(~TISSUE_NAME, .)
+
+dat_2020 %>%
+  filter(STATION_CODE == st & TISSUE_NAME %in% c("Blod", "Galle", "Liver - microsome")) %>%
+  xtabs(~PARAM, .)
+
+```
+
