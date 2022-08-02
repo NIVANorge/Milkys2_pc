@@ -8,6 +8,24 @@
 #
 
 #
+# ** App overview ** ----
+#
+# menu 'projects_selected' is filled using 'projects_available' (available from start-up)
+# user selects projects -> 'get_stations' data frame
+#   -> creates 'get_stations_years' data frame (one line per station x year)
+#   -> creates 'get_stations_years_select' data frame (one line per station x year)
+#   -> outputs plot 'station_years_plot' and table 'station_years_datatable'  
+#   -> filling menus 'stations_selected', 'years_selected' and 'lastyear_data_series'  
+# user selects stations and/or years and clicks button 'download_samples'  
+#   -> creates 'get_specimens', 'get_samples' and 'get_parameters' data frames    
+#   -> outputs tables 'specimens_datatable', 'samples_datatable' and 'parameters_datatable'  
+#   -> fills menu 'parameters_selected'  
+# user selects parameters in menu 'parameters_selected'  
+#   -> creates 'get_measurements' data frame  
+#   -> outputs table 'measurements_datatable'  
+
+
+#
 # Run at start-up ----
 #
 
@@ -19,16 +37,20 @@ library(forcats)
 library(DT)
 library(niRvana)
 
+# . df_projects ----
 df_projects <- get_projects() %>%
   select(-ENTERED_BY) %>%
   arrange(PROJECT_NAME) %>%
   mutate(Menu_string = paste0(PROJECT_NAME, " (ID:", PROJECT_ID, ")"))
 
+# . projects_available ----
 projects_available <- df_projects$Menu_string
 
+# . lookup_tissues ----
 lookup_tissues <- get_nivabase_data(
   "select TISSUE_ID, TISSUE_NAME from NIVADATABASE.BIOTA_TISSUE_TYPES")
 
+# . df_taxoncode_id ----
 df_taxoncode_id <- get_nivabase_data(
   "select DISTINCT TAXONOMY_CODE_ID from NIVADATABASE.BIOTA_SINGLE_SPECIMENS;")
 
@@ -125,10 +147,11 @@ ui <- fluidPage(
 #
 # SERVER ----
 #
+
 server <- function(input, output, session) {
   
   #
-  # fill menu projects_available ----
+  # fill menu 'projects_selected' ----
   #
   updateSelectizeInput(
     session,
@@ -139,8 +162,11 @@ server <- function(input, output, session) {
   #
   # get_stations ----
   #
+  # Used to fill menu 'stations_selected' and make 'get_stations_years' and 'get_specimens'   
+  #
   # Triggered by selecting project
-  # For 'stations_selected' menu
+  # For the menu 'stations_selected', plus 'get_stations_years', ''
+  # Returns data frame from PROJECTS_STATIONS (one line per station x project)
   #
   get_stations <- reactive({
     
@@ -168,9 +194,11 @@ server <- function(input, output, session) {
   #
   # get_stations_years ----
   #
-  # Triggered by get_stations (which is triggered by selecting project)
+  # Used to fill menu 'years_selected'  make 'get_stations_years_select' and 'get_specimens'   
   #
-  # Count of number of 
+  # Triggered by get_stations (which is triggered by selecting project)
+  # Returns data frame with one line per station x year, including count of number of specimens 
+  
   get_stations_years <- reactive({
     
     df_stations <- get_stations() %>%
@@ -205,6 +233,14 @@ server <- function(input, output, session) {
   #
   # get_stations_years_select ----
   #
+  # Used to make outputs 'station_years_plot' and 'station_years_datatable'  
+  #
+  # Triggered by get_stations_years (which is triggered by selecting project)
+  # Retrieves 'get_stations_years' and groups by station  
+  #   - using menu input 'lastyear_data_series', it excludes stations not used after e.g. 2020
+  #
+  # Returns data frame with one line per station and columns STATION_ID and YEAR_last   
+  #
   get_stations_years_select <- reactive({
 
     df_stations_years <- get_stations_years()
@@ -223,7 +259,7 @@ server <- function(input, output, session) {
   
   
   #
-  # output station_years_plot ----
+  # output 'station_years_plot' ----
   #
   output$station_years_plot <- renderPlot({
     
@@ -238,7 +274,7 @@ server <- function(input, output, session) {
   })
   
   #
-  # output station_years_datatable ----
+  # output 'station_years_datatable' ----
   #
   output$station_years_datatable <- DT::renderDT(
     get_stations_years_select(), 
@@ -246,9 +282,10 @@ server <- function(input, output, session) {
   )
   
   #
-  # fill menu stations_selected ---- 
+  # fill menu 'stations_selected' ---- 
   #
-  # Using get_stations
+  # Triggered by 'get_stations' (which is triggered by selecting project)
+  # Retrieving column 'Menu_string' from get_stations()
   #
   observeEvent(get_stations(), {
     df_stations <- get_stations()
@@ -261,9 +298,10 @@ server <- function(input, output, session) {
   })
   
   #
-  # fill menu years_selected ----  
+  # fill menu 'years_selected' ----  
   #
-  # Using get_stations_years
+  # Triggered by 'get_stations_years' (which is triggered by selecting project)
+  # Retrieving unique values of column 'YEAR' from get_stations_years()
   #
   observeEvent(get_stations_years(), {
     df <- get_stations_years()
@@ -280,9 +318,10 @@ server <- function(input, output, session) {
   
   
   #
-  # fill menu lastyear_data_series ----  
+  # fill menu 'lastyear_data_series' ----  
   #
-  # Using get_stations_years
+  # Triggered by 'get_stations_years' (which is triggered by selecting project)
+  # Retrieving unique values of column 'YEAR' from get_stations_years() 
   #
   observeEvent(get_stations_years(), {
     df <- get_stations_years()
@@ -301,9 +340,18 @@ server <- function(input, output, session) {
   #
   # get_specimens ----
   #
+  # Used to make 'get_samples', also for output 'specimens_datatable'        
+  #
+  # Triggered when user clicks button 'download_samples'  
+  # Fetches data frames 'get_stations_years' and 'get_stations'  
+  # - then retrieves STATION_ID for selected stations/years
+  # From Nivabasen, gets BIOTA_SINGLE_SPECIMENS rows based on STATION_IDs and (if selected) years
+  # - then adds columns STATION_CODE, STATION_NAME, TAXON_NAME by left join  
+  # Returns table with one line per specimen  
+  #
   # Note: works by selecting either (or both of) stations and years   
   # - if stations NOT selected, it returns specimens for all stations that year    
-  # - if stations ARE selected, it returns specimens for specific stations that year    
+  # - if stations ARE selected, it returns specimens for specific stations that year  
   #
   
   get_specimens <- eventReactive(input$download_samples, {
@@ -314,7 +362,7 @@ server <- function(input, output, session) {
     }
     
     df_stations_years <- get_stations_years()
-    df_stations <- get_stations()  # this have 'Menu_string" so we need this one too
+    df_stations <- get_stations()  # this one has 'Menu_string" so we need this one too
     # browser()
 
     sql_years <- paste(" and extract(YEAR from DATE_CAUGHT) in (", 
@@ -354,7 +402,7 @@ server <- function(input, output, session) {
       left_join(
         lookup_taxonomy, by = "TAXONOMY_CODE_ID",
       ) %>%
-      select(PROJECT_ID, STATION_CODE, STATION_NAME, TAXON_NAME, everything())      
+      select(PROJECT_ID, STATION_CODE, STATION_NAME, TAXON_NAME, everything())  # ordering columns    
     
     # browser()
     result_2 
@@ -362,7 +410,7 @@ server <- function(input, output, session) {
   })
   
   #
-  # output specimens_datatable ----
+  # output 'specimens_datatable' ----
   #
   output$specimens_datatable <- DT::renderDT(
     get_specimens(), 
@@ -372,6 +420,18 @@ server <- function(input, output, session) {
   #
   # get_samples ----
   #
+  # Used to make 'get_parameters' and (after selecting parameters) 'get_measurements'
+  # - also for output 'samples_datatable'        
+  #
+  # Triggered by 'get_specimens' (which is triggerd when user clicks button 'download_samples')  
+  # Fetches data frame 'get_specimens'    
+  # - then retrieves SPECIMEN_ID  
+  # From Nivabasen, gets BIOTA_SAMPLES_SPECIMENS rows based on SPECIMEN_ID  
+  # - then summarizes this table by SAMPLE_ID (getting one line per sample) -> result_specimens_summ
+  # From Nivabasen, gets BIOTA_SAMPLES rows based on SAMPLE_ID (from 'result_specimens_summ')  
+  # - adds specimen info by left join (STATION_CODE, DATE_CAUGHT, SPECIMEN_NO etc. from 'result_specimens_summ')  
+  # - adds TISSUE_NAME by left join  
+  # Returns table with one line per sample  
 
   get_samples <- reactive({
     
@@ -419,7 +479,7 @@ server <- function(input, output, session) {
   })
   
   #
-  # output samples_datatable ----
+  # output 'samples_datatable' ----
   #
   output$samples_datatable <- DT::renderDT(
     get_samples(), 
@@ -427,7 +487,7 @@ server <- function(input, output, session) {
   )
   
   #
-  # output n_specimens_samples ----
+  # output 'n_specimens_samples' ----
   #
   output$n_specimens_samples <- renderText(
     paste("Downloaded", nrow(get_samples()), 
@@ -435,9 +495,20 @@ server <- function(input, output, session) {
   )
   
 
-    #
+  #
   # get_parameters ----
   #
+  # Used to fill menu 'parameters_selected', result is also shown in a table in the output
+  #
+  # Triggered by 'get_samples' (which is triggerd when user clicks button 'download_samples')  
+  # Fetches data frame 'get_samples'    
+  # - then retrieves SAMPLE_ID  
+  # From Nivabasen, gets 
+  #   (1) a count per METHOD_ID from BIOTA_CHEMISTRY_VALUES based on SAMPLE_ID 
+  #       (this is much faster than getting the actual measurements)   
+  #   (2) NAME, UNIT, LABORATORY, MATRIX from METHOD_DEFINITIONS based on the METHOD_ID
+  # Adds columns from 2 to 1 using left join 
+  # Returns table with one line per method (parameter), including count per parameter    
   
   get_parameters <- reactive({
     
@@ -479,7 +550,7 @@ server <- function(input, output, session) {
   })
   
   #
-  # fill menu parameters_selected ----  
+  # fill menu 'parameters_selected' ----  
   #
   # Using get_parameters
   #
@@ -497,7 +568,7 @@ server <- function(input, output, session) {
 
   
   #
-  # output parameters_datatable ----
+  # output 'parameters_datatable' ----
   #
   output$parameters_datatable <- DT::renderDT(
     get_parameters(), 
@@ -505,8 +576,16 @@ server <- function(input, output, session) {
   )
   
   #
-  # get_measurements ----
+  # get_measurements ----  
   #
+  # Used to get measurements for selected stations/years and selected parameters
+  # - shown in table  
+  #
+  # Retrieves get_samples() and get_parameters() data frames  
+  # - gets values of SAMPLE_ID (all of them) and the user's selected values of METHOD_ID  
+  # From Nivabasen, gets BIOTA_CHEMISTRY_VALUES rows based on SAMPLE_ID and METHOD_ID     
+  # - then gets corresponding rows from METHOD_DEFINITIONS and adds NAME, UNIT etc. by left join
+  # - from get_samples(), adds STATION_CODE, TAXON_NAME, DATE_CAUGHT, SPECIMEN_NO etc. by left join  
   
   get_measurements <- reactive({
     
@@ -562,7 +641,7 @@ server <- function(input, output, session) {
   
   
   #
-  # output measurements_datatable ----
+  # output 'measurements_datatable' ----
   #
   output$measurements_datatable <- DT::renderDT(
     get_measurements(), 
