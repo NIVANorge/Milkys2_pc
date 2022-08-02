@@ -21,10 +21,13 @@ source("802_Get_NIVAbasen_data_functions.R")
 
 ```
 
-### Give your username and password to R (only once per R session):
+### Give your username and password to R (only once per R session)  
+
+* Not necessary if you have saved username and password with keyring
+
 ```{r}
 
-set_credentials()
+# set_credentials()
 
 ```
 
@@ -50,9 +53,10 @@ get_nivabase_data(paste(
 
 cat("2021:")
 get_nivabase_data(paste(
-  "select count(*) as N from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT like '%MILKYS%'",
+  "select count(*) as N from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT like '%210200%'",
   "and extract(YEAR from SAMPLED_DATE) = 2021")) %>%
   pull(N)
+
 
 ```
 
@@ -76,10 +80,15 @@ nrow(df1) # 197
 ```{r}
 
 if (FALSE){
+  
+  # df_2021_allprojects <- get_nivabase_data(paste(
+  #   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where ",
+  #   "extract(YEAR from SAMPLED_DATE) = 2021"))
+  
   df_2021 <- get_nivabase_data(paste(
-    "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where ",
-    "extract(YEAR from SAMPLED_DATE) = 2021"))
-  nrow(df_2021) # 197
+    "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT like '%210200%'",
+    "and extract(YEAR from SAMPLED_DATE) = 2021"))
+  nrow(df_2021) # 970
   
   saveRDS(df_2021, "822_sampledata_df_2021.rds")
 
@@ -183,4 +192,81 @@ get_nivabase_data(paste(
   )) %>% pull(N)
 
 ```
+
+### Milkys 2020 
+
+#### PAH metabolites + ALAD + EROD data  
+```{r}
+
+labware_2020 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210330;ANA21 - MILKYS 2021; Hovedanalyser 2021'")
+
+labware_2020_samples <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT = 'O 210330;ANA21 - MILKYS 2021; Hovedanalyser 2021'")
+
+labware_2020 <- labware_2020 %>%
+  left_join(labware_2020_samples %>% select(TEXT_ID, SPECIES, TISSUE))
+nrow(labware_2020) # 23423
+
+table(addNA(labware_2020$STATUS))
+table(addNA(labware_2020$STATUSX))
+
+# xtabs(~addNA(REPORTED_NAME) + STATUSX, labware_2020 %>% filter(AQUAMONITOR_CODE == "53B"))
+
+xtabs(~addNA(TISSUE), labware_2020 %>% filter(AQUAMONITOR_CODE == "53B"))
+
+```
+
+### Milkys 2021 
+
+#### Get data     
+```{r}
+
+labware_2021 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT like '%210200%'")
+
+labware_2021_samples <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT like '%210200%'")
+
+labware_2021 <- labware_2021 %>%
+  left_join(labware_2021_samples  %>% select(TEXT_ID, SPECIES, TISSUE))
+
+nrow(labware_2021) # 21437
+
+```
+
+
+#### Overview over what is finished and what is not
+```{r}
+
+table(addNA(labware_2021$STATUS))
+table(addNA(labware_2021$STATUSX))
+
+df_finished <- labware_2021 %>%
+  count(AQUAMONITOR_CODE, TISSUE, STATUSX) %>%
+  pivot_wider(names_from = STATUSX, values_from = n, values_fill = 0) %>%
+  mutate(Perc_finished = Ferdig/(Ferdig + Midlertidig)*100)
+
+df_finished2 <- df_finished %>%
+  select(AQUAMONITOR_CODE, TISSUE, Perc_finished) %>%
+  pivot_wider(names_from = TISSUE, values_from = Perc_finished)
+
+not_ok <- apply(!is.na(df_finished2) & df_finished2 == 0, 1, sum)
+df_finished2$Finished <- not_ok == 0
+
+df_finished2 %>% arrange(Finished)
+
+```
+
+#### Example: PAH metabolites not finished  
+```{r}
+
+xtabs(~addNA(REPORTED_NAME) + STATUSX, labware_2021 %>% filter(AQUAMONITOR_CODE == "53B" & 
+                                                                 STATUSX == "Midlertidig"))
+
+# xtabs(~addNA(REPORTED_NAME) + STATUSX, labware_2021 %>% filter(AQUAMONITOR_CODE == "19B" & 
+#                                                                  STATUSX == "Midlertidig"))
+
+```
+
 
