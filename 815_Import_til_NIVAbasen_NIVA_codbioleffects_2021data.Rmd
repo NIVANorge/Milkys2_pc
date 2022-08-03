@@ -89,11 +89,11 @@ selected_year <- 2021
 
 
 ### b. Get most recent data produced in Jupyterhub  
-We only keep the data for the curret year
+We only need the data for the current year
 ```{r}
 # dir("Data")
-# Data at sample level (chemical data, biological efect parameters and VDSI)
-data_all <- readRDS(file = "Files_to_Jupyterhub_2020/01_df_2020_notstandard_2021-06-15.rds")
+# Data at sample level (chemical data, biological effect parameters and VDSI)
+data_all <- readRDS(file = "Files_to_Jupyterhub_2021/01_df_2021_notstandard_2022-06-04.rds")
 
 ```
 
@@ -106,7 +106,7 @@ sql <- paste(
   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
   "where extract(YEAR from SAMPLED_DATE) =", selected_year, 
   "and extract(MONTH from SAMPLED_DATE) >= 3", 
-  "and UPPER(PROSJEKT) like '%MILKYS%';")
+  "and UPPER(PROSJEKT) like '%210200%';")
 sql
 df_labware_01 <- get_nivabase_data(sql)
 
@@ -115,19 +115,14 @@ sql <- paste(
   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
   "where extract(YEAR from SAMPLED_DATE) =", selected_year + 1, 
   "and extract(MONTH from SAMPLED_DATE) <= 2", 
-  "and UPPER(PROSJEKT) like '%MILKYS%';")
+  "and UPPER(PROSJEKT) like '%210200%';")
 df_labware_02 <- get_nivabase_data(sql)
 
 # Remove everything except Eider duck stations
 # Extract 'Specimen_no' and 'TISSUE_NAME'
 df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
   # Add 'Specimen_no'
-  mutate(DESCRIPTION = gsub("<f8>", "ø", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION = gsub("<c5>", "Å", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION = gsub("<e5>", "å", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION = gsub("<c6>", "Æ", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION = gsub("<e6>", "æ", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION2 = DESCRIPTION %>% stringr::str_sub(start = nchar(AQUAMONITOR_CODE) + 1),
+  mutate(DESCRIPTION2 = DESCRIPTION %>% stringr::str_sub(start = nchar(AQUAMONITOR_CODE) + 1),
          Specimen_no = stringr::str_extract(DESCRIPTION2, "[0-9]+") %>% as.numeric(),
          TISSUE_NAME = stringr::str_sub(TISSUE, start = 4))
 
