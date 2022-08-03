@@ -1,0 +1,171 @@
+---
+title: "825t_Tests"
+author: "DHJ"
+date: "3 8 2022"
+params:
+  chemical_group: "metals"
+output: html_document
+---
+
+## Settings  
+
+```{r}
+
+current_year <- 2021
+
+```
+
+## Packages  
+
+```{r packages, results='hide', message=FALSE, warning=FALSE}
+
+library(dplyr)
+# library(tidyr)
+library(ggplot2)
+library(lubridate)
+library(flextable)
+# library(glue)
+library(readxl)
+library(purrr)
+library(leftcensored)   # DHJ's package (https://github.com/DagHjermann/leftcensored)
+library(scico)          # colour palettes incl. "Vik" (https://github.com/thomasp85/scico)
+
+library(ggiraph)
+library(cowplot)
+
+# library(safejoin) # https://github.com/moodymudskipper/safejoin
+
+# source("01_Get_chemical_data_NIVAbasen_functions.R")  # for get_standard_parametername()
+source("824_Report_for_scientists_functions.R")
+source("825_Report_paramgroup_functions.R", encoding = "UTF-8")
+
+```
+
+## Data
+
+```{r get_data, warning=FALSE}
+
+chem_params <- get_parametervalues(params$chemical_group)
+
+# debugonce(get_data_tables)
+dat_sample_fish <- get_data(params$chemical_group, "fish")
+dat_sample_muss <- get_data(params$chemical_group, "mussel")
+
+dat_median <- get_medians(dat_sample_fish, dat_sample_muss)
+
+dat_median_fish <- dat_median %>%
+  filter(LATIN_NAME %in% c("Gadus morhua", "Platichthys flesus"))
+dat_median_mussel <- dat_median %>%
+  filter(LATIN_NAME %in% c("Mytilus edulis"))
+
+```
+
+
+## Test interctive tiles  
+
+### From help("geom_tile_interactive")
+
+```{r, fig.width=7, fig.height=8}
+
+# (removed column "w" present in the example - is not used anyway)
+df <- data.frame(
+  id = rep(c("a", "b", "c", "d", "e"), 2),
+  x = rep(c(2, 5, 7, 9, 12), 2),
+  y = rep(c(1, 2), each = 5),
+  z = factor(rep(1:5, each = 2))
+)
+
+p <- ggplot(df, aes(x, y, tooltip = id)) + geom_tile_interactive(aes(fill = z))
+x <- girafe(ggobj = p, height_svg = 3)
+
+x
+
+```
+### With data, non-interactive   
+
+* Shows that using 
+```{r}
+
+param <- "HG"
+species_category <- "fish"
+tissue <- "muscle"
+df_data <- dat_median_fish %>% 
+  filter(PARAM %in% param & MYEAR > 2014 & STATION_CODE %in% c("02B", "30B")) %>%
+  mutate(
+    Proref_ratio_cat = cut(Proref_ratio_WW, breaks = c(0.01,1,2,3,5,10,100)),
+    VALUE_WW_med_txt = paste(round(VALUE_WW_med, 4), " ug/kg")) %>%
+  select(Proref_ratio_WW, Proref_ratio_cat, VALUE_WW_med_txt, MYEAR, Station)
+
+# Colours
+# cols1 = un-named vector
+cols1 <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
+          RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
+
+# cols1 = named vector
+cols2 <- cols1
+names(cols2) <- levels(df_data$Proref_ratio_cat)
+
+pie(rep(1,6), col = cols1)
+
+# Correct colours
+gg <- ggplot(df_data, aes(MYEAR, Station, fill = Proref_ratio_cat)) +
+  scale_fill_manual(values = cols2) +
+  geom_tile() +
+  labs(title = "Correct colours")
+
+gg
+
+# Wrong colours (even with the named colour vector cols2)
+gg <- ggplot(df_data, aes(MYEAR, Station, fill = Proref_ratio_WW)) +
+  scale_fill_stepsn(breaks = c(0.01,1,2,3,5,10,100), colours = cols2) +
+  geom_tile() +
+  labs(title = "Wrong colours")
+
+
+gg
+
+```
+### Same, interactive  
+
+```{r}
+
+p <- ggplot(df_data, aes(MYEAR, Station, tooltip = VALUE_WW_med_txt)) + 
+  geom_tile_interactive(aes(fill = Proref_ratio_cat)) +
+  scale_fill_manual(values = cols2)
+girafe(ggobj = p, height_svg = 3)
+
+```
+
+```{r}
+
+p <- ggplot(df_data, aes(MYEAR, Station, tooltip = VALUE_WW_med_txt)) + 
+  geom_tile_interactive() +
+  scale_fill_manual(values = cols2)
+girafe(ggobj = p, height_svg = 3)
+
+```
+
+
+### Interactive, more data    
+
+* Also improved tooltip including min and mx values  
+
+```{r}
+
+param <- "HG"
+species_category <- "fish"
+tissue <- "muscle"
+df_data <- dat_median_fish %>% 
+  filter(PARAM %in% param & MYEAR >= 2002) %>%
+  mutate(
+    Proref_ratio_cat = cut(Proref_ratio_WW, breaks = c(0.01,1,2,3,5,10,100)),
+    VALUE_WW_txt = paste("Median:", round(VALUE_WW_med, 4), " ug/kg<br>", 
+                         "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), ")")) %>%
+  select(Proref_ratio_WW, Proref_ratio_cat, VALUE_WW_txt, MYEAR, Station)
+
+p <- ggplot(df_data, aes(MYEAR, Station, tooltip = VALUE_WW_txt)) + 
+  geom_tile_interactive(aes(fill = Proref_ratio_cat)) +
+  scale_fill_manual(values = cols2)
+girafe(ggobj = p, height_svg = 3)
+
+```
