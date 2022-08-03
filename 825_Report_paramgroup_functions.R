@@ -375,11 +375,12 @@ pargroup_median_table_tooltip <- function(data_medians, fill, year,
     scale_y_discrete(limits = levels(dat_plot$PARAM)) +
     theme_bw() +
     theme(
+      axis.title = element_blank(),
       axis.text = element_text(size = 7),
       legend.text = element_text(size = 8),
       legend.title = element_text(size = 8),
       axis.text.x = element_text(angle = -45, hjust = 0),
-      panel.grid = element_blank())
+      panel.grid = element_blank()) 
   
   girafe(ggobj = p, height_svg = 3)
   
