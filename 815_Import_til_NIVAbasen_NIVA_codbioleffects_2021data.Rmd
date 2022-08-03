@@ -1,5 +1,5 @@
 ---
-title: "815 - Import cod biological effect data from NILU to Nivabasen, 2020"
+title: "815 - Import cod biological effect data from NILU to Nivabasen, 2021"
 author: "DHJ"
 date: "2 9 2019"
 output: 
@@ -69,7 +69,7 @@ Store your username and password to R (only once per R session)
 * Not needed if username and password has been saved using keyring  
 ```{r}
 
-set_credentials()
+# set_credentials()
 
 # Check these codes (press F2) for reminder about what comes from which tables:
 # niRvana::get_biota_chemistry
@@ -83,7 +83,7 @@ set_credentials()
 ### a. Year
 ```{r}
 
-selected_year <- 2020
+selected_year <- 2021
 
 ```
 
