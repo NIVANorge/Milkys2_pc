@@ -484,10 +484,18 @@ If 'Species exist in NIVAbasen' we can just keep this column
 cat("Species:\n")
 unique(data_for_input_1$LATIN_NAME)
 
-df_species <- get_nivabase_selection("SPECIES_ID,LATIN_NAME", "SPECIES", 
-                                     "LATIN_NAME", unique(data_for_input_1$LATIN_NAME), values_are_text = TRUE)
+# OLD
+# df_species <- get_nivabase_selection("SPECIES_ID,LATIN_NAME", "SPECIES", 
+#                                      "LATIN_NAME", unique(data_for_input_1$LATIN_NAME), values_are_text = TRUE)
 
-check <- unique(data_for_input_1$LATIN_NAME) %in% df_species$LATIN_NAME
+df_taxon <- get_nivabase_selection(
+  "NIVA_TAXON_ID, LATIN_NAME",
+  "TAXONOMY",
+  "LATIN_NAME",
+  unique(data_for_input_1$LATIN_NAME), values_are_text = TRUE
+  )
+
+check <- unique(data_for_input_1$LATIN_NAME) %in% df_taxon$LATIN_NAME
 if (sum(!check) == 0){
   cat("Species names exist in NIVAbasen\n")
 } else {
@@ -497,19 +505,43 @@ if (sum(!check) == 0){
 ```
 
 ### e. Date, add    
-Assuming that there is one sampling date per station  
+Assuming that there is one sampling date per station   
+* Apparent errors:  
+    - Two bile samples in 53B and all bile samples in 30B have dates that differs from the rest  
 ```{r}
+
+df_sampledates <- df_samples %>%
+      filter(AQUAMONITOR_CODE %in% unique(data_for_input_1$STATION_CODE)) %>%
+      distinct(AQUAMONITOR_CODE, SAMPLED_DATE)
+
+df_samples %>%
+      filter(AQUAMONITOR_CODE %in% unique(data_for_input_1$STATION_CODE))
+
+if (FALSE){
+  df_samples %>% 
+    arrange(AQUAMONITOR_CODE, Specimen_no) %>% 
+    select(ANALYSEOPPDRAG, TEXT_ID, SAMPLED_DATE, STATUS, DESCRIPTION) %>% 
+    View()
+}
+
+check <- df_sampledates %>%
+  add_count(AQUAMONITOR_CODE) %>%
+  filter(n > 1)
+
+if (nrow(check) > 0){
+  stop("There seems to be more than one sampling date per station!")
+} else {
+  message("Date added")
+}
 
 data_for_input_2 <- data_for_input_1 %>%
   left_join(
-    df_samples %>%
-      filter(AQUAMONITOR_CODE %in% data_for_input_1$STATION_CODE) %>%
-      distinct(AQUAMONITOR_CODE, SAMPLED_DATE),
+    ,
     by = c("STATION_CODE" = "AQUAMONITOR_CODE")
   )
 
 if (nrow(data_for_input_2) > nrow(data_for_input_1)){
-  stop("There must be more than one sampling date per station!")
+  stop("There seems to be more than one sampling date per station!")
 } else {
   message("Date added")
 }
