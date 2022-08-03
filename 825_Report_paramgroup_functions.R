@@ -292,14 +292,18 @@ pargroup_median_table <- function(data_medians, fill, year){
   
   data_medians$fill <- data_medians[[fill]]
   
+  fill_min <- floor(1000*min(data_medians$fill, na.rm = T))/1000
+  fill_max <- ceiling(max(data_medians$fill, na.rm = T))
+
   dat_plot <- data_medians %>%
     filter(MYEAR %in% year) %>%
     arrange(desc(PARAM)) %>%
-    mutate(PARAM = forcats::fct_inorder(PARAM))
+    mutate(PARAM = forcats::fct_inorder(PARAM),
+           fill = cut(fill, breaks = c(fill_min,1,2,3,5,10,fill_max)))
   
   cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
             RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
-  col_func <- function(x){cols[x]}
+  names(cols) <- levels(dat_plot$fill)
   
   gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
       geom_tile()
@@ -310,7 +314,7 @@ pargroup_median_table <- function(data_medians, fill, year){
     geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
     #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
     #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
-    scale_fill_stepsn(breaks = c(0.01,1,2,3,5,10,100), colours = cols) +
+    scale_fill_manual(fill, values = cols) +
     scale_color_manual(values = c("red", "white")) +
     scale_alpha_manual(values = c(1, 0)) +
     scale_y_discrete() +
