@@ -330,6 +330,61 @@ if (F){
 }
 
 
+pargroup_median_table_tooltip <- function(data_medians, fill, year){
+  
+  data_medians$fill <- data_medians[[fill]]
+  
+  fill_min <- floor(1000*min(data_medians$fill, na.rm = T))/1000
+  fill_max <- ceiling(max(data_medians$fill, na.rm = T))
+  
+  # if (!is.null(tooltip)){
+  #   data_medians$tooltip <- data_medians[[tooltip]]
+  # } else {
+  #   data_medians$tooltip <- with(data_medians, paste(Station2, PARAM, ":", round(VALUE_WW_med, 3)))
+  # }
+  
+  dat_plot <- data_medians %>%
+    filter(MYEAR %in% year) %>%
+    arrange(desc(PARAM)) %>%
+    mutate(
+      PARAM = forcats::fct_inorder(PARAM),
+      fill = cut(fill, breaks = c(fill_min,1,2,3,5,10,fill_max)),
+      VALUE_WW_txt = paste("Median:", round(VALUE_WW_med, 4), " ug/kg<br>", 
+                           "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), ")")
+  )
+  
+  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
+            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
+  names(cols) <- levels(dat_plot$fill)
+  
+  gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
+    geom_tile()
+  gg <- gg +
+    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+              color = "red", size = 1, height = 0.9, width = 0.9) +
+    geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
+    geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
+    #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+    #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+    scale_fill_manual(breaks = c(0.01,1,2,3,5,10,100), values = cols) +
+    scale_color_manual(values = c("red", "white")) +
+    scale_alpha_manual(values = c(1, 0)) +
+    scale_y_discrete() +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = -45, hjust = 0))
+  labs(
+    title = "Medians"
+  )
+  
+  gg
+  
+}
+
+if (F){
+  debugonce(pargroup_median_table_tooltip)
+  pargroup_median_table_tooltip(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
+}
+
 make_boxplots <- function(data_medians, y, year, ylabel = NULL, main_title = NULL){
   
   data_medians$y <- data_medians[[y]]
