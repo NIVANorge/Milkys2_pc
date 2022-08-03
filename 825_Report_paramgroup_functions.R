@@ -357,18 +357,23 @@ pargroup_median_table_tooltip <- function(data_medians, fill, year,
         fill_column, ": ", round(fill, 3), "<br>",
         "Median: ", round(VALUE_WW_med, 4), " ug/kg<br>",
         "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), ")")) %>%
-    select(Proref_ratio_WW, VALUE_WW_txt, MYEAR, Station2, PARAM, fill, fill_cut)
+    select(Proref_ratio_WW, VALUE_WW_txt, MYEAR, Station2, PARAM, fill, fill_cut,
+           Above_EQS)
   
   cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
             RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
   names(cols) <- levels(dat_plot$fill)
   
   p <- ggplot(dat_plot, aes(Station2, PARAM, tooltip = VALUE_WW_txt)) + 
-    geom_tile_interactive(aes(fill = fill_cut)) +
+    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+              color = "red", size = 1, height = 0.9, width = 0.9) +
+    geom_tile_interactive(aes(fill = fill_cut), width = 0.9, height = 0.9) +
     scale_fill_manual(fill_column, values = cols) +
     scale_y_discrete() +
     theme_bw() +
-    theme(axis.text.x = element_text(angle = -45, hjust = 0))
+    theme(
+      axis.text.x = element_text(angle = -45, hjust = 0),
+      panel.grid = element_blank())
   
   girafe(ggobj = p, height_svg = 3)
   
