@@ -246,49 +246,29 @@ if (FALSE){
 # Tables ----
 #
 
-# For ineractive use (tooltip, something doesn't work for some reason)
-pargroup_median_table_TEST <- function(data_medians, fill, year, interactive = TRUE){
-  
-  data_medians$fill <- data_medians[[fill]]
+#
+# Tile plot of all parameters in one year (for one parameter group)  
+#
 
-  dat_plot <- data_medians %>%
-    filter(MYEAR %in% year) %>%
-    arrange(desc(PARAM)) %>%
-    mutate(PARAM = forcats::fct_inorder(PARAM))
+# Note: to be used for a single year.
+# Can be extended to several years using code like this:
+#
+  # group_by(Station2, PARAM) %>%
+  # summarize(
+  #   VALUE_WW_med = median(VALUE_WW_med, na.rm = TRUE),
+  #   LOQ_perc_under = mean(LOQ_label == "<", na.rm = TRUE)*100,
+  #   LOQ_label = case_when(
+  #     LOQ_perc_under == 0 ~ "",
+  #     LOQ_perc_under > 0 ~ paste(round(LOQ_perc_under,0), "% <LOQ")
+  #   )
+  # )
 
-  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
-            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
-  col_func <- function(x){cols[x]}
-  
-  if (interactive){
-    gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
-      geom_tile_interactive(tooltip = VALUE_WW_med)
-  } else {
-    gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
-      geom_tile()
-  }
-  gg <- gg +
-    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
-              color = "red", size = 1, height = 0.9, width = 0.9) +
-    geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
-    geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
-    #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
-    #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
-    scale_fill_stepsn(breaks = c(0.01,1,2,3,5,10,100), colours = cols) +
-    scale_color_manual(values = c("red", "white")) +
-    scale_alpha_manual(values = c(1, 0)) +
-    scale_y_discrete() +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = -45, hjust = 0))
-    labs(
-      title = "Medians"
-    )
-  
-  gg
-  
-}
 
 pargroup_median_table <- function(data_medians, fill, year){
+  
+  if (length(year) > 1){
+    stop("Several years given. Set year to be a single year")
+  }
   
   data_medians$fill <- data_medians[[fill]]
   
@@ -336,6 +316,10 @@ if (F){
 
 pargroup_median_table_tooltip <- function(data_medians, fill, year,
                                           width_svg = 6, height_svg = 3.5){
+  
+  if (length(year) > 1){
+    stop("Several years given. Set year to be a single year")
+  }
   
   data_medians$fill <- data_medians[[fill]]
   
