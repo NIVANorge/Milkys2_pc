@@ -258,9 +258,82 @@ data_all %>%
 - Starting 'data_for_input' already here  
 - PARAM and METHOD_ID set by checking df_methods (manually)
 - TISSUE_NAME checked in a3 below  
+
+#### ALA-D
 ```{r}
 
-dat_cod <- readxl::read_excel("Input_files_2020/BEM-JAMP_2020_HEJ.xlsx", sheet = "Til Basen")
+fn <- "Input_files_2021/MILKYS 2021_ALA-D results_TCG.xlsx"
+# excel_sheets(fn)
+
+dat_cod_alad_orig <- readxl::read_excel(fn, sheet = "FINAL values", skip = 3)
+
+dat_cod_alad <- dat_cod_alad_orig %>%
+  rename(
+    Value = `ng PBG/min/mg protein`
+  ) %>%
+  mutate(
+    PARAM = "ALAD",
+    METHOD_ID = 28579,     # HARD-CODED
+    TISSUE_NAME = "Blod",  # HARD-CODED
+    LATIN_NAME = "Gadus morhua",
+    STATION_CODE = stringr::str_extract(`Sample code`, "([^\\s]+)"),    # extract left of space
+    SPECIMEN_NO = stringr::str_extract(`Sample code`, "(?<=\\s).*"),    # extract right of space
+    Flag1 = as.character(NA)     # HARD_CODED - for these parameters, all values are above LOQ
+  ) %>%
+  arrange(STATION_CODE, SPECIMEN_NO)
+
+# Check SPECIMEN_NO + STATION_CODE
+xtabs(~SPECIMEN_NO + STATION_CODE, dat_cod_alad)
+
+# Lab code is a unique number (across stations as well)
+# xtabs(~`Lab code` + STATION_CODE, dat_cod_alad)
+    
+```
+
+#### EROD   
+* In this case, there are two measurements of each of the samples 23B-11 and 30B-15   
+* We use the mean for these  
+```{r}
+
+
+fn <- "Input_files_2021/MILKYS 2021-EROD Results Fish Liver.xlsx"
+# excel_sheets(fn)
+
+dat_cod_erod_orig <- readxl::read_excel(fn, sheet = "Results", skip = )
+
+dat_cod_erod_1 <- dat_cod_erod_orig %>%
+  rename(
+    Value = `EROD (pmol/min/mg protein)`
+  ) %>%
+  mutate(
+    PARAM = "EROD",
+    METHOD_ID = 28580,                  # HARD-CODED
+    TISSUE_NAME = "Liver - microsome",  # HARD-CODED
+    LATIN_NAME = "Gadus morhua",
+    `Sample ID2` = sub("-", " ", `Sample ID`), 
+    STATION_CODE = stringr::str_extract(`Sample ID2`, "([^\\s]+)"),    # extract left of space
+    SPECIMEN_NO = stringr::str_extract(`Sample ID2`, "(?<=\\s).*"),    # extract right of space
+    Flag1 = as.character(NA)     # HARD_CODED - for these parameters, all values are above LOQ
+  ) %>%
+  arrange(STATION_CODE, SPECIMEN_NO)
+
+# Check SPECIMEN_NO + STATION_CODE
+xtabs(~SPECIMEN_NO + STATION_CODE, dat_cod_erod_1)
+
+# Lab code is a unique number (across stations as well)
+# xtabs(~`Lab Code` + STATION_CODE, dat_cod_erod_1)
+
+
+# Two measurements of each of the samples 23B-11 and 30B-15   
+# We use the mean for these
+# For writing the code, I used: names(dat_cod_erod_1) %>% paste(collapse = ", ")
+dat_cod_erod_2 <- dat_cod_erod_1 %>%
+  group_by(PARAM, METHOD_ID, TISSUE_NAME, LATIN_NAME, STATION_CODE, SPECIMEN_NO, Flag1) %>%
+  summarize(Value = mean(Value), .groups = "drop")
+
+```
+
+```{r}
 
 data_for_input_1a <- dat_cod %>%
   mutate(STATION_CODE = paste0(stasjon, "B")) %>%
