@@ -372,7 +372,7 @@ pargroup_median_table_tooltip <- function(data_medians, fill, year,
     geom_text(aes(label = LOQ_label), size = 1.5, nudge_y = 0.2) +
     geom_text_interactive(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 1.5) +
     scale_fill_manual(fill_column, values = cols) +
-    scale_y_discrete() +
+    scale_y_discrete(limits = levels(dat_plot$PARAM)) +
     theme_bw() +
     theme(
       axis.text = element_text(size = 7),
