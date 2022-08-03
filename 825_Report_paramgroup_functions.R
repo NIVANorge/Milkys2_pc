@@ -352,11 +352,12 @@ pargroup_median_table_tooltip <- function(data_medians, fill, year,
   
   dat_plot <- dat_plot %>% 
     mutate(
+      PARAM = forcats::fct_inorder(PARAM),
       fill_cut = cut(fill, breaks = c(fill_min,1,2,3,5,10,fill_max)),
       VALUE_WW_txt = paste0(
         fill_column, ": ", round(fill, 3), "<br>",
         "Median: ", round(VALUE_WW_med, 4), " ug/kg<br>",
-        "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), ")")) %>%
+        "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), "; N =", N, ")")) %>%
     select(Proref_ratio_WW, VALUE_WW_txt, MYEAR, Station2, PARAM, fill, fill_cut,
            Above_EQS, VALUE_WW_med, LOQ_label)
   
@@ -368,12 +369,15 @@ pargroup_median_table_tooltip <- function(data_medians, fill, year,
     geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
               color = "red", size = 1, height = 0.9, width = 0.9) +
     geom_tile(aes(fill = fill_cut), width = 0.9, height = 0.9) +
-    geom_text(aes(label = LOQ_label), size = 2, nudge_y = 0.3) +
-    geom_text_interactive(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 2) +
+    geom_text(aes(label = LOQ_label), size = 1.5, nudge_y = 0.2) +
+    geom_text_interactive(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 1.5) +
     scale_fill_manual(fill_column, values = cols) +
     scale_y_discrete() +
     theme_bw() +
     theme(
+      axis.text = element_text(size = 7),
+      legend.text = element_text(size = 8),
+      legend.title = element_text(size = 8),
       axis.text.x = element_text(angle = -45, hjust = 0),
       panel.grid = element_blank())
   
