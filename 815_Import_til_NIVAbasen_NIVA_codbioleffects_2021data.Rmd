@@ -124,10 +124,44 @@ df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
   # Add 'Specimen_no'
   mutate(DESCRIPTION2 = DESCRIPTION %>% stringr::str_sub(start = nchar(AQUAMONITOR_CODE) + 1),
          Specimen_no = stringr::str_extract(DESCRIPTION2, "[0-9]+") %>% as.numeric(),
-         TISSUE_NAME = stringr::str_sub(TISSUE, start = 4))
+         TISSUE_NAME = stringr::str_sub(TISSUE, start = 4),
+         SIA = grepl("SIA", DESCRIPTION))  # SIA samples: samples taken for isotope analysis
+
+  
+# table(df_samples$Specimen_no)
+# table(df_samples$AQUAMONITOR_CODE, df_samples$Specimen_no)
 
 ```
 
+#### Check Specimen_no  
+* Expected to be unique, but many are non-unique if we ignore SIA  (isotope analysis)
+* SIA samples are separate samples taken for isotope analysis   
+* For each fish muscle and blue mussel (= one Specimen_no), two samples are taken, one for isotope analysis, another for chemicals  
+```{r}
+
+#
+# Ignoring SIA
+#
+check_samples1 <- df_samples %>%
+  count(AQUAMONITOR_CODE, TISSUE_NAME, Specimen_no) # View("Samples") 
+
+cat("Number of non-unique Specimen_no, ignoring SIA: ")  
+cat(sum(check_samples1$n > 1), "\n")
+
+cat("\nTissues with non-unique Specimen_no, ignoring SIA: \n")  
+xtabs(~TISSUE_NAME, check_samples1 %>% filter(n > 1))
+
+#
+# Taking SIA into account
+#
+check_samples2 <- df_samples %>%
+  count(AQUAMONITOR_CODE, TISSUE_NAME, Specimen_no, SIA) # View("Samples") 
+
+cat("\n\n")
+cat("Number of non-unique Specimen_no, taking SIA into account: ")  
+cat(sum(check_samples2$n > 1), "\n")
+
+```
 
 ### d. Get some generic lookup tables  
 * Tissues  
