@@ -81,11 +81,6 @@ pargroup_median_table(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
 
 ```
 
-```{r,  fig.height=6, fig.width=11}
-
-pargroup_median_table_static(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
-
-```
 
 ### Blue mussel  
 
@@ -105,7 +100,7 @@ pargroup_median_table(dat_median_mussel, fill = "Proref_ratio_WW", year = 2021)
     - To avoid "random" overlap, use geom_dotplot instead? (with small binwidth)
 ```{r, fig.height=6, fig.width=11, warning=FALSE}
 
-make_boxplots(dat_median_fish, y = "Proref_ratio_WW", year = current_year,
+pargroup_boxplot(dat_median_fish, y = "Proref_ratio_WW", year = current_year,
               ylabel = "Ratio conc. w.w. / proref",
               main_title = paste0("Ratio concentration/proref, metals in fish ", current_year))
 
@@ -117,7 +112,7 @@ make_boxplots(dat_median_fish, y = "Proref_ratio_WW", year = current_year,
 ### Mussel    
 ```{r, fig.height=6, fig.width=11, warning=FALSE}
 
-make_boxplots(dat_median_mussel, y = "Proref_ratio_WW", year = current_year,
+pargroup_boxplot(dat_median_mussel, y = "Proref_ratio_WW", year = current_year,
               ylabel = "Ratio conc. w.w. / proref",
               main_title = paste0("Ratio concentration/proref, metals in mussel ", current_year))
 
@@ -132,7 +127,7 @@ make_boxplots(dat_median_mussel, y = "Proref_ratio_WW", year = current_year,
     - Concentrations given in tooltip (should do something for the < values for minimum values)   
 ```{r, fig.height=6, fig.width=11, warning=FALSE}
 
-make_boxplots(dat_median_fish, y = "EQS_ratio_WW", year = current_year,
+pargroup_boxplot(dat_median_fish, y = "EQS_ratio_WW", year = current_year,
               ylabel = "Ratio conc. w.w. / EQS",
               main_title = paste0("Ratio concentration/EQS, metals in fish ", current_year))
 
@@ -142,7 +137,7 @@ make_boxplots(dat_median_fish, y = "EQS_ratio_WW", year = current_year,
     - Concentrations given in tooltip (should do something for the < values for minimum values)   
 ```{r, fig.height=6, fig.width=11, warning=FALSE}
 
-make_boxplots(dat_median_mussel, y = "EQS_ratio_WW", year = current_year,
+pargroup_boxplot(dat_median_mussel, y = "EQS_ratio_WW", year = current_year,
               ylabel = "Ratio conc. w.w. / EQS",
               main_title = paste0("Ratio concentration/EQS, metals in mussel ", current_year))
 
@@ -153,10 +148,13 @@ make_boxplots(dat_median_mussel, y = "EQS_ratio_WW", year = current_year,
 
 ### Table medians for each year / station  
 
-```{r}
+```{r, fig.height=6, fig.width=11, warning=FALSE}
 
-
+parameter_median_table("HG", dat_median_mussel, fill = "EQS_ratio_WW", width_svg = 8)
 
 ```
+
+
+
 
 
