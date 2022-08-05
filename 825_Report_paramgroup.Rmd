@@ -83,7 +83,7 @@ pargroup_median_table(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
 
 ```{r,  fig.height=6, fig.width=11}
 
-pargroup_median_table(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
+pargroup_median_table_static(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
 
 ```
 
@@ -95,13 +95,6 @@ pargroup_median_table(dat_median_mussel, fill = "Proref_ratio_WW", year = 2021)
 
 ```
 
-### Blue mussel, interactive    
-
-```{r,  fig.height=6, fig.width=11}
-
-pargroup_median_table_tooltip(dat_median_mussel, fill = "Proref_ratio_WW", year = 2021)
-
-```
 
 ## Ratio to proref in last year       
 

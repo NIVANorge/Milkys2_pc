@@ -250,6 +250,9 @@ if (FALSE){
 # Tile plot of all parameters in one year (for one parameter group)  
 #
 
+# This makes an htmlwidget with tooltip (if tooltip = TRUE, the default)
+# or a ggplot
+
 # Note: to be used for a single year.
 # Can be extended to several years using code like this:
 #
@@ -263,8 +266,19 @@ if (FALSE){
   #   )
   # )
 
+# NOTE: much of the code in the two functions 
+# pargroup_median_table_tooltip and pargroup_median_table_static is
+#   similar and could be put into a common "prepare data" function
+pargroup_median_table <- function(..., tooltip = TRUE){
+  if (tooltip){
+    pargroup_median_table_tooltip(...)
+  } else {
+    pargroup_median_table_static(...)
+  }
+}
 
-pargroup_median_table <- function(data_medians, fill, year){
+# Static plot (returns ordinary ggplot object)  
+pargroup_median_table_static <- function(data_medians, fill, year){
   
   if (length(year) > 1){
     stop("Several years given. Set year to be a single year")
@@ -314,6 +328,7 @@ if (F){
 }
 
 
+# "Dynamic" plot, i.e. with tooltips (returns htmlwidget / girafe object)  
 pargroup_median_table_tooltip <- function(data_medians, fill, year,
                                           width_svg = 6, height_svg = 3.5){
   
