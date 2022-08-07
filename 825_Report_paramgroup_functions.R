@@ -443,97 +443,41 @@ if (FALSE){
 # Results for time series of single parameter ----
 #
 
-# "Dynamic" plot, i.e. with tooltips (returns htmlwidget / girafe object)  
-parameter_median_table <- function(parameter, data_medians, fill, 
-                                   series_lasting_until = 2021, min_year = 1995, 
-                                   width_svg = 6, height_svg = 3.5){
+parameter_median_table <- function(..., tooltip = TRUE){
+  if (tooltip){
+    parameter_median_table_tooltip(...)
+  } else {
+    parameter_median_table_static(...)
+  }
+}
+
+
+
+parameter_median_table_data <- function(parameter, data_medians, fill, 
+                                        series_lasting_until = 2021, 
+                                        min_year = 1995){
   
-  if (length(parameter) > 1){
-    stop("Several parameters given. Set 'parameter' to be a single parameter")
+  if (length(min_year) > 1){
+    stop("Several years given. Set 'min_year' to be a single year")
   }
   
-  fill_column <- fill
   data_medians$fill <- data_medians[[fill]]
+  fill_column <- fill
   
   dat_plot <- data_medians %>%
+    # Select parameter
     filter(PARAM %in% parameter) %>%
-    arrange(desc(Station2))
-  
-  if (nrow(dat_plot) == 0){
-    stop("No records with that parameter found.")
-  }
-  
-  # Keep only series lasting until 'series_lasting_until'  
-  dat_plot <- dat_plot %>%
+    # Keep only series lasting until 'series_lasting_until'  
     group_by(Station2) %>%
     mutate(MYEAR_max = max(MYEAR)) %>%
     ungroup() %>%
     filter(MYEAR_max >= series_lasting_until) %>%
     # Drop years before "min_year"
-    filter(MYEAR >= min_year)
+    filter(MYEAR >= min_year) %>%
+    # Station levels
+    arrange(desc(Station2)) %>%
+    mutate(Station2 = droplevels(Station2))
   
-  # Add text for tooltip (VALUE_WW_txt)
-  dat_plot <- dat_plot %>%
-    mutate(
-      VALUE_WW_txt = paste0(
-        fill_column, ": ", round(fill, 3), "<br>",
-        "Median: ", round(VALUE_WW_med, 4), " ug/kg<br>",
-        "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), "; N =", N, ")")
-    )
-  
-  # fill_min <- floor(1000*min(dat_plot$fill, na.rm = T))/1000
-  # fill_max <- ceiling(max(dat_plot$fill, na.rm = T))
-  fill_min <- 0.0001
-  fill_max <- 1000
-  
-  dat_plot <- dat_plot %>%
-    mutate(fill = cut(fill, breaks = c(fill_min,1,2,3,5,10,fill_max)))
-  
-  
-  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
-            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
-  names(cols) <- levels(dat_plot$fill)
-
-  gg <- ggplot(dat_plot, aes(MYEAR, Station2, fill = fill, tooltip = VALUE_WW_txt)) +
-    geom_tile()
-  
-  p <- gg +
-    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
-              color = "red", size = 1, height = 0.9, width = 0.9) +
-    geom_text(aes(label = LOQ_label), size = 1.5, nudge_y = 0.3) +
-    geom_text_interactive(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 1.5) +
-    scale_fill_manual(fill, values = cols) +
-    scale_color_manual(values = c("red", "white")) +
-    scale_alpha_manual(values = c(1, 0)) +
-    scale_y_discrete() +
-    theme_bw() +
-    theme(
-      axis.title = element_blank(),
-      axis.text = element_text(size = 7),
-      legend.text = element_text(size = 7),
-      legend.title = element_text(size = 7),
-      axis.text.x = element_text(angle = -45, hjust = 0),
-      panel.grid = element_blank()) 
-  
-  girafe(ggobj = p, height_svg = 3)
-  
-}
-
-if (F){
-  # debugonce(parameter_median_table)
-  parameter_median_table("HG", dat_median_mussel, fill = "EQS_ratio_WW")
-  
-}
-
-bull <- function(){
-  
-  data_medians$fill <- data_medians[[fill]]
-  
-  fill_column <- fill
-  
-  dat_plot <- data_medians %>%
-    filter(MYEAR %in% year) %>%
-    arrange(desc(PARAM))
   
   # fill_min <- floor(1000*min(dat_plot$fill, na.rm = T))/1000
   # fill_max <- ceiling(max(dat_plot$fill, na.rm = T))
@@ -543,26 +487,86 @@ bull <- function(){
   dat_plot <- dat_plot %>% 
     mutate(
       PARAM = forcats::fct_inorder(PARAM),
-      fill_cut = cut(fill, breaks = c(fill_min,1,2,3,5,10,fill_max)),
+      fill_cut = cut(fill, breaks = c(fill_min,0.5,0.75,0.9,1,2,3,5,10,fill_max)),
       VALUE_WW_txt = paste0(
         fill_column, ": ", round(fill, 3), "<br>",
-        "Median: ", round(VALUE_WW_med, 4), " ug/kg<br>",
+        "Median: ", LOQ_label, round(VALUE_WW_med, 4), " ug/kg<br>",
         "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), "; N =", N, ")")) %>%
     select(Proref_ratio_WW, VALUE_WW_txt, MYEAR, Station2, PARAM, fill, fill_cut,
            Above_EQS, VALUE_WW_med, LOQ_label)
   
-  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
-            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
-  names(cols) <- levels(dat_plot$fill)
+  if (nrow(dat_plot) == 0)
+    stop("No data selected with given arguments")
   
-  p <- ggplot(dat_plot, aes(Station2, PARAM, tooltip = VALUE_WW_txt)) + 
-    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
-              color = "red", size = 1, height = 0.9, width = 0.9) +
-    geom_tile(aes(fill = fill_cut), width = 0.9, height = 0.9) +
-    geom_text(aes(label = LOQ_label), size = 1.5, nudge_y = 0.2) +
-    geom_text_interactive(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 1.5) +
+  dat_plot
+  
+}
+
+if (F){
+  
+  # debugonce(parameter_median_table_data)
+  parameter_median_table_data("PB", dat_median_fish, fill = "Proref_ratio_WW")
+  
+}
+
+
+parameter_median_table_colors <- function(plotdata){
+  n_levels <- length(levels(plotdata$fill_cut))
+  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[5:2],
+            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
+  
+  # Note: aalternative color scales
+  #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+  #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+  
+  if (length(cols) != n_levels){
+    cat("\nLevels of fill variable:", levels(plotdata$fill_cut), "\n")
+    stop("Data has ", n_levels, " levels (see above) but ", length(cols), " colors given")
+  }
+  names(cols) <- levels(plotdata$fill)
+  cols
+}
+
+if (F){
+  # debugonce(parameter_median_table_tooltip)
+  X <- parameter_median_table_data("HG", dat_median_mussel, fill = "EQS_ratio_WW")
+  parameter_median_table_colors(X)
+}
+
+
+# "Dynamic" plot, i.e. with tooltips (returns htmlwidget / girafe object)  
+parameter_median_table_tooltip <- function(parameter, data_medians, fill, 
+                                           series_lasting_until = 2021, 
+                                           min_year = 1995,
+                                           show_medians = FALSE,
+                                           width_svg = 6, height_svg = 3.5){
+  
+  fill_column <- fill
+  
+  dat_plot <- parameter_median_table_data(
+    parameter = parameter, data_medians = data_medians, 
+    fill = fill, series_lasting_until = series_lasting_until,
+    min_year = min_year)
+  
+  cols <- parameter_median_table_colors(dat_plot)
+  
+  if (show_medians){
+    p <- ggplot(dat_plot, aes(MYEAR, Station2, tooltip = VALUE_WW_txt)) + 
+      geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+                color = "red", size = 1, height = 0.9, width = 0.9) +
+      geom_tile(aes(fill = fill_cut), width = 0.9, height = 0.9) +
+      geom_text(aes(label = LOQ_label), size = 1.5, nudge_y = 0.2) +
+      geom_text_interactive(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 1.5)
+  } else {
+    p <- ggplot(dat_plot, aes(MYEAR, Station2, tooltip = VALUE_WW_txt)) + 
+      geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+                color = "red", size = 1, height = 0.9, width = 0.9) +
+      geom_tile_interactive(aes(fill = fill_cut), width = 0.9, height = 0.9)
+  }
+  
+  p <- p +
     scale_fill_manual(fill_column, values = cols) +
-    scale_y_discrete(limits = levels(dat_plot$PARAM)) +
+    scale_y_discrete(limits = levels(dat_plot$Station2)) +
     theme_bw() +
     theme(
       axis.title = element_blank(),
@@ -574,4 +578,55 @@ bull <- function(){
   
   girafe(ggobj = p, height_svg = 3)
   
+}
+
+if (F){
+  # debugonce(parameter_median_table_tooltip)
+  parameter_median_table_tooltip("HG", dat_median_mussel, fill = "EQS_ratio_WW")
+  parameter_median_table_tooltip("HG", dat_median_mussel, fill = "EQS_ratio_WW", 
+                                 show_medians = TRUE)
+  parameter_median_table_tooltip("PB", dat_median_fish, fill = "Proref_ratio_WW")
+}
+
+
+# Static plot (returns ordinary ggplot object)  
+parameter_median_table_static <- function(parameter, data_medians, fill, 
+                                          series_lasting_until = 2021, 
+                                          min_year = 1995,
+                                          show_medians = FALSE){
+  
+  fill_column <- fill
+  
+  dat_plot <- parameter_median_table_data(
+    parameter = parameter, data_medians = data_medians, 
+    fill = fill, series_lasting_until = series_lasting_until,
+    min_year = min_year)
+  
+  cols <- parameter_median_table_colors(dat_plot)
+  
+  gg <- ggplot(dat_plot, aes(MYEAR, Station2, fill = fill)) +
+    geom_tile()
+  gg <- gg +
+    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+              color = "red", size = 1, height = 0.9, width = 0.9) +
+    geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
+    geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
+    scale_fill_manual(fill, values = cols) +
+    scale_color_manual(values = c("red", "white")) +
+    scale_alpha_manual(values = c(1, 0)) +
+    scale_y_discrete() +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = -45, hjust = 0))
+  labs(
+    title = "Medians"
+  )
+  
+  gg
+  
+}
+
+
+if (F){
+  # debugonce(parameter_median_table_static)
+  parameter_median_table_static("HG", dat_median_fish, fill = "Proref_ratio_WW")
 }
