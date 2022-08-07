@@ -323,10 +323,48 @@ pargroup_median_table_static <- function(data_medians, fill, year){
 }
 
 if (F){
-  # debugonce(pargroup_median_table)
-  pargroup_median_table(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
+  # debugonce(pargroup_median_table_static)
+  pargroup_median_table_static(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
 }
 
+pargroup_median_table_data <- function(data_medians, fill, year){
+  
+  if (length(year) > 1){
+    stop("Several years given. Set year to be a single year")
+  }
+  
+  data_medians$fill <- data_medians[[fill]]
+  fill_column <- fill
+  
+  dat_plot <- data_medians %>%
+    filter(MYEAR %in% year) %>%
+    arrange(desc(PARAM))
+  
+  # fill_min <- floor(1000*min(dat_plot$fill, na.rm = T))/1000
+  # fill_max <- ceiling(max(dat_plot$fill, na.rm = T))
+  fill_min <- 0.0001
+  fill_max <- 1000
+  
+  dat_plot <- dat_plot %>% 
+    mutate(
+      PARAM = forcats::fct_inorder(PARAM),
+      fill_cut = cut(fill, breaks = c(fill_min,1,2,3,5,10,fill_max)),
+      VALUE_WW_txt = paste0(
+        fill_column, ": ", round(fill, 3), "<br>",
+        "Median: ", LOQ_label, round(VALUE_WW_med, 4), " ug/kg<br>",
+        "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), "; N =", N, ")")) %>%
+    select(Proref_ratio_WW, VALUE_WW_txt, MYEAR, Station2, PARAM, fill, fill_cut,
+           Above_EQS, VALUE_WW_med, LOQ_label)
+  
+  dat_plot
+  
+
+}
+
+if (F){
+  # debugonce(pargroup_median_table_tooltip)
+  pargroup_median_table_data(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
+}
 
 # "Dynamic" plot, i.e. with tooltips (returns htmlwidget / girafe object)  
 pargroup_median_table_tooltip <- function(data_medians, fill, year,
