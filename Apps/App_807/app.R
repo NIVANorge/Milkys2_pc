@@ -122,6 +122,7 @@ ui <- fluidPage(
               
               tabPanel(
                 "Samples",
+                plotOutput("samples_plot", width = "600px"),
                 div(DTOutput("samples_datatable"), style = "font-size:90%")
               ), # end tabPanel 3
               
@@ -400,7 +401,7 @@ server <- function(input, output, session) {
         df_stations %>% select(STATION_ID, PROJECT_ID, STATION_CODE, STATION_NAME),
         by = "STATION_ID") %>% 
       left_join(
-        lookup_taxonomy, by = "TAXONOMY_CODE_ID",
+        lookup_taxonomy, by = "TAXONOMY_CODE_ID"
       ) %>%
       select(PROJECT_ID, STATION_CODE, STATION_NAME, TAXON_NAME, everything())  # ordering columns    
     
@@ -486,6 +487,25 @@ server <- function(input, output, session) {
     filter = "top"
   )
   
+  #
+  # output 'samples_plot' ----
+  #
+  # Modified from code in 815 (2021 version) 
+  output$samples_plot <- renderPlot({
+    df_samples <- get_samples()
+    # browser()  
+    df_samples <- df_samples %>%
+      mutate(Sample_type = case_when(
+        is.na(SPECIMEN_NO) ~ "Individual unknown",
+        as.character(SAMPLE_NO) == SPECIMEN_NO ~ "Sample no = ind no",
+        grepl(",", SPECIMEN_NO, fixed = TRUE) ~ "Pooled sample",
+        TRUE ~ "Sample no != ind no")
+      )
+    ggplot(df_samples, aes(STATION_CODE, SAMPLE_NO, color = Sample_type)) + 
+      geom_point() +
+      geom_text(aes(label = SPECIMEN_NO), nudge_x = 0.1, hjust = 0, size = 3) +
+      facet_grid(vars(TISSUE_NAME))
+  })
   #
   # output 'n_specimens_samples' ----
   #
