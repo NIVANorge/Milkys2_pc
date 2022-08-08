@@ -17,8 +17,8 @@ output:
     - new specimen-samples records   
     - and of course, measurements  
 
-- *Cod bile metabolites*: here 2020 data differs from older data: until 2019, I also added these manually (through an R script like this), in 2020, they were entered through Labware (but with different names, see below)      
-- cod bile metabolite names until 2019, and in 2020:   
+- *Cod bile metabolites*: here 2020 data differs from older data: until 2019, I also added these manually (through an R script like this), in 2020-2021, they were entered through Labware (but with different names, see below)      
+- cod bile metabolite names until 2019, and in 2020-2021:   
 ```
    2019     ~ 2020
    "PA1OH"  ~ "1-OH-fenantren", 
@@ -689,7 +689,7 @@ existing_samples <- get_nivabase_selection(
   "BIOTA_SAMPLES",
   "STATION_ID",
   unique(data_for_input$STATION_ID),
-  extra_sql = "and extract (YEAR from SAMPLE_DATE) = 2020" 
+  extra_sql = paste("and extract (YEAR from SAMPLE_DATE) =", selected_year)
 ) %>%
   left_join(df_tissue, by = "TISSUE_ID") %>%
   left_join(df_stations %>% select(STATION_ID, STATION_CODE), by = "STATION_ID")
@@ -893,7 +893,11 @@ PASTE INTO SQL DEVELOPER TO ADD THE RECORDS
 Note to DHJ: use "SQL developer (latest version)" from desktop. Don't use the start menu.  
 - remember `commit;` after running the insert sentences   
 - See `milkys_2020_erod-alad_biota_samples.sql` in `C:\Users\DHJ\AppData\Roaming\SQL Developer`  
+
 ```{r}
+
+# Check columns 
+# get_nivabase_data("select * from NIVADATABASE.BIOTA_SAMPLES where rownum <= 5")
 
 # Test functions
 # make_sql_sample(1, biota_samples_eider)
@@ -920,19 +924,21 @@ Directly from R, instead of pasting into SQL Developer for getting data
 Remember to **commit** in SQL developer first  
 ```{r}
 
+today <- substr(lubridate::now(tzone = "UTC"), 1, 10)
+
 biota_samples_fromdatabase <- niRvana::get_nivabase_selection(
   "*",
   "BIOTA_SAMPLES",
   "STATION_ID",
   biota_samples$STATION_ID, 
-  extra_where = paste(
-    "and TRUNC(ENTERED_DATE) = TO_DATE('2021-08-18', 'yyyy-mm-dd')", 
-    "and ENTERED_BY = 'DHJ'")
+  extra_sql = paste0(
+    "and TRUNC(ENTERED_DATE) = TO_DATE(", sQuote(today), ", 'yyyy-mm-dd')", 
+    " and ENTERED_BY = 'DHJ'")
 )
 
 cat("Number of records: ")
 nrow(biota_samples_fromdatabase) %>% cat()   # 144
-cat("\nShould be the same as number of SQLs above! \n")
+cat("\nShould be the same as number of SQLs in the 'Make SQLs' section! \n")
 
 
 ```
@@ -1011,7 +1017,7 @@ existing_singlespec_1 <- get_nivabase_selection(
   "BIOTA_SINGLE_SPECIMENS",
   "STATION_ID",
   unique(data_for_input$STATION_ID),
-  extra_where = " and extract(YEAR from DATE_CAUGHT) = 2020"
+  extra_sql = paste(" and extract(YEAR from DATE_CAUGHT) =", selected_year)
 )
 # Check
 
@@ -1173,7 +1179,7 @@ if (FALSE){
     "BIOTA_SINGLE_SPECIMENS",
     "STATION_ID",
     biota_specimens_to_add$STATION_ID, 
-    extra_where = paste(
+    extra_sql = paste(
       " and extract(YEAR from DATE_CAUGHT) =",
       selected_year, 
       "and ENTERED_BY = 'DHJ'")
@@ -1195,7 +1201,7 @@ if (TRUE){
     "BIOTA_SINGLE_SPECIMENS",
     "STATION_ID",
     unique(data_for_input$STATION_ID),
-    extra_where = paste(" and extract(YEAR from DATE_CAUGHT) =", selected_year)
+    extra_sql = paste(" and extract(YEAR from DATE_CAUGHT) =", selected_year)
     )
   
 }
@@ -1224,7 +1230,7 @@ biota_specimens_complete <- niRvana::get_nivabase_selection(
   "BIOTA_SINGLE_SPECIMENS",
   "STATION_ID",
   unique(biota_samples$STATION_ID), 
-  extra_where = paste(
+  extra_sql = paste(
     " and extract(YEAR from DATE_CAUGHT) =",
     selected_year)
     )
@@ -1419,17 +1425,17 @@ NOT USED (but works)
 
 get_specimens_from_stationdata <- function (station_data, years = NULL) {
   if (!is.null(years)){
-    extra_where <- paste0(" and extract (YEAR from DATE_CAUGHT) in (", 
+    extra_sql <- paste0(" and extract (YEAR from DATE_CAUGHT) in (", 
                           paste(years, collapse = ","), 
                           ")")
   } else {
-    extra_where <- ""
+    extra_sql <- ""
   }
   get_nivabase_selection("*", 
                          "BIOTA_SINGLE_SPECIMENS", 
                          "STATION_ID", 
                          station_data$STATION_ID,
-                         extra_where = extra_where)
+                         extra_sql = extra_sql)
 }
 
 # Test
@@ -1437,7 +1443,7 @@ get_specimens_from_stationdata <- function (station_data, years = NULL) {
 if (FALSE){
   df_specimens_allyrs <- get_specimens_from_stationdata(
     df_stations %>% filter(STATION_CODE %in% c("19B", "43B2", "30B", "24B", "10B")),
-    years = 2015:2020)
+    years = 2015:selected_year)
 }
 
 ```
@@ -1450,17 +1456,17 @@ df_specimens_allyrs <- get_nivabase_selection(
   "BIOTA_SINGLE_SPECIMENS", 
   "STATION_ID", 
   unique(data_for_input$STATION_ID),
-  extra_where = " and extract (YEAR from DATE_CAUGHT) > 2014")
+  extra_sql = " and extract (YEAR from DATE_CAUGHT) > 2014")
 
 xtabs(~year(DATE_CAUGHT), df_specimens_allyrs)
 
 # Didn't work
-#  extra_where = " and (extract YEAR from DATE_CAUGHT) = 2020")
+#  extra_sql = " and (extract YEAR from DATE_CAUGHT) = selected_year")
 
 # Get data frame of chemical results (30 seconds or so)
 message("\nGet data frame of chemical results")
 dat_test <- get_biota_chemistry(
-  years = 2014:2020, 
+  years = 2014:selected_year, 
   specimendata = df_specimens_allyrs,
   stationdata = df_stations,
   report_samples = TRUE)
@@ -1505,7 +1511,7 @@ dat_test %>%
   ggplot(aes(Year, NAME, size = n)) +
   geom_point() +
   facet_grid(cols = vars(STATION_CODE), scales = "free_y") +
-  scale_x_continuous(breaks = 2014:2020) +
+  scale_x_continuous(breaks = 2014:selected_year) +
   theme(axis.text.x = element_text(angle = -45, hjust = 0))
 
 
@@ -1522,7 +1528,7 @@ dat_test %>%
   ggplot(aes(Year, Median)) +
   geom_pointrange(aes(y = Median, ymin = Min, ymax = Max)) +
   facet_grid(cols = vars(STATION_CODE), rows = vars(NAME), scales = "free_y") +
-  scale_x_continuous(breaks = 2014:2020) +
+  scale_x_continuous(breaks = 2014:selected_year) +
   theme(axis.text.x = element_text(angle = -45, hjust = 0))  
 
 
@@ -1548,7 +1554,7 @@ dat_test %>%
   ggplot(aes(Year, Median)) +
   geom_pointrange(aes(y = Median, ymin = Min, ymax = Max)) +
   facet_grid(cols = vars(STATION_CODE), rows = vars(NAME), scales = "free_y") +
-  scale_x_continuous(breaks = 2014:2020) +
+  scale_x_continuous(breaks = 2014:selected_year) +
   scale_y_log10() +
   theme(axis.text.x = element_text(angle = -45, hjust = 0))  
 
@@ -1584,7 +1590,7 @@ df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
 ```{r}
 
 df_specimens_2019 <- get_specimens_from_stationdata(df_stations, years = 2019)
-df_specimens <- get_specimens_from_stationdata(df_stations, years = 2020)
+df_specimens <- get_specimens_from_stationdata(df_stations, years = selected_year)
 
 ```
 
@@ -1594,14 +1600,14 @@ df_specimens <- get_specimens_from_stationdata(df_stations, years = 2020)
 - Now also includes LATIN_NAME   
 ```{r, results = FALSE}
 
-df_2020 <- get_biota_chemistry(
-  years = 2020:2021,              # in case some specimens wrongly  
-                                  #    have date_caught = 2020
+df_selected_year <- get_biota_chemistry(
+  years = selected_year + seq(0,1),              # in case some specimens wrongly  
+                                                 #    have date_caught = later yaers
   specimendata = df_specimens, 
   stationdata = df_stations,
   report_samples = TRUE)
 
-df_2020 <- df_2020 %>% rename(PARAM = NAME)
+df_selected_year <- df_selected_year %>% rename(PARAM = NAME)
 
 ```
 
@@ -1613,7 +1619,7 @@ params <- c("PA1OH", "PYR1OH", "BAP3OH",
           "PA1O", "PYR1O", "BAP3O",
           "1-OH-fenantren", "1-OH-pyren", "3-OH-benzo[a]pyren")
 
-df_2020 %>%
+df_selected_year %>%
   filter(PARAM %in% params) %>%
   xtabs(~PARAM + STATION_CODE, .)  
 
@@ -1699,7 +1705,7 @@ df_methods %>%
 # PYR1O	16793	
 
 # Get METHOD_ID for wrongly used parameters:
-# df_2020 %>%
+# df_selected_year %>%
 #   filter(PARAM %in% params) %>%
 #   xtabs(~PARAM + METHOD_ID, .)  
 # RESULT:
@@ -1708,7 +1714,7 @@ df_methods %>%
 # PYR1OH = 28577 
 
 # Get VALUE_ID range
-df_2020 %>%
+df_selected_year %>%
   filter(PARAM %in% params) %>%
   pull(VALUE_ID) %>%
   range()
@@ -1731,14 +1737,14 @@ df_2020 %>%
 ### New check  
 ```{r}
 
-df_2020_new <- get_biota_chemistry(
-  years = 2020:2021, 
+df_selected_year_new <- get_biota_chemistry(
+  years = selected_year + 0:1, 
   specimendata = df_specimens, 
   stationdata = df_stations,
   report_samples = TRUE) %>%
   rename(PARAM = NAME)
 
-df_2020_new %>%
+df_selected_year_new %>%
   filter(PARAM %in% params) %>%
   xtabs(~PARAM + STATION_CODE, .)  
 
@@ -1755,7 +1761,7 @@ df1 <- get_nivabase_selection(
   "BIOTA_SINGLE_SPECIMENS",
   "STATION_ID",
   69750,
-  extra_where = " and extract(YEAR from DATE_CAUGHT) = 2020")
+  extra_sql = paste(" and extract(YEAR from DATE_CAUGHT) =", selected_year))
 
 df2 <- get_nivabase_selection(
   "*",
@@ -1786,7 +1792,7 @@ df3b <- get_nivabase_selection(
   "BIOTA_SAMPLES",
   "STATION_ID",
   69750,
-  extra_where = " and extract(YEAR from SAMPLE_DATE) = 2020")
+  extra_sql = paste(" and extract(YEAR from SAMPLE_DATE) =", selected_year))
 
 
 ```
