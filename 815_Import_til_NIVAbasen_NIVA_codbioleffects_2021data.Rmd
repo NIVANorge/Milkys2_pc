@@ -681,7 +681,7 @@ stations <- data_for_input$STATION_CODE %>% unique()
 
 ### a. Existing BIOTA_SAMPLES    
 - And in particular existing SAMPLE_NO  
-- THis is not very important in our case since we add new tissues (blood and liver microsome)
+- This is not very important in our case since we add new tissues (blood and liver microsome)
 ```{r}
 
 existing_samples <- get_nivabase_selection(
@@ -689,7 +689,7 @@ existing_samples <- get_nivabase_selection(
   "BIOTA_SAMPLES",
   "STATION_ID",
   unique(data_for_input$STATION_ID),
-  extra_where = "and extract (YEAR from SAMPLE_DATE) = 2020" 
+  extra_sql = "and extract (YEAR from SAMPLE_DATE) = 2020" 
 ) %>%
   left_join(df_tissue, by = "TISSUE_ID") %>%
   left_join(df_stations %>% select(STATION_ID, STATION_CODE), by = "STATION_ID")
@@ -704,7 +704,9 @@ cat("\n")
 message("Tables:")
 
 xtabs(~STATION_CODE, existing_samples)
+cat("\n")
 xtabs(~TISSUE_NAME, existing_samples)
+cat("\n")
 xtabs(~SAMPLE_NO, existing_samples)
 
 #
@@ -748,7 +750,7 @@ existing_samples_spec <- get_nivabase_selection(
 ```{r}
 
 existing_specimens <- get_nivabase_selection(
-  "SPECIMEN_ID, DATE_CAUGHT, SAMPLE_POINT_ID, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+  "SPECIMEN_ID, DATE_CAUGHT, SAMPLE_POINT_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
   "BIOTA_SINGLE_SPECIMENS",
   "SPECIMEN_ID",
   unique(existing_samples_spec$SPECIMEN_ID)
