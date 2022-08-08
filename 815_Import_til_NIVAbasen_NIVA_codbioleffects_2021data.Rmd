@@ -666,17 +666,13 @@ data_for_input %>%
 
 stations <- data_for_input$STATION_CODE %>% unique()
 
-for (station in stations){
   gg <- data_for_input %>%
-    filter(STATION_CODE %in% station) %>%
-    mutate(SAMPLE_NO = factor(Sample_no), SPECIMEN_NO = factor(SPECIMEN_NO)) %>%
-    ggplot(aes(SAMPLE_NO, SPECIMEN_NO)) +
+    mutate(SPECIMEN_NO = factor(SPECIMEN_NO)) %>%
+    ggplot(aes(STATION_CODE, SPECIMEN_NO)) +
     geom_point() +
     facet_grid(cols = vars(TISSUE_NAME)) +
-    theme(axis.text.x = element_text(angle = -45, hjust = 0)) +
-    labs(title = station)
+    theme(axis.text.x = element_text(angle = -45, hjust = 0))
   print(gg)
-}
 
 ```
 
