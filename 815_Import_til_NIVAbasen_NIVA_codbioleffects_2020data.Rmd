@@ -67,7 +67,7 @@ if (FALSE){
 Store your username and password to R (only once per R session)  
 ```{r}
 
-set_credentials()
+# set_credentials()
 
 # Check these codes (press F2) for reminder about what comes from which tables:
 # niRvana::get_biota_chemistry
@@ -309,11 +309,21 @@ df2 <- get_nivabase_selection(
   "SAMPLE_ID",
   df3$SAMPLE_ID)
 
+# Original run in 2021, before SPECIES_ID was removed
 df1 <- get_nivabase_selection(
   "SPECIMEN_ID, DATE_CAUGHT, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
   "BIOTA_SINGLE_SPECIMENS",
   "SPECIMEN_ID",
   df2$SPECIMEN_ID)
+
+# If run in 2022 or later, use this:
+if (FALSE){
+  df1 <- get_nivabase_selection(
+    "SPECIMEN_ID, DATE_CAUGHT, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+    "BIOTA_SINGLE_SPECIMENS",
+    "SPECIMEN_ID",
+    df2$SPECIMEN_ID)
+}
 
 df_check <- df3 %>%
   left_join(df_tissue) %>%
