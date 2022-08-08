@@ -1047,34 +1047,66 @@ sql <- paste(
   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
   "where extract(YEAR from SAMPLED_DATE) =", selected_year, 
   "and extract(MONTH from SAMPLED_DATE) >= 3", 
-  "and UPPER(PROSJEKT) like '%MILKYS%'")       # 'MILKYS' is HARD-CODED
+  "and UPPER(PROSJEKT) like '%210200%'")       # '210200' is HARD-CODED
 df_labware_01 <- get_nivabase_data(sql)   
+nrow(df_labware_01)
 
 # January-February next year data
 sql <- paste(
   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
   "where extract(YEAR from SAMPLED_DATE) =", selected_year + 1, 
   "and extract(MONTH from SAMPLED_DATE) <= 2", 
-  "and UPPER(PROSJEKT) like '%MILKYS%'")       # 'MILKYS' is HARD-CODED
+  "and UPPER(PROSJEKT) like '%210200%'")       # '210200' is HARD-CODED
 df_labware_02 <- get_nivabase_data(sql)   
+nrow(df_labware_02)
 
+# Remove everything except Eider duck stations
+# Extract 'Specimen_no' and 'TISSUE_NAME'
 df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
-  filter(AQUAMONITOR_CODE %in% df_stations$STATION_CODE)
+  # Add 'Specimen_no'
+  mutate(
+    DESCRIPTION2 = DESCRIPTION %>% stringr::str_sub(start = nchar(AQUAMONITOR_CODE) + 1),
+    Specimen_no = stringr::str_extract(DESCRIPTION2, "[0-9]+") %>% as.numeric(),
+    TISSUE_NAME = stringr::str_sub(TISSUE, start = 4),
+    SIA = grepl("SIA", DESCRIPTION),
+    # New variable 'Tissue': equals TISSUE_NAME, but separates 'Muskel' and 'Muskel SIA' 
+    Tissue = case_when(
+      !SIA ~ TISSUE_NAME,
+      SIA ~ paste(TISSUE_NAME, "SIA")),
+    Sample_type = case_when(
+      is.na(X_BULK_BIO) ~ "Sample no = ind no",
+      as.character(BIOTA_SAMPLENO) == X_BULK_BIO ~ "Sample no = ind no",
+      grepl(",", X_BULK_BIO, fixed = TRUE) ~ "Pooled sample",
+      TRUE ~ "Sample no != ind no")
+  )  # SIA samples: samples taken for isotope analysis
+
 
 ```
 
 ### b2. Visualise Fish_no vs SAMPLE_NO   
 Check whether there are other tissues than liver (not liver-microsome) and muscle  
-- There are not  
-```{r}
+- Yes, there are now also bile (but not blood and liver-microsome, so no need to change anything)     
+- Also shows whether samples are pooled or whether they have  
+```{r, fig.width=7, fig.height=7}
 
 df_samples %>%
   filter(AQUAMONITOR_CODE %in% data_for_input$STATION_CODE) %>%
-  ggplot(aes(AQUAMONITOR_CODE, BIOTA_SAMPLENO, color = is.na(X_BULK_BIO))) +   # changed from Specimen_no
+  ggplot(aes(AQUAMONITOR_CODE, BIOTA_SAMPLENO, color = Sample_type)) + 
   geom_point() +
-  facet_grid(vars(TISSUE))
+  geom_text(aes(label = X_BULK_BIO), nudge_x = 0.1, hjust = 0, size = 3) +
+  facet_grid(vars(Tissue))
 
 ```
+```{r}
+
+df_samples %>%
+  filter(AQUAMONITOR_CODE %in% data_for_input$STATION_CODE,
+         (BIOTA_SAMPLENO == 16 | X_BULK_BIO == "16")) %>% View()
+
+
+```
+
+
 ### b3. Add SPECIMEN_NO to biota_samples     
 Given that the checks above shows that two assumptions given in start of 'b' is OK  
 ```{r}
