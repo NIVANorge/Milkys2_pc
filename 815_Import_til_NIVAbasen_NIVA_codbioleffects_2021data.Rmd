@@ -474,6 +474,21 @@ if (sum(!check) == 0){
   warning("NOT ALL tissue names exist in NIVAbasen!")
 }
 
+check <- unique(subset(data_for_input_1, PARAM == "ALAD")$TISSUE_NAME)
+if (check != "Blod"){
+  ("STOP! Wrong tissue for ALA-D")
+} else {
+  cat("Tissue for ALA-D (PARAM = ALAD) is correct\n")
+}
+
+check <- unique(subset(data_for_input_1, PARAM == "EROD")$TISSUE_NAME)
+if (check != "Liver - microsome"){
+  ("STOP! Wrong tissue for EROD")
+} else {
+  cat("Tissue for EROD (PARAM = EROD) is correct\n")
+}
+
+
 ```
 
 
@@ -508,11 +523,61 @@ if (sum(!check) == 0){
 Assuming that there is one sampling date per station   
 * Apparent errors:  
     - Two bile samples in 53B and all bile samples in 30B have dates that differs from the rest  
+    - Dates set manually  
+* Creates 'data_for_input_2'  
+
+```{r}
+
+cat("---------------------------------------------\n")
+cat("All samples: \n")
+cat("---------------------------------------------\n")
+df_samples %>%
+  filter(AQUAMONITOR_CODE %in% unique(data_for_input_1$STATION_CODE)) %>%
+  xtabs(~AQUAMONITOR_CODE + SAMPLED_DATE, .)
+
+cat("---------------------------------------------\n")
+cat("By tissue: \n")
+cat("---------------------------------------------\n")
+df_samples %>%
+  filter(AQUAMONITOR_CODE %in% unique(data_for_input_1$STATION_CODE)) %>%
+  xtabs(~ TISSUE_NAME + SAMPLED_DATE + AQUAMONITOR_CODE, .)
+
+# Set sample dates manually  
+data_for_input_2 <- data_for_input_1 %>%
+  mutate(
+    SAMPLED_DATE = case_when(
+      STATION_CODE %in% "23B" ~ ymd("2021-11-03", tz = "UTC"),
+      STATION_CODE %in% "30B" ~ ymd("2021-11-01", tz = "UTC"),
+      STATION_CODE %in% "53B" ~ ymd("2021-10-10", tz = "UTC")
+    )
+  )
+
+cat("---------------------------------------------\n")
+cat("Check 1 - check the dates set\n")
+cat("---------------------------------------------\n")
+
+xtabs(~STATION_CODE + addNA(SAMPLED_DATE), data_for_input_2)
+
+cat("---------------------------------------------\n")
+cat("Check 2 - are set dates equal to existing muscle dates? (numbers = UNIX time) \n")
+cat("---------------------------------------------\n")
+
+for (station in c("23B", "30B", "53B")){
+  a <- df_samples %>% filter(AQUAMONITOR_CODE %in% station & TISSUE_NAME == "Muskel") %>% 
+    pull(SAMPLED_DATE) %>% unique()
+  b <- data_for_input_2 %>% filter(STATION_CODE %in% station) %>% 
+    pull(SAMPLED_DATE) %>% unique()
+  cat(station, ":", identical(a,b), "(", a, ")\n")
+}
+
+```
+
 ```{r}
 
 df_sampledates <- df_samples %>%
-      filter(AQUAMONITOR_CODE %in% unique(data_for_input_1$STATION_CODE)) %>%
-      distinct(AQUAMONITOR_CODE, SAMPLED_DATE)
+  filter(AQUAMONITOR_CODE %in% unique(data_for_input_1$STATION_CODE)) %>%
+  distinct(AQUAMONITOR_CODE, SAMPLED_DATE)
+
 
 df_samples %>%
       filter(AQUAMONITOR_CODE %in% unique(data_for_input_1$STATION_CODE))
@@ -555,8 +620,10 @@ if (nrow(data_for_input_2) > nrow(data_for_input_1)){
 - Bottom part: use if you must add UNIT and *check* METHOD_ID   
 ```{r}
 
+methodid_exists <- "METHOD_ID" %in% names(data_for_input_2)
+
 # IF Method_id has not yet been added - add it here
-if (FALSE){
+if (!methodid_exists){
   
   df_lookup_methods_1 <- get_nivabase_selection(
     "*", 
@@ -598,7 +665,7 @@ if (FALSE){
 } 
 
 # IF Method_id HAS been added
-if (TRUE){
+if (methodid_exists){
   df_lookup_methods <- get_nivabase_selection(
     "NAME, METHOD_ID, UNIT", 
     "METHOD_DEFINITIONS", 
@@ -608,6 +675,7 @@ if (TRUE){
   data_for_input <- data_for_input_2 %>%
     left_join(df_lookup_methods, by = "METHOD_ID")
 }
+
 
 
 # df4 <- get_nivabase_selection("*", "BIOTA_SAMPLES_SPECIMENS", "SPECIMEN_ID", df3$SAMPLE_ID)
