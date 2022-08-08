@@ -792,7 +792,7 @@ not TISSUE_ID = 3 (TISSUE_NAME = 'Lever')
 
 
 # "SAMPLE_ID"            - Let the database decide
-# "SPECIES_ID"           - NA seems to be the current standard for these data
+# "SPECIES_ID"           - Has been excluded from table (was usually NA anyway)
 # "TISSUE_ID"            - Lookup value from TISSUE_NAME
 # "STATION_ID"           - Use value in 'data_for_input'
 # "REMARK"               - NA
@@ -1013,7 +1013,7 @@ ggplot(biota_samples, aes(TISSUE_NAME, SAMPLE_NO)) +
 ```{r}
 
 existing_singlespec_1 <- get_nivabase_selection(
-  "SPECIMEN_ID, DATE_CAUGHT, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+  "SPECIMEN_ID, DATE_CAUGHT, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
   "BIOTA_SINGLE_SPECIMENS",
   "STATION_ID",
   unique(data_for_input$STATION_ID),
@@ -1197,7 +1197,7 @@ if (FALSE){
 if (TRUE){
   
   biota_specimens_fromdatabase <- get_nivabase_selection(
-    "SPECIMEN_ID, DATE_CAUGHT, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+    "SPECIMEN_ID, DATE_CAUGHT, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
     "BIOTA_SINGLE_SPECIMENS",
     "STATION_ID",
     unique(data_for_input$STATION_ID),
@@ -1452,7 +1452,7 @@ if (FALSE){
 ```{r}
 
 df_specimens_allyrs <- get_nivabase_selection(
-  "SPECIMEN_ID, DATE_CAUGHT, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO", 
+  "SPECIMEN_ID, DATE_CAUGHT, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO", 
   "BIOTA_SINGLE_SPECIMENS", 
   "STATION_ID", 
   unique(data_for_input$STATION_ID),
