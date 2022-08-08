@@ -26,7 +26,6 @@
     
 * App_806 - Use for searching on a big SQL join? (see script 821)
     
-    
 * App_807 - Reading data directly from Nivabasen including Labware tables     
     - Main menus and main server functions finished  
     - Goes from project towards parameters (cannot search for parameter first)   

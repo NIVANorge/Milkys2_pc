@@ -5,7 +5,6 @@
 # Find out more about building applications with Shiny here:
 #
 #    http://shiny.rstudio.com/
-#
 
 #
 # ** App overview ** ----
@@ -432,7 +431,10 @@ server <- function(input, output, session) {
   # From Nivabasen, gets BIOTA_SAMPLES rows based on SAMPLE_ID (from 'result_specimens_summ')  
   # - adds specimen info by left join (STATION_CODE, DATE_CAUGHT, SPECIMEN_NO etc. from 'result_specimens_summ')  
   # - adds TISSUE_NAME by left join  
-  # Returns table with one line per sample  
+  # Returns table with one line per sample 
+  
+  # NOTE: How are SIA muscle samples and siloxan liver samples treated??
+  # See script 815 (2021) section 6 and 6B
 
   get_samples <- reactive({
     
