@@ -572,48 +572,6 @@ for (station in c("23B", "30B", "53B")){
 
 ```
 
-```{r}
-
-df_sampledates <- df_samples %>%
-  filter(AQUAMONITOR_CODE %in% unique(data_for_input_1$STATION_CODE)) %>%
-  distinct(AQUAMONITOR_CODE, SAMPLED_DATE)
-
-
-df_samples %>%
-      filter(AQUAMONITOR_CODE %in% unique(data_for_input_1$STATION_CODE))
-
-if (FALSE){
-  df_samples %>% 
-    arrange(AQUAMONITOR_CODE, Specimen_no) %>% 
-    select(ANALYSEOPPDRAG, TEXT_ID, SAMPLED_DATE, STATUS, DESCRIPTION) %>% 
-    View()
-}
-
-check <- df_sampledates %>%
-  add_count(AQUAMONITOR_CODE) %>%
-  filter(n > 1)
-
-if (nrow(check) > 0){
-  stop("There seems to be more than one sampling date per station!")
-} else {
-  message("Date added")
-}
-
-data_for_input_2 <- data_for_input_1 %>%
-  left_join(
-    ,
-    by = c("STATION_CODE" = "AQUAMONITOR_CODE")
-  )
-
-if (nrow(data_for_input_2) > nrow(data_for_input_1)){
-  stop("There seems to be more than one sampling date per station!")
-} else {
-  message("Date added")
-}
-
-
-```
-
 ### f. Parameters - adding UNIT (and METHOD_ID)    
 - We just check what we used last year  
 - Top part: use if you must add UNIT + METHOD_ID   
@@ -698,7 +656,7 @@ if (FALSE){
 ```{r}
 
 data_for_input %>% 
-  count(Param, PARAM, NAME, UNIT)
+  count(PARAM, NAME, UNIT)
 
 ```
 
