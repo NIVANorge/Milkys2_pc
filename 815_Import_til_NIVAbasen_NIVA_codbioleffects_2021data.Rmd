@@ -779,12 +779,12 @@ if (FALSE)
 
 ## 5. BIOTA_SAMPLES    
 
-Makes `biota_samples`, used in 5  
+Makes `biota_samples1`, used in 5  
 In this case, quite similar to BIOTA_SINGLE_SPECIMENS, but includes TISSUE_ID   
 - Note: EROD data should be given as TISSUE_ID = 64 (TISSUE_NAME = 'Liver - microsome'),
 not TISSUE_ID = 3 (TISSUE_NAME = 'Lever')
 
-### a. Start `biota_samples` 
+### a. Start `biota_samples1` 
 ```{r}
 # df <- get_nivabase_data("select * from NIVADATABASE.BIOTA_SAMPLES where rownum < 4")
 # df
@@ -803,7 +803,7 @@ not TISSUE_ID = 3 (TISSUE_NAME = 'Lever')
 # "TAXONOMY_CODE_ID"     - Lookup value
 # "SAMPLE_DATE"          - Sample_date in 'data_insert2'
 
-biota_samples <- data_for_input %>%
+biota_samples1 <- data_for_input %>%
   # in the case of siloxans, one SPECIMEN_NO = one sample:
   distinct(STATION_ID, LATIN_NAME, TISSUE_NAME, SAMPLED_DATE, SPECIMEN_NO) %>%  
   safe_left_join(df_tissue,                                                      # adds TISSUE_ID
@@ -816,16 +816,16 @@ biota_samples <- data_for_input %>%
   rename(SAMPLE_DATE = SAMPLED_DATE) 
 
 
-# nrow(biota_samples)
+# nrow(biota_samples1)
 
 # For inspection of data 
-biota_samples %>% 
+biota_samples1 %>% 
   select(STATION_ID, TISSUE_ID, SAMPLE_NO, TAXONOMY_CODE_ID, SAMPLE_DATE) %>%
   arrange(STATION_ID, TISSUE_ID, SAMPLE_NO)
 
 cat("===================================\n")
 cat("Biota samples that will be inserted in database: \n")
-xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), biota_samples)
+xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), biota_samples1)
 
 cat("===================================\n")
 cat("Records for input: \n")
@@ -836,15 +836,15 @@ xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), data_for_input)
 # 47025
 ```
 
-### b. Check 'biota_samples' vs single specimens   
+### b. Check 'biota_samples1' vs single specimens   
 NOT NEEDED? Done in 10a-b.  
   
-Check whether all stations/samples in 'biota_samples' has a corresponding fish in BIOTA_SINGLE_SPECIMENS  
+Check whether all stations/samples in 'biota_samples1' has a corresponding fish in BIOTA_SINGLE_SPECIMENS  
 - In this case, many of the 53B fish are from fish individuals that are not in the database   
 - FOr these, we must not only add samples, but also BIOTA_SINGLE_SPECIMENS and BIOTA_SAMPLES_SPECIMENS  
 ```{r}
 
-# check1 <- biota_samples %>% 
+# check1 <- biota_samples1 %>% 
 #   select(STATION_ID, SAMPLE_NO, TISSUE_NAME) %>%
 #   safe_left_join(existing_singlespec %>% select(STATION_ID, SPECIMEN_NO, DATE_CAUGHT),
 #                  na_matches = "never", 
@@ -882,7 +882,7 @@ Not needed here (for Bjørnar and Espen)
 There is a specific "liver - microsome" tissue 
 ```{r}
 # Overview
-biota_samples %>%
+biota_samples1 %>%
   xtabs(~STATION_ID + paste(TISSUE_ID, TISSUE_NAME), .)
 
 ```
@@ -902,8 +902,8 @@ Note to DHJ: use "SQL developer (latest version)" from desktop. Don't use the st
 # Test functions
 # make_sql_sample(1, biota_samples_eider)
 
-sql_list <- 1:nrow(biota_samples) %>% 
-  map_chr(make_sql_sample, data = biota_samples)
+sql_list <- 1:nrow(biota_samples1) %>% 
+  map_chr(make_sql_sample, data = biota_samples1)
 sql <- paste(sql_list, collapse = ";\n")
 sql <- paste0(sql, ";\n")
 writeLines(sql, "clipboard")  # copies SQLs to clipboard - go to SQL Developer and paste
@@ -932,7 +932,7 @@ biota_samples_fromdatabase <- niRvana::get_nivabase_selection(
   "*",
   "BIOTA_SAMPLES",
   "STATION_ID",
-  biota_samples$STATION_ID, 
+  biota_samples1$STATION_ID, 
   extra_sql = paste0(
     "and TRUNC(ENTERED_DATE) = TO_DATE(", sQuote(day_for_adding_records), ", 'yyyy-mm-dd')", 
     " and ENTERED_BY = 'DHJ'")
@@ -945,7 +945,7 @@ n_records2
 if (n_records2 != n_records1){
   stop("Number of added records is not the same as number of SQLs in the 'Make SQLs' section!")
 } else {
-  cat("The number of added records is the same as number of SQLs in the 'Make SQLs' section")
+  cat("The number of added records is the same as number of SQLs in the 'Make SQLs' section \n")
 }
 
 
@@ -957,7 +957,7 @@ if (n_records2 != n_records1){
 
 get_nivabase_data("select count(*) from NIVADATABASE.BIOTA_SAMPLES")  #  60112
 
-# DELETE from NIVADATABASE.BIOTA_SAMPLES where TRUNC(ENTERED_DATE) = TO_DATE('2021-08-18', 'yyyy-mm-dd') and ENTERED_BY = 'DHJ';
+# DELETE from NIVADATABASE.BIOTA_SAMPLES where TRUNC(ENTERED_DATE) = TO_DATE('2022-08-08', 'yyyy-mm-dd') and ENTERED_BY = 'DHJ';
 # commit;
 
 ```
@@ -966,8 +966,9 @@ get_nivabase_data("select count(*) from NIVADATABASE.BIOTA_SAMPLES")  #  60112
 ### g. Add SAMPLE_ID from 'biota_samples_fromdatabase' 
 ```{r}
 
-biota_samples <- biota_samples %>%
-  safe_left_join(biota_samples_fromdatabase %>% select(STATION_ID, TISSUE_ID, TAXONOMY_CODE_ID, SAMPLE_NO, SAMPLE_ID), 
+biota_samples2 <- biota_samples1 %>%
+  safe_left_join(biota_samples_fromdatabase %>% 
+                   select(STATION_ID, TISSUE_ID, TAXONOMY_CODE_ID, SAMPLE_NO, SAMPLE_ID), 
                  by = c("STATION_ID", "TISSUE_ID", "TAXONOMY_CODE_ID", "SAMPLE_NO"),
                  na_matches = "never",
                  check = "BCV") %>%
@@ -977,35 +978,39 @@ biota_samples <- biota_samples %>%
                  check = "BCV")
   
 
-cat("Number of records: ")
-length(unique(biota_samples$SAMPLE_ID)) %>% cat()
-cat("\nShould be the same as above! \n")
-cat("\n")
+n_records3 <- length(unique(biota_samples2$SAMPLE_ID))
+cat("Number of records: ", n_records3, "\n\n")
+
+if (n_records3 != n_records1){
+  stop("Number of added records is not the same as number of SQLs in the 'Make SQLs' section!")
+} else {
+  cat("The number of added records is the same as number of SQLs in the 'Make SQLs' section \n")
+}
 
 # Check ID
 cat("SAMPLE_ID: ")
-range(biota_samples$SAMPLE_ID) %>% paste(collapse = " - ") %>% cat()
+range(biota_samples2$SAMPLE_ID) %>% paste(collapse = " - ") %>% cat()
 cat("\n")
 
 ```
 
-### h. Visualise `biota_samples`     
+### h. Visualise `biota_samples2`     
 ```{r}
 
 
 if (FALSE) {
   
   # Check that IDs are unique
-  tab <- xtabs(~SAMPLE_ID, biota_samples)
+  tab <- xtabs(~SAMPLE_ID, biota_samples2)
   table(tab)
   
   # Check that SAMPLE_NO + TISSUE_NAME + STATION_ID are unique
-  xtabs(~SAMPLE_NO + TISSUE_NAME + STATION_ID, biota_samples)
+  xtabs(~SAMPLE_NO + TISSUE_NAME + STATION_ID, biota_samples2)
   
 }
 
 
-ggplot(biota_samples, aes(TISSUE_NAME, SAMPLE_NO)) +
+ggplot(biota_samples2, aes(TISSUE_NAME, SAMPLE_NO)) +
   geom_point() +
   facet_grid(cols = vars(STATION_CODE)) +
   theme(axis.text.x = element_text(hjust = 0, angle = -30))
@@ -1111,22 +1116,22 @@ df_samples %>%
 
 ```
 
-### b3. Add SPECIMEN_NO to biota_samples     
+### b3. Add SPECIMEN_NO to biota_samples2     
 Given that the checks above shows that two assumptions given in start of 'b' is OK  
 ```{r}
 
 # Given the two assumptions above, we can do like this:  
-biota_samples <- biota_samples %>%
+biota_samples3 <- biota_samples2 %>%
   mutate(SPECIMEN_NO = SAMPLE_NO)
 
 if (FALSE){
   
-  biota_samples %>%
+  biota_samples3 %>%
     ggplot(aes(x = STATION_CODE, y = SPECIMEN_NO)) +
     geom_point()
   
   # Samples that lack a corresponding individual
-  biota_samples %>%
+  biota_samples3 %>%
     anti_join(existing_singlespec_1, by = c("STATION_ID", "SPECIMEN_NO")) %>%
     left_join(df_stations %>% select(STATION_ID, STATION_CODE)) %>%
     select(STATION_CODE, TISSUE_NAME, SAMPLE_NO, SPECIMEN_NO) %>%
@@ -1141,7 +1146,7 @@ if (FALSE){
 ```{r}
 
 # Start 'specimens_to_add' 
-biota_specimens_to_add <- biota_samples %>%
+biota_specimens_to_add <- biota_samples3 %>%
   anti_join(existing_singlespec_1, by = c("STATION_ID", "SPECIMEN_NO")) %>%
   distinct(STATION_ID, SPECIMEN_NO)
 
@@ -1196,8 +1201,8 @@ sql_list[1:3]
 ```
 
 ### e1. Get existing records in Nivabase
-- CASE A: The records we just added  
-- CASE
+- CASE A: The records we just added   
+- CASE B: All specimens for given stations  
 Directly from R, instead of pasting into SQL Developer for getting data  
 - in contrast to the original of this code (for 2018 data)   
 Remember to **commit** in SQL developer first   
@@ -1243,6 +1248,7 @@ if (TRUE){
 }
 
 
+
 # Check ID
 cat("SPECIMEN_ID: ")
 range(biota_specimens_fromdatabase$SPECIMEN_ID) %>% paste(collapse = " - ") %>% cat()
@@ -1255,7 +1261,7 @@ cat("\n")
 ## 7. BIOTA_SAMPLES_SPECIMENS   
 Add records for   
 1. The new specimens  
-2. The 'old' specimens, linking to new samples (biota_samples)  
+2. The 'old' specimens, linking to new samples (biota_samples3)  
 
 ### a. Get all individuals  
 (including the new ones)
@@ -1265,7 +1271,7 @@ biota_specimens_complete <- niRvana::get_nivabase_selection(
   "*",
   "BIOTA_SINGLE_SPECIMENS",
   "STATION_ID",
-  unique(biota_samples$STATION_ID), 
+  unique(biota_samples3$STATION_ID), 
   extra_sql = paste(
     " and extract(YEAR from DATE_CAUGHT) =",
     selected_year)
@@ -1279,8 +1285,8 @@ nrow(biota_specimens_complete) %>% cat()   # 144
 ### b. Make `biota_samples_specimens`
 ```{r}
 
-# biota_samples already have SPECIMEN_NO added (from 10b)
-# biota_samples_specimens <- biota_samples %>%
+# biota_samples3 already have SPECIMEN_NO added (from 10b)
+# biota_samples_specimens <- biota_samples3 %>%
 #   select(STATION_ID, STATION_CODE, TISSUE_NAME, SAMPLE_NO, SAMPLE_ID, SPECIMEN_NO) %>%
 #   safe_left_join(
 #     biota_specimens_complete %>% select(STATION_ID, SPECIMEN_NO, SPECIMEN_ID),
@@ -1288,7 +1294,7 @@ nrow(biota_specimens_complete) %>% cat()   # 144
 #     by = c("STATION_ID", "SPECIMEN_NO"),
 #     check = "BCV")
 
-biota_samples_specimens <- biota_samples %>%
+biota_samples_specimens <- biota_samples3 %>%
   select(STATION_ID, STATION_CODE, TISSUE_NAME, SAMPLE_NO, SAMPLE_ID, SPECIMEN_NO) %>%
   mutate(SPECIMEN_NO = as.numeric(SPECIMEN_NO)) %>%
   safe_left_join(
@@ -1296,8 +1302,15 @@ biota_samples_specimens <- biota_samples %>%
     na_matches = "never",
     by = c("STATION_ID", "SPECIMEN_NO"))
     
-cat("Number of records that will be added to BIOTA_SAMPLES_SPECIMENS: ")
-nrow(biota_samples_specimens) %>% cat()   # 74
+n_records4 <- nrow(biota_samples_specimens)  # 92
+cat("Number of records that will be added to BIOTA_SAMPLES_SPECIMENS: ", n_records4, "\n\n")  
+
+if (n_records4 != n_records1){
+  stop("Number of records to add is not the same as number of SQLs in the 'Make SQLs' section! (In case of pooled samples, this is not an error.)")
+} else {
+  cat("The number of added records is the same as number of SQLs in the 'Make SQLs' section \n")
+}
+
 
 ```
 
@@ -1342,7 +1355,7 @@ sql_list[1:3]
 ### a. Start `biota_values`   
 ```{r}
 
-# "SAMPLE_ID"            - Get from 'biota_samples'
+# "SAMPLE_ID"            - Get from 'biota_samples3'
 # "METHOD_ID"            - Already in 'data_for_input' (from script 210)
 # "VALUE"                -    " 
 # "FLAG1"                -    "
@@ -1367,8 +1380,8 @@ if (sum(!is.na(data_for_input$Value)) == nrow(biota_chemistry_values)){
 }
 
 cat("===================================\n")
-cat("Biota samples that will be inserted in database: \n")
-xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), biota_samples)
+cat("Biota samples that has been inserted in database: \n")
+xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), biota_samples3)
 
 cat("===================================\n")
 cat("Records for input: \n")
