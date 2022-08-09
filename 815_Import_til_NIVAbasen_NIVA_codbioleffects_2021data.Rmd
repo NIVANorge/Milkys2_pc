@@ -925,7 +925,8 @@ Directly from R, instead of pasting into SQL Developer for getting data
 Remember to **commit** in SQL developer first  
 ```{r}
 
-today <- substr(lubridate::now(tzone = "UTC"), 1, 10)
+day_for_adding_records <- substr(lubridate::now(tzone = "UTC"), 1, 10)
+day_for_adding_records <- "2022-08-08"
 
 biota_samples_fromdatabase <- niRvana::get_nivabase_selection(
   "*",
@@ -933,13 +934,19 @@ biota_samples_fromdatabase <- niRvana::get_nivabase_selection(
   "STATION_ID",
   biota_samples$STATION_ID, 
   extra_sql = paste0(
-    "and TRUNC(ENTERED_DATE) = TO_DATE(", sQuote(today), ", 'yyyy-mm-dd')", 
+    "and TRUNC(ENTERED_DATE) = TO_DATE(", sQuote(day_for_adding_records), ", 'yyyy-mm-dd')", 
     " and ENTERED_BY = 'DHJ'")
 )
 
-cat("Number of records: ")
-nrow(biota_samples_fromdatabase) %>% cat()   # 144
-cat("\nShould be the same as number of SQLs in the 'Make SQLs' section! \n")
+cat("Number of retrieved records: ")
+n_records2 <- nrow(biota_samples_fromdatabase)
+n_records2
+
+if (n_records2 != n_records1){
+  stop("Number of added records is not the same as number of SQLs in the 'Make SQLs' section!")
+} else {
+  cat("The number of added records is the same as number of SQLs in the 'Make SQLs' section")
+}
 
 
 ```
@@ -1785,44 +1792,79 @@ df_selected_year_new %>%
 ### Get data from one station  
 ```{r}
 
+df0 <- get_nivabase_selection(
+  "STATION_ID, STATION_CODE, STATION_NAME",
+  "PROJECTS_STATIONS",
+  "STATION_CODE",
+  "71B", values_are_text = TRUE)
+# df0$STATION_ID
+
 df1 <- get_nivabase_selection(
-  "*",
+  "STATION_ID, SPECIMEN_ID, SPECIMEN_NO, DATE_CAUGHT",
   "BIOTA_SINGLE_SPECIMENS",
   "STATION_ID",
-  69750,
+  df0$STATION_ID[1],
   extra_sql = paste(" and extract(YEAR from DATE_CAUGHT) =", selected_year))
 
 df2 <- get_nivabase_selection(
-  "*",
+  "SPECIMEN_ID, SAMPLE_ID",
   "BIOTA_SAMPLES_SPECIMENS",
   "SPECIMEN_ID",
   df1$SPECIMEN_ID)
 
 df3 <- get_nivabase_selection(
-  "*",
+  "SAMPLE_ID, SAMPLE_NO, REPNO, TISSUE_ID",
   "BIOTA_SAMPLES",
   "SAMPLE_ID",
   df2$SAMPLE_ID)
 
-df3 <- get_nivabase_selection(
-  "*",
-  "BIOTA_SAMPLES",
+df3_tissue <- get_nivabase_selection(
+  "TISSUE_ID, TISSUE_NAME",
+  "BIOTA_TISSUE_TYPES",
+  "TISSUE_ID",
+  unique(df3$TISSUE_ID))
+
+df4 <- get_nivabase_selection(
+  "SAMPLE_ID, METHOD_ID, VALUE, FLAG1",
+  "BIOTA_CHEMISTRY_VALUES",
   "SAMPLE_ID",
-  df2$SAMPLE_ID)
+  df3$SAMPLE_ID)
 
-df3b <- get_nivabase_selection(
-  "*",
-  "BIOTA_SAMPLES",
-  "SAMPLE_ID",
-  245960)
+df4_methods <- get_nivabase_selection(
+  "METHOD_ID, NAME, UNIT, LABORATORY", 
+  "METHOD_DEFINITIONS", 
+  "METHOD_ID", 
+  unique(df4$METHOD_ID))
 
-df3b <- get_nivabase_selection(
-  "*",
-  "BIOTA_SAMPLES",
-  "STATION_ID",
-  69750,
-  extra_sql = paste(" and extract(YEAR from SAMPLE_DATE) =", selected_year))
+df_check <- df3 %>%
+  left_join(df3_tissue) %>%
+  left_join(df4) %>%
+  left_join(df4_methods) %>%
+  left_join(df2) %>%
+  left_join(df1) %>%
+  left_join(df0)
 
+# Siloxans - check values  
+df_check %>%
+  filter(SAMPLE_NO > 100) %>% # View()
+  ggplot(aes(SAMPLE_NO, VALUE)) +
+    geom_point(color = "blue3") +
+    facet_grid(cols = vars(NAME))
+
+# Siloxans - check individuals to samples  
+df_check %>%
+  group_by(SPECIMEN_NO, TISSUE_NAME, SAMPLE_NO) %>%
+  
+  arrange(SPECIMEN_NO, TISSUE_NAME, SAMPLE_NO)
+  
+df_check %>%
+  group_by(SPECIMEN_ID, SPECIMEN_NO, TISSUE_NAME, SAMPLE_NO) %>%
+  summarise(
+    No_param = n(),
+    Parameters = substr(paste(unique(NAME), collapse = ", "), 1, 25)
+  ) %>%
+  arrange(SPECIMEN_ID, SPECIMEN_NO, TISSUE_NAME, SAMPLE_NO)
+  
 
 ```
 
