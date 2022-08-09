@@ -121,7 +121,7 @@ ui <- fluidPage(
               
               tabPanel(
                 "Samples",
-                plotOutput("samples_plot", width = "600px"),
+                plotOutput("samples_plot", width = "700px", height = "700px"),
                 div(DTOutput("samples_datatable"), style = "font-size:90%")
               ), # end tabPanel 3
               
@@ -497,6 +497,8 @@ server <- function(input, output, session) {
     df_samples <- get_samples()
     # browser()  
     df_samples <- df_samples %>%
+      arrange(SAMPLE_NO) %>%
+      mutate(SAMPLE_NO = factor(SAMPLE_NO) %>% fct_inorder()) %>%
       mutate(Sample_type = case_when(
         is.na(SPECIMEN_NO) ~ "Individual unknown",
         as.character(SAMPLE_NO) == SPECIMEN_NO ~ "Sample no = ind no",
@@ -507,7 +509,7 @@ server <- function(input, output, session) {
       geom_point() +
       geom_text(aes(label = SPECIMEN_NO), nudge_x = 0.1, hjust = 0, size = 3) +
       facet_grid(vars(TISSUE_NAME))
-  })
+  }, width = 700, height = 700)
   #
   # output 'n_specimens_samples' ----
   #

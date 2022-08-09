@@ -908,8 +908,9 @@ sql <- paste(sql_list, collapse = ";\n")
 sql <- paste0(sql, ";\n")
 writeLines(sql, "clipboard")  # copies SQLs to clipboard - go to SQL Developer and paste
 
+n_records1 <- length(sql_list)  # 92
 cat("Number of SQLs: \n")
-length(sql_list)  # 144
+n_records1
 
 cat("\nSample of SQLs: \n")
 sql_list[1:3]
@@ -1086,26 +1087,22 @@ df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
 ### b2. Visualise Fish_no vs SAMPLE_NO   
 Check whether there are other tissues than liver (not liver-microsome) and muscle  
 - Yes, there are now also bile (but not blood and liver-microsome, so no need to change anything)     
-- Also shows whether samples are pooled or whether they have  
+- Also shows whether samples are pooled or whether they have different specimen and sample numbers   
 ```{r, fig.width=7, fig.height=7}
+
+# Note: code and figure also utilised in app 807
 
 df_samples %>%
   filter(AQUAMONITOR_CODE %in% data_for_input$STATION_CODE) %>%
+  arrange(BIOTA_SAMPLENO) %>%
+  mutate(BIOTA_SAMPLENO = factor(BIOTA_SAMPLENO) %>% fct_inorder()) %>%
   ggplot(aes(AQUAMONITOR_CODE, BIOTA_SAMPLENO, color = Sample_type)) + 
   geom_point() +
   geom_text(aes(label = X_BULK_BIO), nudge_x = 0.1, hjust = 0, size = 3) +
   facet_grid(vars(Tissue))
 
-```
-```{r}
-
-df_samples %>%
-  filter(AQUAMONITOR_CODE %in% data_for_input$STATION_CODE,
-         (BIOTA_SAMPLENO == 16 | X_BULK_BIO == "16")) %>% View()
-
 
 ```
-
 
 ### b3. Add SPECIMEN_NO to biota_samples     
 Given that the checks above shows that two assumptions given in start of 'b' is OK  
