@@ -1400,6 +1400,7 @@ biota_chemistry_values %>%
   xtabs(~n, .)  # should be only 1's!
 
 ```
+
 ### a2. Check that SAMPLE_NO is given for all   
 ```{r}
 
@@ -1408,6 +1409,7 @@ biota_chemistry_values %>%
   nrow()
 
 ```
+
 ### a2. Check that SAMPLE_ID is given for all   
 ```{r}
 
@@ -1428,6 +1430,7 @@ biota_chemistry_values %>%
            by = c("TISSUE_ID")) %>%
   ggplot(aes(TISSUE_NAME, SAMPLE_ID, color = VALUE)) +
   geom_point() +
+  scale_colour_distiller(direction = 1) +
   facet_grid(cols = vars(STATION_ID), rows = vars(METHOD_ID)) +
   theme(axis.text.x = element_text(hjust = 0, angle = -30))
 
@@ -1453,7 +1456,7 @@ writeLines(sql, "clipboard-1024")   # copies SQLs to clipboard - go to SQL Devel
                                     #    for the clipboard
 
 cat("Number of SQLs: \n")
-length(sql_list)  # 140
+length(sql_list)  # 92
 
 
 cat("\nSample of SQLs: \n")
@@ -1612,6 +1615,8 @@ dat_test %>%
 
 
 ## 14. Fix cod metabolites in NIVAbasen    
+
+- NOT DONE FOR 2022 DATA! (Yet.)
 
 - In 2020, the absorption-normalised ones (low numbers) were by mistake called PYR1OH, PA1OH and BAP3OH
 - Must be changed to PYR1O, PA1O, BAP3O
