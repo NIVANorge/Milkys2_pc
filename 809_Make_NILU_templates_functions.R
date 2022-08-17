@@ -1,4 +1,8 @@
 
+# **NOTE: This has now been moved to project 'Lims_import_template'   
+# https://github.com/NIVANorge/Lims_import_template
+#
+
 #
 # Note: the parameters will be in the same order as they are in 'nilu_data_long'
 #

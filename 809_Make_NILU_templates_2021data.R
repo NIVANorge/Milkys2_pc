@@ -3,6 +3,9 @@
 #
 # Make excel templates for the use in NILU
 #
+# **NOTE: This has now been moved to project 'Lims_import_template'   
+# https://github.com/NIVANorge/Lims_import_template
+#
 #o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 
