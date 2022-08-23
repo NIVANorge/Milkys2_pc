@@ -126,7 +126,7 @@ if (FALSE){
 }
 
 
-get_data <- function(paramgroup, speciesgroup, min_obs = 100){
+get_data_paramgroup <- function(paramgroup, speciesgroup, min_obs = 100){
   
   X <- get_data_tables(paramgroup)
   
@@ -182,9 +182,9 @@ get_data <- function(paramgroup, speciesgroup, min_obs = 100){
 
 # Test
 if (FALSE){
-  # debugonce(get_data)
-  x1 <- get_data("metals", "fish")
-  x2 <- get_data("metals", "mussel")
+  # debugonce(get_data_paramgroup)
+  x1 <- get_data_paramgroup("metals", "fish")
+  x2 <- get_data_paramgroup("metals", "mussel")
 }
 
 
@@ -237,8 +237,8 @@ get_medians <- function(data_samplelevel_fish, data_samplelevel_mussel){
 # Test
 if (FALSE){
   debugonce(get_medians)
-  x1 <- get_data("metals", "fish")
-  x2 <- get_data("metals", "mussel")
+  x1 <- get_data_paramgroup("metals", "fish")
+  x2 <- get_data_paramgroup("metals", "mussel")
   test <- get_medians(x1, x2)
 }
 
