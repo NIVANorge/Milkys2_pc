@@ -268,63 +268,14 @@ if (FALSE){
 
 # NOTE: much of the code in the two functions 
 # pargroup_median_table_tooltip and pargroup_median_table_static is
-#   similar and could be put into a common "prepare data" function
+#   similar and could be put into a common "prepare data" function.
+#   See code for 'parameter_median_table_tooltip' below
 pargroup_median_table <- function(..., tooltip = TRUE){
   if (tooltip){
     pargroup_median_table_tooltip(...)
   } else {
     pargroup_median_table_static(...)
   }
-}
-
-# Static plot (returns ordinary ggplot object)  
-pargroup_median_table_static <- function(data_medians, fill, year){
-  
-  if (length(year) > 1){
-    stop("Several years given. Set year to be a single year")
-  }
-  
-  data_medians$fill <- data_medians[[fill]]
-  
-  fill_min <- floor(1000*min(data_medians$fill, na.rm = T))/1000
-  fill_max <- ceiling(max(data_medians$fill, na.rm = T))
-
-  dat_plot <- data_medians %>%
-    filter(MYEAR %in% year) %>%
-    arrange(desc(PARAM)) %>%
-    mutate(PARAM = forcats::fct_inorder(PARAM),
-           fill = cut(fill, breaks = c(fill_min,1,2,3,5,10,fill_max)))
-  
-  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
-            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
-  names(cols) <- levels(dat_plot$fill)
-  
-  gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
-      geom_tile()
-  gg <- gg +
-    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
-              color = "red", size = 1, height = 0.9, width = 0.9) +
-    geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
-    geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
-    #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
-    #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
-    scale_fill_manual(fill, values = cols) +
-    scale_color_manual(values = c("red", "white")) +
-    scale_alpha_manual(values = c(1, 0)) +
-    scale_y_discrete() +
-    theme_bw() +
-    theme(axis.text.x = element_text(angle = -45, hjust = 0))
-  labs(
-    title = "Medians"
-  )
-  
-  gg
-  
-}
-
-if (F){
-  # debugonce(pargroup_median_table_static)
-  pargroup_median_table_static(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
 }
 
 pargroup_median_table_data <- function(data_medians, fill, year){
@@ -348,7 +299,7 @@ pargroup_median_table_data <- function(data_medians, fill, year){
   dat_plot <- dat_plot %>% 
     mutate(
       PARAM = forcats::fct_inorder(PARAM),
-      fill_cut = cut(fill, breaks = c(fill_min,1,2,3,5,10,fill_max)),
+      fill_cut = cut(fill, breaks = c(fill_min,0.5,0.75,0.9,1,2,3,5,10,fill_max)),
       VALUE_WW_txt = paste0(
         fill_column, ": ", round(fill, 3), "<br>",
         "Median: ", LOQ_label, round(VALUE_WW_med, 4), " ug/kg<br>",
@@ -362,45 +313,44 @@ pargroup_median_table_data <- function(data_medians, fill, year){
 }
 
 if (F){
-  # debugonce(pargroup_median_table_tooltip)
+  # debugonce(pargroup_median_table_data)
   pargroup_median_table_data(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
+}
+
+pargroup_median_table_colors <- function(plotdata){
+  n_levels <- length(levels(plotdata$fill_cut))
+  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[5:2],
+            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
+  
+  # Note: aalternative color scales
+  #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+  #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+  
+  if (length(cols) != n_levels){
+    cat("\nLevels of fill variable:", levels(plotdata$fill_cut), "\n")
+    stop("Data has ", n_levels, " levels (see above) but ", length(cols), " colors given")
+  }
+  names(cols) <- levels(plotdata$fill_cut)
+  cols
+}
+
+if (F){
+  # debugonce(pargroup_median_table_tooltip)
+  X <- pargroup_median_table_data(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
+  x <- parameter_median_table_colors(X)
+  data.frame(Ratio = names(x), Hexcode = x) %>% write.csv2("clipboard")
 }
 
 # "Dynamic" plot, i.e. with tooltips (returns htmlwidget / girafe object)  
 pargroup_median_table_tooltip <- function(data_medians, fill, year,
                                           width_svg = 6, height_svg = 3.5){
   
-  if (length(year) > 1){
-    stop("Several years given. Set year to be a single year")
-  }
-  
-  data_medians$fill <- data_medians[[fill]]
-  
   fill_column <- fill
+
+  dat_plot <- pargroup_median_table_data(
+    data_medians= data_medians, fill = fill, year = year)
   
-  dat_plot <- data_medians %>%
-    filter(MYEAR %in% year) %>%
-    arrange(desc(PARAM))
-  
-  # fill_min <- floor(1000*min(dat_plot$fill, na.rm = T))/1000
-  # fill_max <- ceiling(max(dat_plot$fill, na.rm = T))
-  fill_min <- 0.0001
-  fill_max <- 1000
-  
-  dat_plot <- dat_plot %>% 
-    mutate(
-      PARAM = forcats::fct_inorder(PARAM),
-      fill_cut = cut(fill, breaks = c(fill_min,1,2,3,5,10,fill_max)),
-      VALUE_WW_txt = paste0(
-        fill_column, ": ", round(fill, 3), "<br>",
-        "Median: ", round(VALUE_WW_med, 4), " ug/kg<br>",
-        "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), "; N =", N, ")")) %>%
-    select(Proref_ratio_WW, VALUE_WW_txt, MYEAR, Station2, PARAM, fill, fill_cut,
-           Above_EQS, VALUE_WW_med, LOQ_label)
-  
-  cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
-            RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
-  names(cols) <- levels(dat_plot$fill)
+  cols <- parameter_median_table_colors(dat_plot)
   
   p <- ggplot(dat_plot, aes(Station2, PARAM, tooltip = VALUE_WW_txt)) + 
     geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
@@ -427,6 +377,46 @@ if (F){
   # debugonce(pargroup_median_table_tooltip)
   pargroup_median_table_tooltip(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
 }
+
+
+# Static plot (returns ordinary ggplot object)  
+pargroup_median_table_static <- function(data_medians, fill, year){
+  
+  fill_column <- fill
+  
+  dat_plot <- pargroup_median_table_data(
+    data_medians= data_medians, fill = fill, year = year)
+  
+  cols <- parameter_median_table_colors(dat_plot)
+  
+  gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
+    geom_tile()
+  gg <- gg +
+    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+              color = "red", size = 1, height = 0.9, width = 0.9) +
+    geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
+    geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
+    #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+    #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+    scale_fill_manual(fill, values = cols) +
+    scale_color_manual(values = c("red", "white")) +
+    scale_alpha_manual(values = c(1, 0)) +
+    scale_y_discrete() +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = -45, hjust = 0))
+  labs(
+    title = "Medians"
+  )
+  
+  gg
+  
+}
+
+if (F){
+  # debugonce(pargroup_median_table_static)
+  pargroup_median_table_static(dat_median_fish, fill = "Proref_ratio_WW", year = 2021)
+}
+
 
 pargroup_boxplot <- function(data_medians, y, year, ylabel = NULL, main_title = NULL){
   
