@@ -33,36 +33,87 @@ get_tissue <- function(param, species){
                        "BAP3OH", "PA1OH", "PYR1OH", "PYR1", "AY380", "1-OH-fenantren")
   livermicrosome_parameters <- c("PROTV", "AY380")
   
-  if (!species %in% c(fish_species, mollusc_species, bird_species)){
+  if (mean(species %in% c(fish_species, mollusc_species, bird_species)) < 1) {
     stop("Species not found in the code of function 'get_tissue'. Check this function.")
-  } 
+  }
   
-  if (species %in% bird_species){
+  if (sum(species %in% bird_species) > 0){
     stop("BIRD DATA - PICK TISSUE MANUALLY")
   } 
   
+  if (mean(species %in% fish_species) == 1) {
+    species_group <- "fish" 
+  } else if (mean(species_group <- "mollusc") == 1) {
+    species_group <- "mollusc" 
+  }
+    
   if (param %in% "HG"){
-    if (species %in% fish_species){
+    if (species_group == "fish"){
       result <- "Muskel"
-    } else if (species %in% mollusc_species){
+    } else if (species_group == "mollusc"){
       result <- "Whole soft body"
     }
   } else if (param %in% bile_parameters){
-    if (species %in% fish_species){
+    if (species_group == "fish"){
       result <- "Galle"
     } else {
       stop("Bile parameter measured in bird or mollusc? Check data.")
     }
   } else if (param %in% livermicrosome_parameters){
-    if (species %in% fish_species){
+    if (species_group == "fish"){
       result <- "Liver - microsome"
     } else {
       stop("Liver microsome parameter measured in bird or mollusc? Check data.")
     }
   } else {
-    if (species %in% fish_species){
+    if (species_group == "fish"){
       result <- "Lever"
-    } else if (species %in% mollusc_species){
+    } else if (species_group == "mollusc"){
+      result <- "Whole soft body"
+    }
+  }
+  result
+}
+
+
+if (FALSE){
+  debugonce(get_tissue)
+  get_tissue("HG", c("Gadus morhua", "Platichthys flesus"))
+  get_tissue("CB118", "Gadus morhua")
+  get_tissue("HG", "Mytilus edulis")
+  get_tissue("CB118", "Mytilus edulis")
+  get_tissue("PYR1O", "Gadus morhua")
+  get_tissue("PYR1O", "Mytilus edulis")
+}
+
+get_tissue_speciescategory <- function(param, speciescategory){
+  
+  bile_parameters <- c("AY", "PYR1O", "BILIV", "OHBIL", "PA1O", "BAP3O", "ABS380", 
+                       "BAP3OH", "PA1OH", "PYR1OH", "PYR1", "AY380", "1-OH-fenantren")
+  livermicrosome_parameters <- c("PROTV", "AY380")
+  
+  if (param %in% "HG"){
+    if (speciescategory %in% "Fish"){
+      result <- "Muskel"
+    } else if (speciescategory %in% "Mussel"){
+      result <- "Whole soft body"
+    }
+  } else if (param %in% bile_parameters){
+    if (speciescategory %in% "Fish"){
+      result <- "Galle"
+    } else {
+      stop("Bile parameter measured in bird or mollusc? Check data.")
+    }
+  } else if (param %in% livermicrosome_parameters){
+    if (speciescategory %in% "Fish"){
+      result <- "Liver - microsome"
+    } else {
+      stop("Liver microsome parameter measured in bird or mollusc? Check data.")
+    }
+  } else {
+    if (speciescategory %in% "Fish"){
+      result <- "Lever"
+    } else if (speciescategory %in% "Mussel"){
       result <- "Whole soft body"
     }
   }
@@ -70,12 +121,9 @@ get_tissue <- function(param, species){
 }
 
 if (FALSE){
-  get_tissue("HG", "Gadus morhua")
-  get_tissue("CB118", "Gadus morhua")
-  get_tissue("HG", "Mytilus edulis")
-  get_tissue("CB118", "Mytilus edulis")
-  get_tissue("PYR1O", "Gadus morhua")
-  get_tissue("PYR1O", "Mytilus edulis")
+  get_tissue_speciescategory("HG", "Fish")
+  get_tissue_speciescategory("CB118", "Fish")
+  get_tissue_speciescategory("CB118", "Mussel")
 }
 
 # Get ordinary linear trend
