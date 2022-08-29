@@ -236,3 +236,165 @@ dat_2020 %>%
 
 ```
 
+## 5. Check ferrybox stations (unrelated to Milkys)  
+
+### From projects like "forsuring"   
+* 2010-2012 only  
+```{r}
+
+get_nivabase_data("select * from NIVADATABASE.PROJECTS_STATIONS where rownum < 4")
+get_nivabase_data("select * from NIVADATABASE.PROJECTS where rownum < 4")
+
+df1 <- get_nivabase_data("select PROJECT_ID, PROJECT_NAME, PROJECT_DESCRIPTION from NIVADATABASE.PROJECTS where PROJECT_NAME like '%forsur%'")
+
+df1
+
+df2 <- get_nivabase_selection("*", "PROJECTS_STATIONS", "PROJECT_ID", df1$PROJECT_ID)
+
+df2b <- df2 %>%
+  left_join(df1) %>%
+  group_by(STATION_ID, STATION_CODE, STATION_NAME) %>%
+  summarize(across(.cols = c(PROJECT_ID, PROJECT_NAME), .fns = ~paste(unique(.), collapse = ",")))
+
+df3 <- niRvana::add_coordinates(df2b)
+
+# write.csv(df3, "../../seksjon 214/R-oceanography/Common data/PROJECTS_STATIONS_acidification.csv")
+
+df3b <- df3 %>% filter(grepl("FerryBox", STATION_NAME))
+
+if (FALSE){
+  library(leaflet)
+  # Copy/paste to console
+  leaflet() %>%
+    addTiles() %>%
+    addMarkers(lng = df3b$LONGITUDE, lat = df3b$LATITUDE, 
+               popup = paste(df3b$STATION_NAME, "<br>", df3b$PROJECT_NAME))
+    
+}
+
+df4 <- get_nivabase_selection(
+  "WATER_SAMPLE_ID, STATION_ID, SAMPLE_DATE, DEPTH1",
+  "WATER_SAMPLES",
+  "STATION_ID",
+  df3b$STATION_ID)
+
+table(year(df4$SAMPLE_DATE))
+
+```
+### From station names  
+
+a. Norbjørn
+
+```{r}
+
+df1a <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.PROJECTS_STATIONS", 
+  "where STATION_NAME like '%Tromsø-Svalbard%'"))
+# zero
+
+df1a <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.PROJECTS_STATIONS", 
+  "where STATION_CODE like '%NB%'"))
+# 189
+
+nbs <- paste0("NB", 1:15) %>% sQuote() %>% paste(collapse = ",")
+
+df1a <- get_nivabase_data(paste(
+  "select PROJECT_ID, STATION_ID, STATION_CODE, STATION_NAME from NIVADATABASE.PROJECTS_STATIONS", 
+  "where STATION_CODE in ('NB1','NB2','NB3','NB4','NB5','NB6','NB7','NB8','NB9','NB10','NB11','NB12','NB13','NB14','NB15')"))
+# 31
+
+df2 <- get_nivabase_selection(
+  "WATER_SAMPLE_ID, STATION_ID, SAMPLE_DATE, DEPTH1",
+  "WATER_SAMPLES",
+  "STATION_ID",
+  df1a$STATION_ID)
+
+table(year(df2$SAMPLE_DATE))
+
+df1b <- df1a %>% 
+  left_join(df2 %>% count(STATION_ID, name = "samples_2019-2022")) %>%
+  add_coordinates()
+
+write.csv(df1b, "../Mikronor_midlertidig/Nivadatabase_Norbjorn_stations.csv")
+
+if (FALSE){
+  library(leaflet)
+  # Copy/paste to console
+  leaflet() %>%
+    addTiles() %>%
+    addMarkers(lng = df1b$LONGITUDE, lat = df1b$LATITUDE, 
+               popup = paste(df1b$STATION_NAME, "<br>", df1b$PROJECT_NAME))
+    
+}
+
+```
+
+
+b. Fantasy + Norbjorn
+
+```{r}
+
+df1a <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.PROJECTS_STATIONS", 
+  "where STATION_CODE like '%FA%'"))
+# 225 obs but are they the right ones?
+
+# Find projects f Norbjørn
+proj_id <- unique(df1b$PROJECT_ID)
+
+df1a <- get_nivabase_selection(
+  "PROJECT_ID, STATION_ID, STATION_CODE, STATION_NAME", 
+  "PROJECTS_STATIONS",
+  "PROJECT_ID",
+  proj_id
+)
+
+df_projects <- get_nivabase_selection(
+  "PROJECT_ID, PROJECT_NAME",
+  "PROJECTS",
+  "PROJECT_ID",
+  proj_id
+)
+
+df1b <- df1a %>% left_join(df_projects)
+
+df2 <- df1b %>%
+  group_by(STATION_ID, STATION_CODE, STATION_NAME) %>%
+  summarize(across(.cols = c(PROJECT_ID, PROJECT_NAME), .fns = ~paste(unique(.), collapse = ","))) %>%
+  add_coordinates()
+
+write.csv(df2, "../Mikronor_midlertidig/Nivadatabase_Havforsuring_stations.csv")
+
+if (FALSE){
+  library(leaflet)
+  # Copy/paste to console
+  leaflet() %>%
+    addTiles() %>%
+    addMarkers(lng = df2$LONGITUDE, lat = df2$LATITUDE, 
+               popup = paste(df2$STATION_NAME, "<br>", df2$PROJECT_NAME))
+    
+}
+
+```
+
+```{r}
+
+```
+
+```{r}
+
+
+
+df_method <- get_nivabase_selection(
+  "METHOD_ID, NAME, UNIT",
+  "METHOD_DEFINITIONS",
+  "NAME",
+  "pH", values_are_text = TRUE)  
+
+
+
+
+```
+
+
