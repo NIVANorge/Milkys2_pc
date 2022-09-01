@@ -1,0 +1,1025 @@
+---
+title: "34_Add_uncertainty"
+author: "DHJ"
+date: "29 8 2019"
+output: 
+  html_document:
+    keep_md: true
+---
+
+**UNCRT can be given in three ways:**
+- as standard deviation `u` (set METCU = SD)   
+- as "expanded uncertainty" = 2 x standard deviation = 2u (set METCU = U2)   
+- as percentage = 100u/VALUE (set METCU = %)   
+NOTE: The formula used in part 6 and 7, sqrt(s^2 + (Value^2)*(v^2)), is taken from Rob Fryer and is given both in Annex 5 of the 2018/19 MIME report as well as in ICES DOME 'Frequently Asked Questions'    
+
+- This year (part 8), we use percentage (and METCU = %) as given by the labs.   
+
+
+
+
+## 1. Libraries
+```{r, results=}
+
+library(dplyr)
+library(purrr)
+library(readxl)
+library(safejoin)  # for safe_left_join() with check = "V" 
+                   # (check if no set of values of join columns is duplicated in y)
+library(ggplot2)
+
+library(here)
+# setwd("C:/Data/seksjon 212")
+# set_here("C:/Data/seksjon 212")
+
+# here()
+# ?set_here
+# set_here("C:/Data/seksjon 212/Milkys")
+
+```
+
+
+### Selected year  
+```{r}
+
+selected_year <- 2020
+
+```
+
+
+## 2. Chemical data    
+We only keep data from the last year  
+```{r}
+
+# dir("Data")
+# Data at sample level (chemical data, biological efect parameters and VDSI)
+# Also in "../Milkys2/Data/101_data_updated_2020-08-05.rds"
+ 
+fn <- "Files_from_Jupyterhub_2020/Raw_data/101_dat_new_2021-09-01.rds"     # data FROM Milkys2 on Jupyterhub
+fn <- "../Milkys2/Data/101_dat_new_2021-12-30.rds"                         # data FROM Milkys2 on PC 
+
+dat_all_allyears <- readRDS(fn)
+
+# Remember: for sum variables, only SAMPLE_NO2 has been set (SAMPLE_NO is NA)
+check <- dat_all_allyears %>%
+  filter(SAMPLE_NO != SAMPLE_NO2)
+
+if (nrow(check) > 0)
+  stop("Check cases where SAMPLE_NO != SAMPLE_NO2")
+
+dat_all_allyears <- dat_all_allyears %>%
+  mutate(
+    TISSUE_NAME = case_when(
+      TISSUE_NAME %in% "Egg homogenate of yolk and albumin" ~ "Egg",
+      TRUE ~ TISSUE_NAME)
+  )
+
+
+```
+
+
+### Check if there are unique values 
+```{r}
+
+check <- dat_all_allyears %>%
+  ungroup() %>%
+  group_by(STATION_CODE, LATIN_NAME, TISSUE_NAME, MYEAR, SAMPLE_NO2, 
+           UNIT, PARAM) %>%
+  mutate(n = n()) %>%
+  filter(n > 1)
+
+cat("The number of duplicate values in 'dat_all_allyears' is: ", nrow(check))  # 0
+
+
+if (FALSE){
+  check %>%
+    filter(TISSUE_NAME == "Egg" & SAMPLE_NO == 1)
+    
+}
+
+```
+### Plot raw data   
+- In earlier veriosn of the data, some PFDcA values from Sørfjorden are very low  
+- the same for some PFUdA data 
+- PCBs are also very low for 19B, but this is correct (methods are adjusted for this station)   
+
+```{r}
+
+plot_raw_data_liver_highlight <- function(param, 
+                                          highlight = "53B", 
+                                          highlight_text = "Inner Sørfjord", 
+                                          log = FALSE){
+  df <- dat_all_allyears %>% 
+    filter(LATIN_NAME == "Gadus morhua" & MYEAR == 2020 & PARAM == param) %>% 
+    arrange(VALUE_WW) %>%
+    mutate(
+      Flag1 = ifelse(is.na(FLAG1), "Over LOQ", "Under LOQ"),
+      `Station color` = ifelse(STATION_CODE == highlight, highlight_text, "Other stations")
+      )
+  gg <- ggplot(df, aes(STATION_CODE, VALUE_WW, color = `Station color`, shape = Flag1)) +
+    geom_jitter(width = 0.25, height = 0) +
+    labs(title = paste(param, "in cod liver"),
+         subtitle = "Dashed line = Lowest 'under LOQ-value'")
+  if (sum(df$Flag1 == "Under LOQ") > 0)
+    gg <- gg + geom_hline(yintercept = min(df$VALUE_WW[df$Flag1 == "Under LOQ"]), 
+                          linetype = "dashed")
+  if (log)
+    gg <- gg + scale_y_log10()
+  print(gg)
+}
+
+dat_all_allyears %>% 
+    filter(LATIN_NAME == "Gadus morhua" & MYEAR == 2020 & substr(PARAM, 1, 2) == "PF") %>%
+  group_by(PARAM) %>%
+  summarise(median(VALUE_WW), mean(is.na(FLAG1)))
+
+plot_raw_data_liver_highlight("PFDcA") # strange values  
+plot_raw_data_liver_highlight("PFOS")
+plot_raw_data_liver_highlight("PFOSA")
+plot_raw_data_liver_highlight("PFUdA")
+plot_raw_data_liver_highlight("PFNA")
+
+plot_raw_data_liver_highlight("CB180", highlight = "19B", highlight_text = "Svalbard", log = TRUE)
+plot_raw_data_liver_highlight("CB101", highlight = "19B", highlight_text = "Svalbard", log = TRUE)
+
+```
+### Fix PFDcA and PFUdA in cod liver    
+- Set values under 0.5 to "< 0.5"
+```{r}
+
+sel <- with(dat_all_allyears, 
+            LATIN_NAME == "Gadus morhua" & PARAM == "PFDcA" & MYEAR == 2020 & VALUE_WW < 0.5)
+message("Change ", sum(sel), " PFDcA records")
+
+dat_all_allyears$VALUE_WW[sel] <- 0.5 
+dat_all_allyears$FLAG1[sel] <- "<" 
+dat_all_allyears$VALUE_DW[sel] <- NA 
+dat_all_allyears$VALUE_FB[sel] <- NA 
+
+# PLot again
+# plot_raw_data_liver_highlight("PFDcA") # strange values  
+
+```
+### Fix concentrations below zero  
+```{r}
+
+if (FALSE){
+  
+  dat_all_allyears %>%
+    filter() %>%
+    xtabs(~LATIN_NAME + PARAM + MYEAR, .)
+  
+}
+
+sel <- with(
+  dat_all_allyears, 
+  VALUE_WW < 0 & !PARAM %in% c("Delta13C") & LATIN_NAME == "Somateria mollissima")
+message("Fix ", sum(sel), " eider duck PCBs with conc. < 0, these are below LOQ")
+
+dat_all_allyears$VALUE_WW[sel] <- -dat_all_allyears$VALUE_WW[sel]
+dat_all_allyears$VALUE_DW[sel] <- -dat_all_allyears$VALUE_DW[sel]
+dat_all_allyears$VALUE_FB[sel] <- -dat_all_allyears$VALUE_WW[sel]
+dat_all_allyears$FLAG1[sel] <- "<"
+
+```
+
+
+### Create `dat_all`  
+- Data for the selected year   
+
+```{r}
+
+dat_all <- dat_all_allyears %>%
+  filter(MYEAR %in% selected_year)
+
+xtabs(~ addNA(LATIN_NAME), dat_all)
+
+```
+
+
+### Fix QUANTIFICATION_LIMIT   
+- Given for metals    
+
+```{r}
+
+sel <- !is.na(dat_all$QUANTIFICATION_LIMIT)
+cat("Has QUANTIFICATION_LIMIT: \n")
+table(sel)
+
+cat("\nHas VALUE_WW > QUANTIFICATION_LIMIT: \n")
+xtabs(~(VALUE_WW > QUANTIFICATION_LIMIT), dat_all[sel,])
+
+sel2 <- 
+  !is.na(dat_all$QUANTIFICATION_LIMIT) & 
+  !is.na(dat_all$VALUE_WW) & 
+  with(dat_all, VALUE_WW < QUANTIFICATION_LIMIT)
+cat("\nHas VALUE_WW < QUANTIFICATION_LIMIT: \n")
+sum(sel2)
+
+# Check these data
+# dat_all[sel2,]
+
+# Quantification limits of metals is 1-20; this must be ug/kg, not mg/kg
+dat_all[sel2,] %>%
+  select(PARAM, VALUE_WW, QUANTIFICATION_LIMIT) %>%
+  group_by(PARAM) %>%
+  summarise(across(.fns = list(mean=mean, min=min, sd=sd)))
+
+# If not yet fixed (all QUANTIFICATION_LIMIT are above 0.5)
+if (min(dat_all$QUANTIFICATION_LIMIT[sel2]) >= 0.5){   
+  # fix by dividing values by 1000
+  dat_all$QUANTIFICATION_LIMIT[sel2] <- dat_all$QUANTIFICATION_LIMIT[sel2]/1000
+}
+# after fixing, the lowest QUANTIFICATION_LIMIT is 0.001 (so this fixing can only be done once)
+
+```
+
+### Extra: View the most important data columns     
+- For interactive use  
+```{r, echo=FALSE}
+#
+# SHOW RAW DATA
+# data set with selected columns, just for View
+#
+dat_all_allyears_view <- dat_all_allyears %>% 
+  select(
+    STATION_CODE, STATION_NAME, SAMPLE_DATE, LATIN_NAME, TISSUE_NAME, PARAM, MYEAR, 
+    SAMPLE_NO2, VALUE_WW, FLAG1, QUANTIFICATION_LIMIT, UNCERTAINTY
+  )
+
+if (FALSE){
+  View(dat_all_allyears_view %>% 
+         filter(LATIN_NAME == "Gadus morhua" & PARAM == "CB180" & MYEAR == 2020) %>% 
+         arrange(VALUE_WW), title = "CB180")
+  View(dat_all_allyears_view %>% 
+         filter(LATIN_NAME == "Gadus morhua" & PARAM == "PFUdA" & MYEAR == 2020) %>% 
+         arrange(VALUE_WW), title = "PFUdA")
+  View(dat_all_allyears_view %>% 
+         filter(LATIN_NAME == "Gadus morhua" & PARAM == "PFDcA" & MYEAR == 2020) %>% 
+         arrange(VALUE_WW), title = "PFDcA")
+  View(dat_all_allyears_view %>% 
+         filter(LATIN_NAME == "Gadus morhua" & PARAM == "PFOS" & MYEAR == 2020) %>% 
+         arrange(VALUE_WW), title = "PFOS")
+}
+
+```
+
+## 3a. Uncertainty data   
+### Eurofins   
+- NOTE: Uncertainty given in data sheet is 2*SE ("expanded uncertainty")   
+- `Uncertainty_expand` is `Uncert_EF` if it has data, otherwise it is `Uncert_DHJ`
+```{r}
+
+# Uncertainty data  
+fn <- "Input_files_2020/Uncertainty/2018-2019_MILKYS_QAdata_Eurofins_for2019data.xlsx"
+
+df_uncert1 <- read_excel(fn, sheet = "QA-data", skip = 5) %>%
+  filter(!is.na(`Parameter code`)) %>%
+  rename(Uncert_EF = `Estimation of uncertainty of measurements (if available)`) %>%
+  mutate(Uncert_EF = as.numeric(Uncert_EF))
+# colnames(df_uncert1)
+
+# Sheet for translating to standard name
+df_uncert1_NAMES <- read_excel(fn, sheet = "Names")
+
+# Add standard name
+df_uncert1 <- df_uncert1 %>%
+  safe_left_join(df_uncert1_NAMES, na_matches = "never", check = "V") %>%
+  mutate(Uncertainty_expand = 
+           case_when(!is.na(Uncert_EF) ~ Uncert_EF,
+                     is.na(Uncert_EF) ~ Uncert_DHJ)
+         ) %>%
+  select(PARAM, Uncertainty_expand, Uncert_EF, Uncert_DHJ)
+df_uncert1
+
+```
+
+## . Check and fix uniqueness   
+BPA occurs 3 times - we use the mean 
+```{r}
+
+# Check 
+check <- df_uncert1 %>%
+  filter(!is.na(PARAM)) %>%
+  group_by(PARAM) %>%
+  mutate(n = n()) 
+
+check %>% filter(n > 1)
+
+df_uncert1 <- df_uncert1 %>%
+  filter(!is.na(PARAM)) %>%
+  group_by(PARAM) %>%
+  summarise_all(list(mean) )
+
+# df_uncert1
+```
+
+### NILU
+```{r}
+# This part is used only one time, in order to make the start of an Excel sheet 
+#   that is filled out manually
+
+fn <- "Input_files_2020/Uncertainty/NILU_draft.csv"
+
+make_manual_excel_sheet <- FALSE
+if (make_manual_excel_sheet){
+  pars <- dat_all %>%
+    filter(LATIN_NAME %in% "Somateria mollissima") %>%
+    count(PARAM) %>%
+    pull(PARAM)
+  write.csv2(tibble(PARAM = pars), fn)
+}
+#  end of 'make_manual_excel_sheet' part
+
+fn <- "Input_files_2020/Uncertainty/NILU uncertainty.xlsx"
+df_uncert2 <- read_excel(fn, sheet = "For reading")
+df_uncert2
+
+```
+
+### Extra values
+```{r}
+# dat_all %>% filter(PARAM %in% "PFBS" & MYEAR == "2019")
+
+df_uncert_extra <- read.csv(textConnection("
+PARAM,Uncertainty_expand,Lab
+BDE126,30,Eurofins
+BDE183,30,Eurofins
+BDE6S,30,Eurofins
+BDESS,30,Eurofins
+CB_S7,30,Eurofins
+DBA3A,30,Eurofins
+PFDcA,35,Eurofins
+PFDA,35,Eurofins
+PFHpA,35,Eurofins
+PFHxA,35,Eurofins
+PFNA,35,Eurofins
+PFOA,35,Eurofins
+PFOS,35,Eurofins
+PFOSA,35,Eurofins
+PFUdA,35,Eurofins
+PFUnda,35,Eurofins
+P_S,35,Eurofins
+PFAS,35,Eurofins
+HBCDD,30,Eurofins
+PAH16,30,Eurofins
+KPAH,30,Eurofins
+TDEPP,20,Eurofins
+PFBS,35,Eurofins
+"), stringsAsFactors = FALSE)
+
+
+```
+
+
+### Combine
+```{r}
+
+param_pfas <- c("PFBS", "PFDcA", "PFHpA", "PFHxA", "PFHxS", "PFNA", "PFOA", "PFOS", "PFOSA", "PFUdA")
+
+df_uncert <- bind_rows(
+  df_uncert1 %>% select(PARAM, Uncertainty_expand) %>% 
+    mutate(Lab = "Eurofins"),
+  df_uncert2 %>% select(PARAM, Uncertainty_expand) %>% 
+    mutate(Lab =case_when(
+      PARAM %in% param_pfas ~ "NIVA",
+      TRUE ~ "NILU")
+      )
+) %>%
+  filter(!is.na(PARAM)) %>%
+  mutate(MYEAR = selected_year)
+# df_uncert %>%
+#   arrange(PARAM)
+
+```
+
+```{r}
+df_uncert1 %>% filter(PARAM == "BDESS")
+df_uncert2 %>% filter(PARAM == "BDESS")
+df_uncert %>% filter(PARAM == "BDESS")
+df_uncert %>% filter(PARAM == "BDESS")
+```
+
+
+
+## 3b. Add 'Uncertainty_expand' and 'Lab' to data   
+- Creates `dat_all_2` from `dat_all` 
+```{r}
+
+param_bioleffects <- c("PA1OH", "PA1O", "1-OH-fenantren", "PYR1OH",  "PYR1O", "1-OH-pyren", 
+      "BAP3OH", "BAP3O", "3-OH-benzo[a]pyren", 
+      "EROD", "ALAD", 
+      "VDSI", "Intersex", "INTF%")     # INTF% = percentage intersex, see vocab.ices.dk
+
+dat_all_2 <- dat_all %>%
+  mutate(Lab =
+           case_when(LATIN_NAME %in% "Somateria mollissima" ~ "NILU",
+                     PARAM %in% c("D4", "D5", "D6") ~ "NILU",
+                     PARAM %in% c(param_pfas, param_bioleffects) ~ "NIVA",
+                     TRUE ~ "Eurofins")
+  ) %>% # filter(PARAM == "ALAD") %>% select(PARAM, Lab) %>% View()
+  left_join(df_uncert,
+                 na_matches = "never",
+            by = c("MYEAR", "Lab", "PARAM")
+            )
+
+
+if (nrow(dat_all) != nrow(dat_all_2)){
+  stop("Duplicated rows in 'PARAM'!")
+
+  df_uncert %>%
+    add_count(MYEAR, Lab, PARAM) %>%
+    filter(n > 1)  
+  
+    }
+
+```
+
+
+### Values lacking uncertainty
+```{r}
+
+xtabs(~is.na(Uncertainty_expand), dat_all_2 %>% filter(MYEAR == selected_year))
+
+if (FALSE){
+  xtabs(~PARAM + Lab, dat_all_2 %>% filter(MYEAR == selected_year & is.na(Uncertainty_expand)))
+  xtabs(~PARAM + Lab, dat_all_2 %>% filter(MYEAR == selected_year & !is.na(Uncertainty_expand)))
+}
+
+```
+
+### Check example  
+```{r}
+
+if (FALSE) {
+  
+  dat_all_2 %>%
+    filter(PARAM %in% "BDE126" & MYEAR == selected_year) %>%
+    select(TISSUE_NAME, PARAM, Lab, VALUE_WW, Uncertainty_expand)
+
+}
+
+```
+
+
+## 4. LOQ values     
+
+### `tab_loq1` created  
+- Compare QUANTIFICATION_LIMIT and LOQ from less-than   
+    - `LOQ_lt_min` (minimum value of less-than's) will be used where QUANTIFICATION_LIMIT is lacking  
+    - This is a change since 2019 (and before), when we used LOQ_lt_med (median less-than value). This lead to very high errors in some parameters with large variation in less-than values, such as CB180 in cod. See below!
+    - In 2019: QUANTIFICATION_LIMIT given by Eurofins, not given in 2020 except for metals  
+```{r, fig.width=5, fig.height=10, warning=FALSE}
+
+tab_loq1 <- dat_all_2 %>%
+  filter(MYEAR == selected_year & FLAG1 %in% "<") %>%
+  group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM) %>%
+  summarise(LOQ_gi_min = min(QUANTIFICATION_LIMIT, na.rm = TRUE),
+            LOQ_given = median(QUANTIFICATION_LIMIT, na.rm = TRUE),
+            LOQ_lt_min = min(VALUE_WW, na.rm = TRUE) %>% round(4),
+            LOQ_lt_med = median(VALUE_WW, na.rm = TRUE) %>% round(4),
+            LOQ_lt_max = max(VALUE_WW, na.rm = TRUE) %>% round(4),
+            .groups = "drop"
+            ) %>%
+  ungroup()
+
+# Show it (try to make it fit in the width)
+df <- tab_loq1 %>%
+  filter(Lab %in% "Eurofins") %>%
+  select(-MYEAR, -Lab) %>%
+  mutate(LATIN_NAME = substr(LATIN_NAME, 1, 10),
+         TISSUE_NAME = substr(TISSUE_NAME, 1, 10),
+         PARAM = substr(PARAM, 1, 10))
+
+df
+
+# Parameters/tissues with given QUANTIFICATION_LIMIT and at least one less-than value
+# None in 2020  
+
+# If any data (with less-thans) are given with QUANTIFICATION_LIMIT, make plot:
+if (sum(!is.na(df$LOQ_given)) > 0){
+  
+  df %>%
+    mutate(LOQ_lt_min = LOQ_lt_min/LOQ_given,
+           LOQ_lt_med = LOQ_lt_med/LOQ_given,
+           LOQ_lt_max = LOQ_lt_max/LOQ_given) %>%
+    pivot_longer(LOQ_gi_min:LOQ_lt_max, names_to = "Type", values_to = "LOQ") %>%
+    ggplot(aes(x = Type, y = paste(PARAM, TISSUE_NAME), fill = LOQ)) +
+    geom_tile()
+  
+}
+
+
+```
+
+### `tab_loq2`, overall minimum value   
+- this is created for all records   
+- to use only for those records where there are neither QUANTIFICATION_LIMIT nor less-thans (part 5)    
+- We make and exception for CB180 in cod, where we will use the lowest observed value for 19B, or the lowest observed value for all the rest   
+```{r}
+
+tab_loq2 <- dat_all_2 %>%
+  filter(MYEAR %in% selected_year & !is.na(VALUE_WW)) %>%
+  group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM) %>%
+  summarise(Min_value = min(VALUE_WW) %>% round(4),
+            .groups = "drop")
+
+#
+# Special case!
+# For CB180 in cod liver, we use a different minimum value for 19B (Svalbard) and the rest, see graph in section 2
+# Will be used in section 5
+#
+tab_loq_CB180_cod <- dat_all_2 %>%
+  filter(MYEAR %in% selected_year & !is.na(VALUE_WW) & LATIN_NAME == "Gadus morhua" & PARAM == "CB180") %>%
+  mutate(
+    Station19B = (STATION_CODE %in% "19B")
+    ) %>%
+  group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM, Station19B) %>%
+  summarise(Min_value = min(VALUE_WW) %>% round(4),
+            .groups = "drop")
+
+
+
+```
+
+### `tab_loq` creation  
+- from tab_loq1 + tab_loq2    
+```{r}
+
+tab_loq <- safejoin::safe_full_join(
+  tab_loq1, tab_loq2, 
+  na_matches = "never", 
+  check = "uv") %>%
+  mutate(
+    Ratio_min_LOQ = Min_value/LOQ_lt_min
+    )
+
+
+```
+
+### Minimum under min LOQ, table  
+- Overall minimum value less than lowest less-than?   
+- i.e., Ratio_min_LOQ significantly less than 1  
+- 3 cases: PFDcA, CB180 and PFUdA   
+- Lowest PFDcA concentration is zero!  
+```{r}
+
+cat("Ratio_min_LOQ less than 1: ")
+cat(
+  mean(tab_loq$Ratio_min_LOQ < 1, na.rm = TRUE)*100, "%, ",
+  sum(tab_loq$Ratio_min_LOQ < 1, na.rm = TRUE), "cases \n\n"  )
+
+cat("Ratio_min_LOQ significantly less than 1: ")
+cat(
+  mean(tab_loq$Ratio_min_LOQ < 0.95, na.rm = TRUE)*100, "%, ",
+  sum(tab_loq$Ratio_min_LOQ < 0.95, na.rm = TRUE), "cases \n\n"  )
+
+tab_loq %>% 
+  filter(Ratio_min_LOQ < 1) %>%
+  arrange(Ratio_min_LOQ)
+        
+```
+
+### Minimum under min LOQ, plot    
+```{r}
+
+ggplot(tab_loq, aes(LOQ_lt_min, Min_value)) +
+  geom_point() +
+  scale_x_log10() +
+  scale_y_log10() +
+  geom_point(data = subset(tab_loq, Ratio_min_LOQ < 1), color = "red") +
+  geom_text(data = subset(tab_loq, Ratio_min_LOQ < 1), 
+            aes(label = paste(PARAM, TISSUE_NAME)), color = "red", hjust = -0.1, size = rel(3))
+  
+
+```
+
+
+## 5. Add LOQ where QUANTIFICATION_LIMIT not given  
+
+### Create `dat_all_updated`   
+- Creates `dat_all_updated` by adding `tab_loq` columns to `dat_all_2`   
+- Creates new values of `QUANTIFICATION_LIMIT`  
+If no less-thans exist, we use half of the minimum value!
+Creating new data set 'dat_all_updated'  
+```{r}
+
+dat_all_updated <- dat_all_2 %>%
+  # Add LOQ_lt_med variable
+  safe_left_join(tab_loq %>% select(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM, 
+                                    LOQ_lt_min, LOQ_lt_med, Min_value),
+                 na_matches = "never", 
+                 check = "v") %>%
+  mutate(LOQ_source = case_when(
+    !is.na(QUANTIFICATION_LIMIT) ~ "Given",
+    !is.na(LOQ_lt_min) ~ "From LT",
+    is.na(LOQ_lt_min) ~ "From minvalue"),
+  # Where we lack QUANTIFICATION_LIMIT, we set it to LOQ_lt_med variable
+         QUANTIFICATION_LIMIT = 
+           case_when(LOQ_source %in% "Given" ~ QUANTIFICATION_LIMIT,
+                     LOQ_source %in% "From LT" ~ LOQ_lt_min,          # if QUANTIFICATION_LIMIT not given 
+                     LOQ_source %in% "From minvalue" ~ Min_value/2)   # if also no less-thans exist
+  )
+# We keep Lab, LOQ_lt_min, LOQ_lt_med and LOQ_given for later!
+
+# dat_all_updated 
+
+xtabs(~is.na(QUANTIFICATION_LIMIT) + LOQ_source, dat_all_updated %>% filter(MYEAR == selected_year))
+
+```
+
+
+### Make exeption for CB180 values   
+```{r}
+
+#
+# 'Min_value' has been set from the very low 19B values
+# For stations except 19B, we set it higher
+#
+sel <- with(dat_all_updated, 
+            LATIN_NAME == "Gadus morhua" & PARAM == "CB180" & MYEAR == 2020 & !STATION_CODE %in% "19B")
+message("Min_value changed for ", sum(sel), " records")
+dat_all_updated$Min_value[sel] <- subset(tab_loq_CB180_cod, !Station19B)$Min_value
+
+#
+# For all CB180 in liver, we use Min_value although LOQ exists
+#
+sel <- with(dat_all_updated, 
+            LATIN_NAME == "Gadus morhua" & PARAM == "CB180" & MYEAR == 2020)
+message("QUANTIFICATION_LIMIT and LOQ_source changed for ", sum(sel), " records")
+dat_all_updated$QUANTIFICATION_LIMIT[sel] <- dat_all_updated$Min_value[sel]
+dat_all_updated$LOQ_source[sel] <- "From minvalue"
+
+
+#
+# For check
+#
+if (FALSE){
+  
+  dat_all_updated_view <- dat_all_updated %>% 
+    select(
+      STATION_CODE, TISSUE_NAME, PARAM, MYEAR, 
+      SAMPLE_NO2, VALUE_WW, FLAG1, QUANTIFICATION_LIMIT, UNCERTAINTY,
+      QUANTIFICATION_LIMIT, LOQ_source
+    )
+  
+  dat_all_updated_view %>% 
+    filter(TISSUE_NAME == "Lever" & PARAM == "CB180") %>%
+    View()
+
+}
+
+```
+
+
+
+
+#### Checks (not necessary)
+```{r}
+# xxx
+dat_all_updated %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1)) %>%
+  xtabs(~PARAM + is.na(QUANTIFICATION_LIMIT), .)
+
+dat_all_updated %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "BDE47") %>%
+  xtabs(~Lab + is.na(QUANTIFICATION_LIMIT), .)
+
+dat_all_updated %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "CB118") %>%
+  xtabs(~Lab + is.na(QUANTIFICATION_LIMIT), .)
+
+dat_all_updated %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "CB118" & Lab %in% "NILU") 
+  
+tab_loq2 %>%
+    filter(MYEAR == selected_year & PARAM == "CB118" & Lab %in% "NILU")
+tab_loq %>%
+    filter(MYEAR == selected_year & PARAM == "CB118" & Lab %in% "NILU")
+```
+
+
+
+## 6. Make UNCRT - example     
+- UNCRT can be given in three ways:
+    - as standard deviation `u` (set METCU = SD)   
+    - as "expanded uncertainty" = 2 x standard deviation = 2u (set METCU = U2)   
+    - as percentage = 100u/VALUE (set METCU = %)   
+NOTE: The formula sqrt(s^2 + (Value^2)*(v^2)) is taken from Rob Fryer and is given both in Annex 5 of the 2018/19 MIME report as well as in ICES DOME 'Frequently Asked Questions'  
+  
+In 2016 and 2017, we converted from percent to standard deviation (METCU = SD), using an assumed value of LOD:   
+Based on Annex 5 2018 ('Annex05_reporting_less-thans_and_uncertainties_v3.docx')   
+  - u = standard deviation   
+  - u = sqrt(s^2 + (Value^2)*(v^2)) where
+      - v = relative uncertainty (percentage divided by 100)
+      - s = SD of replicate measurements of the blank
+      - s is assumed to be LOD/3
+      - LOD may be assumed to be LOQ/x
+      
+### Example   
+- assuming (quite conservatively) that LOD = LOQ/1.33, or (even more consrvatively) that LOD = LOQ  
+```{r,fig.width=8, fig.height=4}
+
+v <- 0.3          # relative uncertainty (percentage divided by 100)
+LOQ <- 0.2
+
+par(mfrow = c(2,2), mar = c(4,4,2,1))
+
+x <- 1.333      # assume (quite conservatively) LOD = LOQ/1.33 s = LOD/3 = (LOQ/1.33)/3 = 4
+LOD <- LOQ/x
+s <- LOD/3      # SD of replicate measurements of the blank - assumed to be LOD/3
+Value <- seq(0.2, 4, 0.1)
+u <- sqrt(s^2 + (Value^2)*(v^2))
+plot(Value, u, main = paste("x =", x, "(LOD = LOQ/x)"))
+plot(Value, 100*u/Value, ylab = "Percent", main = paste("x =", x))
+abline(v = LOQ, lty = "dashed")
+
+x <- 1.000        # assume (very conservatively) LOD = LOQ
+LOD <- LOQ/x
+s <- LOD/3      # SD of replicate measurements of the blank - assumed to be LOD/3
+Value <- seq(0.2, 4, 0.1)
+u <- sqrt(s^2 + (Value^2)*(v^2))
+plot(Value, u, main = paste("x =", x, "(LOD = LOQ/x)"))
+plot(Value, 100*u/Value, ylab = "Percent", main = paste("x =", x))
+abline(v = LOQ, lty = "dashed")
+
+```
+
+## 7. Using (as test) median less-than value as LOQ  
+- I.e. LOQ_lt_med   
+- Creates 'dat_all_updated_test'  
+- Based on the example in part 6  
+- We ended up using *not* this approach, but just the given percentages, see part 8
+
+### Add LOD, UNCRT and METCU  
+We here use LOQ from less-thans as LOQ, if possible  
+    - i.e. LOQ_lt_med, or QUANTIFICATION_LIMIT if LOQ_lt_med is not given  
+    - we here assume that LOD = LOQ (so we use 'LOQ_lt_med/3')
+```{r}
+
+# dat_all_updated_test <- dat_all_updated %>%
+#   mutate(
+#     LOD = case_when(
+#       !is.na(LOQ_lt_med) ~ LOQ_lt_med,
+#       is.na(LOQ_lt_med) ~ QUANTIFICATION_LIMIT),
+#     s = LOD/3,
+#     UNCRT = case_when(
+#       !is.na(s) ~ sqrt(s^2 + (VALUE_WW^2)*((Uncertainty/100)^2)),
+#       is.na(s) ~ Uncertainty),   # should be zero cases of this
+#     METCU = "SD"
+#   )
+
+```
+
+### Check 1 - table       
+- Summary table  
+```{r}
+
+# mean_uncrt <- dat_all_updated_test %>%
+#   filter(MYEAR == selected_year & !is.na(UNCRT)) %>%
+#   group_by(MYEAR, Lab, LATIN_NAME, TISSUE_NAME, PARAM) %>%
+#   summarise(
+#     Uncertainty = mean(Uncertainty, na.rm = TRUE),
+#     QUANTIFICATION_LIMIT = mean(QUANTIFICATION_LIMIT, na.rm = TRUE),
+#     LOQ_source = paste(unique(LOQ_source), collapse = ","),
+#     VALUE_mean = mean(VALUE_WW, na.rm = TRUE) %>% round(3),
+#     VALUE_min = min(VALUE_WW, na.rm = TRUE) %>% round(3),
+#     UNCRT_mean = mean(UNCRT, na.rm = TRUE) %>% round(3),
+#     UNCRT_max = max(UNCRT, na.rm = TRUE) %>% round(3),
+#     percerror_mean = mean(100*UNCRT/VALUE_WW, na.rm = TRUE) %>% round(3),
+#     percerror_max = max(100*UNCRT/VALUE_WW, na.rm = TRUE) %>% round(3)
+#   )
+# 
+# # View(mean_uncrt)
+# 
+# # For comparison with minimum less-than value, 
+# mean_uncrt_1 <- mean_uncrt
+
+```
+
+
+### Check 2 - plot    
+- Plot one parameter/tissue
+```{r}
+
+# plot_error <- function(lab, param, species, tissue, data = dat_all_updated) {
+#   
+#   df_plot <- data %>%
+#     filter(MYEAR == selected_year & !is.na(UNCRT)) %>%
+#     filter(Lab == lab & PARAM == param & LATIN_NAME == species & TISSUE_NAME == tissue) %>%
+#     mutate(Percent_error = 100*UNCRT/VALUE_WW)
+#   
+#   gg <- ggplot(df_plot, aes(VALUE_WW, Percent_error)) +
+#     geom_point() +
+#     geom_vline(xintercept = df_plot$s[1]*3, linetype = "dashed") +
+#     xlim(0,50) +
+#     labs(title = paste0(param, " (", lab, ") in ", species, ", ", tissue),
+#          subtitle = "dotted line = assumed LOD")
+#   
+#   print(gg)
+#   
+# }
+# 
+# plot_error("Eurofins", "CB180", "Gadus morhua", "Lever", dat_all_updated_test)
+
+```
+
+## 8. Just use 'Uncertainty_expand' as given by the labs     
+-  METCU = %
+```{r}
+
+dat_all_updated_2 <- dat_all_updated %>%
+  mutate(
+    UNCRT = Uncertainty_expand,   # Just use as is
+    METCU = "%"
+  )
+
+cat("Number of 'UNCRT' lacking: \n")
+xtabs(~is.na(UNCRT), dat_all_updated_2 %>% filter(MYEAR == selected_year))
+cat("\n")
+cat("Number of 's' lacking: \n")
+xtabs(~is.na(s), dat_all_updated_2 %>% filter(MYEAR == selected_year))
+
+
+
+```
+
+
+### Show raw data  
+- selected columns 
+```{r}
+#
+# data set with selected columns, just for View
+#
+dat_all_updated_view <- dat_all_updated_2 %>% 
+  select(
+    STATION_CODE, STATION_NAME, SAMPLE_DATE, LATIN_NAME, TISSUE_NAME, PARAM, MYEAR, 
+    SAMPLE_NO2, VALUE_WW, FLAG1, Lab, QUANTIFICATION_LIMIT,  
+    LOQ_lt_min, LOQ_lt_med, Min_value, LOQ_source, UNCRT, METCU
+  )
+
+if (FALSE){
+  
+  View(dat_all_updated_view %>% 
+         filter(LATIN_NAME == "Gadus morhua" & PARAM == "CB180") %>% 
+         arrange(VALUE_WW), title = "CB180")
+  View(dat_all_updated_view %>% 
+         filter(LATIN_NAME == "Gadus morhua" & PARAM == "PFUdA") %>% 
+         arrange(VALUE_WW), title = "PFUdA")
+  View(dat_all_updated_view %>% 
+         filter(LATIN_NAME == "Gadus morhua" & PARAM == "PFDcA") %>% 
+         arrange(VALUE_WW), title = "PFDcA")
+  View(dat_all_updated_view %>% 
+         filter(LATIN_NAME == "Gadus morhua" & PARAM == "PFOS") %>% 
+         arrange(VALUE_WW), title = "PFOS")
+}
+
+```
+
+
+
+
+### Check if there are unique values 
+```{r}
+
+check <- dat_all_updated_2 %>%
+  ungroup() %>%
+  group_by(STATION_CODE, LATIN_NAME, TISSUE_NAME, MYEAR, 
+           SAMPLE_NO2, UNIT, PARAM) %>%
+  mutate(n = n()) %>%
+  filter(n > 1)
+
+if (nrow(check) > 0){
+  warning("There are ", nrow(check), " duplicates in the data!")
+  # xtabs(~STATION_CODE + MYEAR, check)
+  xtabs(~PARAM + MYEAR, check)
+} else {
+  message("There are no duplicates in the data.")
+}
+
+
+```
+
+## 9. Save  
+**This is input for 842_ICES_submission_xxxxdata.Rmd**
+```{r}
+
+fn <- paste0("Data/841_dat_all_", selected_year) 
+saveRDS(dat_all_updated_2, fn)
+
+message("Data written to ", fn)
+
+#
+# This is input for script 842 ICES submission
+#
+
+#
+# Read back, if needed:
+# 2019 data
+# dat_all_updated_2 <- readRDS("../Milkys/Data/34_dat_all.rds")
+# 2020 data
+# dat_all_updated_2 <- readRDS(fn)
+
+```
+
+
+
+#### Final check
+```{r}
+
+# xxx
+dat_all_updated_2 %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1)) %>%
+  xtabs(~PARAM + is.na(UNCRT), .)
+
+dat_all_updated_2 %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "BDE47") %>%
+  xtabs(~Lab + is.na(UNCRT), .)
+
+dat_all_updated_2 %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "BDE47" & Lab %in% "NILU")
+
+dat_all_updated_2 %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == "BDE126" & Lab %in% "NILU")
+
+```
+
+#### Check in MIME   
+```{r}
+
+df <- dat_all_updated_2 %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1) & 
+           PARAM == "HG" & STATION_CODE == "30B" &
+           TISSUE_NAME == "Muskel")
+df %>%
+  select(VALUE_WW, Uncertainty_expand, LOQ_lt_min, Min_value, UNCRT, METCU)
+
+```
+
+
+
+
+
+
+### Comparison   
+- with stuff in 7, but now commented out  
+```{r}
+
+
+# mean_uncrt_compare <- function(lab, param, species, tissue){
+#   bind_rows(
+#     mean_uncrt_1 %>%
+#       filter(Lab == lab & PARAM == param & LATIN_NAME == species, TISSUE_NAME == tissue),
+#     mean_uncrt_2 %>%
+#       filter(Lab == lab & PARAM == param & LATIN_NAME == species, TISSUE_NAME == tissue)
+#   )
+# }
+# 
+# mean_uncrt_compare("Eurofins", "CB180", "Gadus morhua", "Lever")
+
+
+
+```
+
+### Check 3   
+- Kind of table/plot  
+```{r}
+
+param <- "CB118"
+
+df1 <- dat_all_updated_2 %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1))
+
+df2 <- dat_all_updated_2 %>% 
+  filter(MYEAR == selected_year & is.na(FLAG1) & PARAM == param)
+
+cat("\n************************************************************\n")
+cat("Check error/value ratio for 1) all data and 2) CB118\n\n")
+
+df_list = list(df1,df2)
+names(df_list) <- c("All data", param)
+
+for (i in 1:2){
+  
+  df <- df_list[[i]]
+  
+  with(df, print(quantile(UNCRT/VALUE_WW, na.rm = TRUE)))
+
+  gg <- ggplot(df, aes(y = UNCRT/VALUE_WW)) + 
+    geom_boxplot() +
+    scale_y_log10() +
+    labs(title = names(df_list)[i])
+  print(gg)
+  
+  }
+
+  
+
+# xtabs(~PARAM + Lab, dat_all_updated_2 %>% filter(MYEAR == selected_year & is.na(UNCRT)))
+# dat_all_updated_2 %>% filter(PARAM %in% "BDE47" & STATION_CODE == "19N") %>% View()
+
+```
+
+
+
+
