@@ -1,0 +1,240 @@
+---
+title: "882_Summarise_trend_results"
+author: "DHJ"
+date: '2022-09-09'
+output: html_document
+---
+
+- Get results out of the result files made by 'get_splines_results_seriesno' (Jupyterhub script 125)   
+
+## 0. Constants  
+```{r}
+
+# Reference year (usually last year)
+ref_year <- 2021
+
+```
+
+
+## 1. Packages  
+```{r}
+
+library(dplyr)
+library(tidyr)
+library(purrr)
+library(ggplot2)
+
+# library(leftcensored)
+
+source("882_Summarise_trend_results_functions.R")
+
+```
+
+## 2. Files  
+
+- Example files downloaded from Jupyterhub Milkys2/Data/125_results_2021  
+
+### Trend result files  
+```{r}
+
+folder <- "Files_from_Jupyterhub_2021/Trend_result_files"
+fn <- dir(folder) %>% set_names()
+length(fn)
+
+result_list <- map(fn, ~readRDS(paste0(folder, "/", .x)))
+
+```
+### Data  
+- Should use 
+```{r}
+
+dat_all <- readRDS("Files_from_Jupyterhub_2021/Raw_data/109_adjusted_data_2022-06-04.rds")
+
+```
+
+
+
+
+## 3a. Test example 1    
+
+### Get data  
+
+- HBCD at 13B - sparse data, mostly <LOQ  
+
+```{r}
+
+# Trend data
+result <- result_list[["trend_0527.rda"]]
+dat <- get_concentration_data(result)
+dat_sampleinfo <- get_sample_info(dat)
+
+```
+
+### Extra test 1, 2 and 3   
+
+- See "Refinements" on https://dome.ices.dk/ohat/trDocuments/2021/help_methods_less_thans.html  
+
+```{r}
+
+# Example: HBCD at 13B  
+
+# Extra rule 1: 
+# Time series should be truncated from the left until Nplus >= N  
+df <- dat_sampleinfo %>%
+  summarise(Nplus = sum(N_over > 0),
+            N = length(N_over)) %>% as.data.frame()
+rule1_ok <- df$Nplus/df$N >= 0.5
+cat("Rule 1 ok:", rule1_ok, "\n")
+
+# Extra rule 2: 
+# If a linear/smooth trend is fitted, the first year must be non-censored:  
+rule2_ok <- pull(dat_sampleinfo, N_over)[1] > 0
+cat("Rule 2 ok:", rule2_ok, "\n")
+
+# Extra rule 3, 
+# If a linear/smooth trend is fitted, final years with only censored data should be set equal to the last 
+#   year with some equal data  
+rule3_ok <- tail(pull(dat_sampleinfo, N_over),1) > 0
+cat("Rule 3 ok:", rule3_ok, "\n")
+
+if (!rule3_ok){
+  # Per year, number of uncensored measurements (over LOQ):
+  N_over <- pull(dat_sampleinfo, N_over)
+  # Last year with any uncensored measurements:
+  last_uncens <- max(which(N_over > 0))
+  cat("(last uncensored is x number", last_uncens, " - while length of time series =", length(N_over), ")")
+}
+
+```
+
+### Plot time series  
+```{r}
+
+plot_ts_log(result, dat, dat_sampleinfo)
+plot_ts(result, dat)
+
+```
+
+
+
+## 3b. Test example 2    
+
+### Get data  
+
+- CB153 at 15A - longer series, non-linear data, few <LOQ  
+
+```{r}
+
+# Trend data
+result <- result_list[["trend_0543.rda"]]
+dat <- get_concentration_data(result)
+dat_sampleinfo <- get_sample_info(dat)
+
+```
+
+### Plot time series  
+```{r}
+
+plot_ts_log(result, dat)
+plot_ts(result, dat)
+
+```
+
+### Get data for plots  
+```{r}
+
+# Trend data
+result <- result_list[["trend_0543.rda"]]
+
+# Point data  
+dat <- dat_all %>%
+  filter(PARAM %in% result$PARAM, STATION_CODE %in% result$STATION_CODE) %>%
+  # Make sure that "<" points are plotted first (so over LOQ points are plotted on top)
+  arrange(is.na(FLAG1))
+
+# Sample info
+dat_sampleinfo <- dat %>%
+  group_by(MYEAR) %>%
+  summarise(N_over = sum(is.na(FLAG1)),
+            N_under = sum(!is.na(FLAG1)),
+            N_text = paste0(N_over, "/", N_under), .groups = "drop")
+
+```
+
+### Plot time trends   
+
+- Note "sample size text" on plot no. 1  
+```{r}
+
+# result$plot_data %>%
+#   mutate(x = exp(x), y = exp(y), y_lo = exp(y_lo), y_hi = exp(y_hi))
+
+# Plot time series, ordinary scale  
+ggplot(result$plot_data, aes(x = x, y = exp(y))) +
+  geom_ribbon(aes(ymin = exp(y_lo), ymax = exp(y_hi)), fill = "lightblue") +
+  geom_line() +
+  geom_vline(xintercept = ref_year-10, linetype = "dashed") +
+  geom_point(data = dat, aes(x = MYEAR, y = VALUE_WW, shape = is.na(FLAG1))) +
+  scale_shape_manual(values = c(19, 6)) +
+    labs(title = paste0(result$PARAM, " at ", result$STATION_CODE, ", estimated concentration "), 
+       x = "Year", y = "Conc") 
+
+
+```
+
+
+
+### Plot difference between last year and all previous years  
+```{r}
+
+ggplot(result$diff_data, aes(x, y)) +
+  geom_ribbon(aes(ymin = y_lo, ymax = y_hi), fill = "lightblue") +
+  geom_line() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  geom_vline(xintercept = ref_year-10, linetype = "dashed") +
+  labs(title = paste0(result$PARAM, " at ", result$STATION_CODE, ", estimated log(difference) to last year "), 
+       x = "Year", y = "Conc")  
+
+```
+
+### Make df_change
+
+```{r}
+
+# Make df_change
+# Start with change for entire period
+df_change <- head(result$diff_data, 1) %>% mutate(Period = "Max", .before = 1)  
+
+# Change over last 10 years
+sel <- result$diff_data$x %in% (ref_year - 10) 
+if (sum(sel) == 1){
+  df_change <- bind_rows(
+    df_change,
+    result$diff_data[sel,] %>% mutate(Period = "10 year", .before = 1)
+  )
+}
+
+# Change over last 20 years
+sel <- result$diff_data$x %in% (ref_year - 20) 
+if (sum(sel) == 1){
+  df_change <- bind_rows(
+    df_change,
+    result$diff_data[sel,] %>% mutate(Period = "20 year", .before = 1)
+  )
+}
+
+
+df_change <- df_change %>%
+  mutate(
+    Change = case_when(
+      y_lo > 0 ~ "Increase",
+      y_hi < 0 ~ "Decrease",
+      TRUE ~ "No change"),
+    Percent_of_start = round(100*exp(y), 1)
+    )
+
+df_change
+
+```
+
+
