@@ -79,7 +79,7 @@ if (FALSE){
 
 ```{r}
 
-# Get projects, but doesn't really make sense since the projects names fiffer from those in PROJECT in table LABWARE_CHECK_SAMPLE
+# Get projects, but doesn't really make sense since the projects names differ from those in PROJECT in table LABWARE_CHECK_SAMPLE
 if (FALSE){
   df_proj <- get_projects()
   grep("CEMP", df_proj$PROJECT_NAME, value = TRUE)
@@ -303,71 +303,56 @@ labware_2020 <- get_nivabase_data(
 * PROSJEKT including 'tidsserier': none found     
 ```{r}
 
+# o # o # o # o # o # o # o # o # o # o 
+# NOTE: HARD-CODED
+# o # o # o # o # o # o # o # o # o # o 
+
+find_year <- 2021
+
+
 check1 <- get_nivabase_data(
   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where upper(PROSJEKT) like '%MILKYS%'")
 check1 %>%
   count(ACCOUNT_NUMBER, PROSJEKT)
   
-
 check2 <- get_nivabase_data(
   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where lower(PROSJEKT) like '%tidsserier%'")
 table(check2$PROSJEKT)
 check2 %>%
   count(ACCOUNT_NUMBER, PROSJEKT)
 
-# 2021 data - NOTE: HARD-CODED
-dat_2021 <- dat %>%
-  filter(grepl("2021", TEXT_ID))
+# THIS WORKS
+check3 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where CUSTOMER in 'MSC'")
+table(check3$PROSJEKT)
+check3 %>%
+  count(ACCOUNT_NUMBER, PROSJEKT, Year = year(SAMPLED_DATE)) %>%
+  filter(Year %in% find_year)
 
-# tail(dat$SAMPLED_DATE, 200)
-sel <- grepl("2020", dat$TEXT_ID)
-sum(sel)   # 656
-mean(sel)  # 0.18
 
-# None fitting (only "O 190142; BL_ID - Lange tidsserier i kystvann; Bl<f8>tbunnsidentifisering")
 ```
 
 
 ### b. Get data    
 ```{r}
 
-prosj <- unique(dat_2021$PROSJEKT)
-cat("Name of project", prosj, " \n\n")
+# o # o # o # o # o # o # o # o # o # o 
+# NOTE: HARD-CODED
+# o # o # o # o # o # o # o # o # o # o 
 
-#
-# Approach a
-# 
-labware_2021_a <- get_nivabase_selection(
+prosj <- "O 210200.ANAIN"
+cat("Name of project:", prosj, " \n\n")
+
+labware_2021 <- get_nivabase_selection(
   "*",
-  "LABWARE_CHECK_SAMPLE", 
-  "TEXT_ID",
-  dat_2021$TEXT_ID, values_are_text = TRUE)
+  "LABWARE_CHECK_SAMPLE",
+  "PROSJEKT",
+  prosj, values_are_text = TRUE
+  )
 
-#
-# Approach b
-# 
-search_string <- paste(
-  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT =", sQuote(prosj)
-)
-
-labware_2021_b <- get_nivabase_data(search_string) %>%
-  mutate(PROSJEKT = oracle_fix_norw_letters(PROSJEKT),
-         DESCRIPTION = oracle_fix_norw_letters(DESCRIPTION)
-         )
-
-#
-# Check approach a vs approach b
-#
-nrow(labware_2021_a)
-nrow(labware_2021_b)
-
-table(labware_2021_a$AQUAMONITOR_CODE)
-table(labware_2021_b$AQUAMONITOR_CODE)
-
-# 
-# Use approach b
-#
-labware_2021 <- labware_2021_b
+# Should be mostly 2021! 
+check_dates <- labware_2021$SAMPLED_DATE
+table(year(check_dates))
 
 ```
 
