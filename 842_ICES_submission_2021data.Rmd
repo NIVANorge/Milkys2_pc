@@ -5,7 +5,7 @@ output:
     keep_md: true
 ---
 
-For submission of 2020 data in autumn 2021  
+For submission of 2021 data in autumn 2022    
   
 Soure of main data (data_ind2):
 - prepared in Jupyterhub script 101 (where it also gets input from scr. 101 in this folder)    
@@ -31,22 +31,23 @@ get_nivabase_data(str)
 ## Where files will be saved  
 ```{r}
 
-save_folder_txt <- "Files_to_ICES/2020/Test"
-save_folder_rds <- "Files_to_ICES/2020/Rdata"
-save_folder_excel <- "Files_to_ICES/2020/Excel"
+save_folder_txt <- "Files_to_ICES/2021/Test"
+save_folder_rds <- "Files_to_ICES/2021/Rdata"
+save_folder_excel <- "Files_to_ICES/2021/Excel"
 
 ```
 
 ### Selected year  
 ```{r}
 
-selected_year <- 2020
+selected_year <- 2021
 
 ```
 
 
 ## 0. Libraries and functions
 ```{r}
+
 library(tidyverse)
 library(lubridate)
 
@@ -89,32 +90,29 @@ minute2decimal <- function(x) {
 
 ## 1. Read data
 
-### a1. Get data produced by script 841  
-We only keep the 2019 data
+
+### a1. Get data produced by script 105 in Jupyterhub  
+
+- used to be based on data produced by script 841 (see scripts from previous years)    
+
 ```{r}
-# dir("Data")
-# Data at sample level (chemical data, biological efect parameters and VDSI)
-# Also in "../Milkys2/Data/101_data_updated_2020-08-05.rds"
 
-# '34_dat_all_2019.rds' 
-#   was made in 
-# '34_Add_uncertainty_2019data.Rmd'
-#   which is based on
-# 'Input_data_2019/101_data_updated_2020-08-05.rds'
-#   which is copied from Jupyterhub
+folder <- "Files_from_Jupyterhub_2021/Raw_data"
+dir(folder, "105_*")
 
-fn <- "Data/841_dat_all_2020"
-
-cat("----------------------------------------\n")
-cat("file written at:\n")
-file.info(fn)$mtime
-cat("----------------------------------------\n")
-
-data_all <- readRDS(fn) %>%
+data_all <- readRDS(paste0(folder, "/", "105_data_with_uncertainty_2022-09-23.rds")) %>%
+  # Set 36A to 36A1
   mutate(
-    TISSUE_NAME = case_when(
-      TISSUE_NAME %in% "Egg homogenate of yolk and albumin" ~ "Egg",
-      TRUE ~ TISSUE_NAME),
+    STATION_CODE = ifelse(STATION_CODE == "36A", "36A1", STATION_CODE)
+  )
+
+    
+#
+# Data in the selected year
+#
+data_ind2 <- data_all %>%
+  filter(MYEAR %in% selected_year) %>%
+  mutate(
     SAMPLE_NO = SAMPLE_NO2,
     PARAM = case_when(
       PARAM %in% "1-OH-fenantren" ~ "PA1OH",
@@ -125,14 +123,13 @@ data_all <- readRDS(fn) %>%
   )
 
 #
-# Data in the selected year
-#
-data_ind2 <- data_all %>%
-  filter(MYEAR %in% selected_year)
-
-#
 # Couple of tables
 #
+
+table(data_ind2$TISSUE_NAME)
+
+xtabs(~ PARAM, data_ind2 %>% filter(grepl("OH", PARAM)))
+
 xtabs(~ is.na(SAMPLE_NO), data_ind2)
 
 xtabs(~ addNA(LATIN_NAME), data_ind2)
@@ -144,11 +141,9 @@ xtabs(~ addNA(LATIN_NAME), data_ind2)
 # STATION_CODE, Fish_no, Length, Weight, Gonad_weight
 #
 # data_ind_fish_old <- readRDS("Data/03_Fish_individual_data.rds")
-data_ind_fish <- readRDS(
-  "Files_from_Jupyterhub_2020/Raw_data/150_Fish_individual_data_2020.rds") 
 
-# table(data_ind_fish$Station)
-# table(data_ind_fish$STATION_CODE)
+dir(folder, "150_*")
+data_ind_fish <- readRDS(paste0(folder, "/", "150_Fish_individual_data_2021.rds"))
 
 ```
 
@@ -189,159 +184,10 @@ cat("Intersex changed to code INTF% for", sum(sel), "records")
 
 ### a2-1. Get VDSI + intersex data   
 - Intersex should have code `INTF%` (https://vocab.ices.dk/?CodeID=53682)   
-- NOT NEEDED anymore  
-```{r, message=FALSE}
-
-#
-# NOT NEEDED (data has been added to database
-#
-
-if (FALSE){
-
-folder_vdsi <- "K:/Prosjekter/Sjøvann/JAMP/2020/opparbeiding/Snegl"
-
-#
-# 1. Imposex in Littorina
-#
-
-fn <- dir(folder_vdsi, pattern = ".xlsx")
-fn <- fn[!grepl("AAMAL", fn)]
-fn <- fn[!grepl("LITTORINA", fn)]
-fn <- fn[!grepl("~", fn, fixed = TRUE)]
-
-# Names = Extract all characters to the left of the first underscore  
-names(fn) <- stringr::str_extract(fn, "[^_]+")
-names(fn)[names(fn) == "131"] <- "131G"
-# fn
-
-
-read_excel_snail <- function(fn){
-  df <- readxl::read_excel(paste0(folder_vdsi, "/", fn), skip = 6)
-  df <- df[1:6]
-  df <- df[!is.na(df$`Analysert av`),]
-  df
-  }
-
-dat_vdsi_list <- fn %>% map(read_excel_snail)
-
-# 15G has 51 rows:
-# dat_vdsi_list %>% map_int(nrow)
-
-# Check 15G
-# dat_vdsi_list[["15G"]] %>% View()
-# dat_vdsi_list[["36G"]] %>% View()
-dat_vdsi_list[["15G"]] <- dat_vdsi_list[["15G"]][1:50,]  # delete last line
-
-# Pick only number, sex and Imposex 
-# ...we will deal with length and penis length later  
-dat_vdsi <- dat_vdsi_list %>% 
-  map(~.[c(1,3,5)]) %>%
-  bind_rows(.id = "STATION_CODE") %>%
-  rename(VALUE_WW = VDSI, 
-         Sex = Kjønn) %>%
-  mutate(PARAM = "VDSI",
-         UNIT = "idx",
-         LATIN_NAME = "Nucella lapillus")
-
-# dat_vdsi
-
-cat("\n------------------------------------------\n")
-cat("Imposex data: \n------------------------------------------\n")
-xtabs(~is.na(VALUE_WW) + addNA(Sex), dat_vdsi)
-
-
-#
-# 2. Intersex
-#
-fn <- "71G_fugløy_intersex_LITTORINA_2020.xlsx"
-df <- readxl::read_excel(paste0(folder_vdsi, "/", fn), range = "A3:G53")
-
-dat_intersex <- df %>%
-  filter(F == 1) %>%
-  mutate(STATION_CODE = "71G", 
-         Sex = "f",
-         PARAM = "INTF%",
-         UNIT = "PERCENT",
-         LATIN_NAME = "Littorina littorea") %>%
-  mutate(VALUE_WW = `ISI   (intersex-stadie)`*100) %>%
-  select(STATION_CODE, Sex, VALUE_WW, PARAM, LATIN_NAME)
-
-#
-# 3. Combine and summrize 
-#
-
-dat_snail_sex <- bind_rows(dat_vdsi, dat_intersex) %>%
-  filter(Sex == "f") %>%
-  group_by(STATION_CODE, PARAM, LATIN_NAME) %>%
-  summarise(VALUE_WW = mean(VALUE_WW))
-
-dat_snail_sex$MYEAR <- selected_year
-
-cat("\n------------------------------------------\n")
-cat("Combined data: \n------------------------------------------\n")
-xtabs(~PARAM, dat_snail_sex )
-
-}
-
-
-```
+- NOT NEEDED anymore (see scripts from previous years)   
 
 ### a2-2. Add VDSI + intersex data   
-- NOT NEEDED anymore  
-
-```{r}
-
-#
-# NOT NEEDED (data has been added to database
-#
-
-if (FALSE){
-  
-check1 <- data_ind2 %>%
-  filter(STATION_CODE %in% dat_snail_sex$STATION_CODE)
-
-# View(check1)
-
-# Get values of STATION_NAME, SAMPLE_DATE  
-dat_snail_sex_lookup <- check1 %>%
-  group_by(STATION_CODE) %>%
-  summarise(across(c(STATION_NAME, SAMPLE_DATE), first))
-# dat_snail_sex_lookup
-
-data_to_add <- dat_snail_sex %>%
-  left_join(dat_snail_sex_lookup) %>%
-  mutate(
-    TISSUE_NAME = "Whole soft body",
-    SAMPLE_NO = 1,
-    SAMPLE_NO2 = 1,
-    REPNO = 1, 
-    MYEAR = 2020,
-    lab = "NIVA"
-  )
-
-# number of rows in data
-n1 <- nrow(data_ind2)
-
-# Check that VDSI + intersex have not already been added   
-check_existing <- data_ind2 %>%
-  filter(PARAM %in% c("VDSI", "INTF%"))
-
-if (nrow(check_existing) == 0){
-  
-  data_ind2 <- bind_rows(data_ind2, data_to_add) 
-  
-}
-
-n2 <- nrow(data_ind2)
-
-message(n2-n1, " rows added to the data")
-
-}
-
-
-```
-
-
+- NOT NEEDED anymore (see scripts from previous years)   
 
 
 ### a3. For checking single stations
@@ -357,101 +203,42 @@ data_all %>% report_station("43B2", "Lever", year = 2020, threshold_samples = 7)
 
 ### a4. Data in Aquamonitor format, for dates only   
 We us these data to create ´df_dates´ containing ´SAMPLE_DATE´    
-- NOT NEEDED  
-```{r}
-# 
-# data_AqM <- readRDS("Input_data_2019/101_dat_new1_2020-08-05.rds")
-# 
-# data_AqM <- data_AqM %>%
-#   mutate(
-#     Month = month(CatchDateFirst),
-#     MYEAR = case_when(
-#       Month <= 2 ~ year(CatchDateFirst)-1,   # measurments in Jan-Feb belong to the year before
-#       Month >= 3 ~ year(CatchDateFirst)),
-#   ) %>%
-#   filter(MYEAR == 2019)
-# 
-# # Dates for stations that have just one date
-# df_dates_aqm <- data_AqM %>%
-#   rename(STATION_CODE = StationCode, 
-#          SAMPLE_DATE = CatchDateFirst) %>%
-#   distinct(STATION_CODE, SAMPLE_DATE) %>%
-#   # Remove stations with more than one date:
-#   group_by(STATION_CODE) %>%
-#   mutate(n = n()) %>%
-#   filter(n == 1)
-# 
-# # Dates for eider station (19N), which has one date for
-# #   blood and another for eggs
-# # We call date 'SAMPLE_DATE2' so we can addi ti alongside SAMPLE_DATE
-# df_dates_aqm_eider <- data_AqM %>%
-#   rename(STATION_CODE = StationCode, 
-#          TISSUE_NAME = TissueName, 
-#          SAMPLE_DATE2 = CatchDateFirst) %>%  # Note the variable names
-#   filter(STATION_CODE == "19N") %>%
-#   distinct(STATION_CODE, TISSUE_NAME, SAMPLE_DATE2)
-# 
-# # Add SAMPLE_DATE using df_dates_aqm andSAMPLE_DATE2 using df_dates_aqm_eider
-# df_dates <- data_ind2 %>%
-#   distinct(STATION_CODE, TISSUE_NAME) %>%
-#   # Add SAMPLE_DATE:
-#   left_join(df_dates_aqm, by = "STATION_CODE") %>%
-#   # Add SAMPLE_DATE2 for eider: 
-#   left_join(df_dates_aqm_eider, by = c("STATION_CODE", "TISSUE_NAME"))
-# 
-# 
-# # Change SAMPLE_DATE where suitable
-# # The station "26A2" is lacking in AqM data so we add it manually
-# df_dates <- df_dates %>%
-#   mutate(
-#     SAMPLE_DATE = case_when(
-#       !is.na(SAMPLE_DATE2) ~ SAMPLE_DATE2,            # for eider
-#       STATION_CODE %in% "26A2" ~ ymd_hms("2020-10-26 00:00:00"),
-#       TRUE ~ SAMPLE_DATE)   
-#   ) %>%
-#   select(-SAMPLE_DATE2, -n) %>%
-#   arrange(STATION_CODE)
-# 
-# # View(df_dates)
-
-```
-
+- NOT NEEDED (see older scripts if needed)   
 
 ### a5. Add SAMPLE_DATE to data
-- NOT NEEDED  
-```{r}
-
-# data_ind2 <- data_ind2 %>%
-#   safe_left_join(df_dates,
-#                  by = c("STATION_CODE", "TISSUE_NAME"), 
-#                  na_matches = "never",
-#                  check = "BCVm")
-
-```
-
+- NOT NEEDED (see older scripts if needed)   
 
 ### a6. Check 227G2  
-- NOT NEEDED  
-```{r}
-
-# data_ind2 %>%
-#   filter(PARAM %in% "VDSI" & STATION_CODE %in% "227G2")  
-
-
-```
+- NOT NEEDED (see older scripts if needed)   
 
 ### b. Checks  
 
-Years
+#### Years
 ```{r}
 table(data_ind2$MYEAR)
 ```
 
-SAMPLE_NO 1
+SAMPLE_NO 1 
+
+- Excluding siloxanes, which have sample numbers >100
+
 ```{r}
 
-data_all %>%
-  filter(MYEAR %in% 2020) %>%
+data_ind2 %>%
+  filter(MYEAR %in% selected_year & !PARAM %in% c("D4","D5","D6")) %>%
+  group_by(STATION_CODE, TISSUE_NAME) %>% 
+  summarise(Sample_no = paste(min(SAMPLE_NO), "-", max(SAMPLE_NO)),
+            .groups = "drop") %>%
+  spread(TISSUE_NAME, Sample_no)
+
+```
+- Special case: siloxanes - sample numbers >100 for liver  
+- Note 24B, which has SAMPLE_NO = 7 + all numbers 101-115    
+
+```{r}
+
+data_ind2 %>%
+  filter(MYEAR %in% selected_year & PARAM %in% c("D4","D5","D6")) %>% # View()
   group_by(STATION_CODE, TISSUE_NAME) %>% 
   summarise(Sample_no = paste(min(SAMPLE_NO), "-", max(SAMPLE_NO)),
             .groups = "drop") %>%
@@ -459,18 +246,6 @@ data_all %>%
 
 ```
 
-SAMPLE_NO 2
-```{r}
-
-data_all %>%
-  filter(MYEAR %in% 2020) %>%
-  filter(TISSUE_NAME %in% c("Lever", "Muskel")) %>%
-  group_by(STATION_CODE, TISSUE_NAME) %>% 
-  summarise(Sample_no = paste(sort(unique(SAMPLE_NO)), collapse = ", "),
-            .groups = "drop") %>%
-  spread(TISSUE_NAME, Sample_no)
-
-```
 
 SAMPLE DATE (cod)
 ```{r}
@@ -521,7 +296,7 @@ cat("Removed", sum(sel), "recods that had no station code\n")
 #### Parameter list
 ```{r}
 
-# xtabs(~PARAM, data_ind2 %>% filter(MYEAR == 2020))
+# xtabs(~PARAM, data_ind2 %>% filter(MYEAR == selected_year))
 
 ```
 
@@ -643,17 +418,81 @@ df_muscle_33F_old <- readRDS("../Milkys_2018/Data/09_df_muscle_33F.RData")
 ```
 
 
-### e1. 2019 fish  individual data
+### e1. Fish individual data
 ```{r}
 
 # df_samples <- readRDS(file = "Data/01_df_samples_2019.rds")
-df_samples <- readRDS("Files_to_Jupyterhub_2020/Labware_samples_2020_2021-07-02.rds")
+# df_samples <- readRDS("Files_to_Jupyterhub_2020/Labware_samples_2020_2021-07-02.rds")  
+
+folder <- paste0("Files_to_Jupyterhub_", selected_year)
+dir(folder, pattern = "Labware_samples_*")
+
+df_samples <- readRDS(paste0(folder, "/Labware_samples_2021_2022-09-21.rds")) %>%
+  filter(STATUS %in% "Ferdig") %>%
+  # Set 36A to 36A1
+  mutate(
+    AQUAMONITOR_CODE = ifelse(AQUAMONITOR_CODE == "36A", "36A1", AQUAMONITOR_CODE)
+  ) %>%
+  # Remove "SIA" lines 
+  filter(!grepl("SIA", DESCRIPTION))
+
 
 # Nice way of viewing these data  
 if (FALSE)
   df_samples %>% 
     select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>% 
     View()
+
+# if (selected_year == 2021){
+#   
+#   # 36A lacking for some reason
+# 
+#   df_samples <- bind_rows(
+#     df_samples,
+#     data.frame(
+#       AQUAMONITOR_CODE = "36A", TISSUE = "SB-Whole soft body", DESCRIPTION = "",
+#       BIOTA_SAMPLENO = 1:3, X_BULK_BIO = as.character(NA))
+#   )
+# 
+# }
+
+
+# Check again
+check <- setdiff(unique(data_ind2$STATION_CODE), unique(df_samples$AQUAMONITOR_CODE))
+if (length(check) > 0){
+  stop("The station(s) ", paste(check, collapse = ", "), " are lacking in 'df_samples'.")
+}
+
+```
+#### 
+
+#### Check data  
+```{r}
+
+check <- df_samples %>%
+  filter(TISSUE %in% "LI-Lever") %>%
+  add_count(AQUAMONITOR_CODE, TISSUE, BIOTA_SAMPLENO) %>%
+  filter(n > 1)
+if (nrow(check) > 0){
+  stop("Duplicates in liver data (error in section 1.e1)")
+  # If error, check using the following lines:
+  check %>% 
+    select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>% 
+    View("Liver samples")
+}
+
+check <- df_samples %>%
+  filter(TISSUE %in% "MU-Muskel") %>%
+  add_count(AQUAMONITOR_CODE, TISSUE, BIOTA_SAMPLENO) %>%
+  filter(n > 1)
+if (nrow(check) > 0){
+  stop("Duplicates in muscle data (error in section 1.e1)")
+  # If error, check using the following lines:
+  check %>% 
+    select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>% 
+    View("Muscle samples")
+}
+
 
 ```
 
@@ -665,13 +504,14 @@ Lacking X_BULK_BIO where there should have been a number
 check <- df_samples %>%
   # filter(AQUAMONITOR_CODE == "53B")  %>% 
   select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>% 
-  mutate(DESCRIPTION = gsub("<f8>", "ø", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION = gsub("<c5>", "Å", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION = gsub("<e5>", "å", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION = gsub("<c6>", "Æ", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION = gsub("<e6>", "æ", DESCRIPTION, fixed = TRUE),
-         DESCRIPTION2 = DESCRIPTION %>% stringr::str_sub(start = nchar(AQUAMONITOR_CODE) + 1),
-         Fish_no = stringr::str_extract(DESCRIPTION2, "[0-9]+")) %>%
+  mutate(
+    DESCRIPTION = gsub("<f8>", "ø", DESCRIPTION, fixed = TRUE),
+    DESCRIPTION = gsub("<c5>", "Å", DESCRIPTION, fixed = TRUE),
+    DESCRIPTION = gsub("<e5>", "å", DESCRIPTION, fixed = TRUE),
+    DESCRIPTION = gsub("<c6>", "Æ", DESCRIPTION, fixed = TRUE),
+    DESCRIPTION = gsub("<e6>", "æ", DESCRIPTION, fixed = TRUE),
+    DESCRIPTION2 = DESCRIPTION %>% stringr::str_sub(start = nchar(AQUAMONITOR_CODE) + 1),
+    Fish_no = stringr::str_extract(DESCRIPTION2, "[0-9]+")) %>%
   filter(is.na(X_BULK_BIO)) %>%
   filter(Fish_no != BIOTA_SAMPLENO) %>%
   select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION2, BIOTA_SAMPLENO, X_BULK_BIO, Fish_no)
@@ -713,15 +553,18 @@ df_samples <- df_samples %>%
 ```
 
 
-## df_liver and df_muscle - for fish samples  
+## 2. df_liver and df_muscle - for fish samples  
 Basis: the file of LABWARE samples (df_samples)   
+
 
 #### Liver except 33F
 ```{r}
 # colnames(df_liver_old)
 df_liver <- df_samples %>%
   filter(TISSUE %in% "LI-Lever") %>%
+  # filter(!grepl("silo", DESCRIPTION, ignore.case = TRUE)) %>%
   filter(!AQUAMONITOR_CODE %in% "33F") %>%
+  filter(BIOTA_SAMPLENO < 100) %>% # View("liver")
   group_by(AQUAMONITOR_CODE, BIOTA_SAMPLENO, X_BULK_BIO) %>%
   summarise(STATION_CODE = first(AQUAMONITOR_CODE),
             SAMPLE_NO = first(BIOTA_SAMPLENO),
@@ -739,7 +582,7 @@ df_liver$FiskNr_1 <- fish_numbers %>% map_chr(~.[1]) %>% as.numeric()
 df_liver$FiskNr_2 <- fish_numbers %>% map_chr(~.[2]) %>% as.numeric()
 df_liver$FiskNr_3 <- fish_numbers %>% map_chr(~.[3]) %>% as.numeric()
 
-# For unpooled samples, and if nothog is given in X_BULK_BIO,
+# For unpooled samples, and if nothing is given in X_BULK_BIO,
 #   we set FiskNr_1 = SAMPLE_NO
 sel <- is.na(df_liver$FiskNr_1)
 df_liver$FiskNr_1[sel] <- df_liver$SAMPLE_NO[sel]
@@ -758,6 +601,13 @@ df_liver$sum <- apply(df_liver[,c("Vekt1", "Vekt2", "Vekt3")], 1, sum, na.rm = T
 df_liver <- df_liver %>%
   select(-Pooled_no)
 
+check <- df_liver %>%
+  add_count(STATION_CODE, SAMPLE_NO) %>%
+  filter(n > 1)
+if (nrow(check) > 0){
+  stop("Duplicates!")
+}
+
 ```
 
 ```{r}
@@ -771,13 +621,12 @@ df_muscle_old <- df_muscle
 
 
 
-
 #### Muscle (except 33F)
 ```{r}
 
 # colnames(df_liver_old)
 df_muscle <- df_samples %>%
-  filter(TISSUE %in% "MU-Muskel" & AQUAMONITOR_CODE != "33F") %>%
+  filter(TISSUE %in% "MU-Muskel" & AQUAMONITOR_CODE != "33F") %>% # nrow()
   # filter(!AQUAMONITOR_CODE %in% "33F") %>%
   group_by(AQUAMONITOR_CODE, BIOTA_SAMPLENO, X_BULK_BIO) %>%
   summarise(STATION_CODE = first(AQUAMONITOR_CODE),
@@ -808,68 +657,24 @@ df_muscle <- df_muscle %>%
                      !is.na(Pooled_no) ~ as.numeric(Pooled_no))
   )
 
-```
-
-
-#### Liver 33F
-```{r}
-
-df <- df_samples %>%
-  filter(TISSUE %in% "LI-Lever" & AQUAMONITOR_CODE %in% "33F") %>%
-  group_by(AQUAMONITOR_CODE, BIOTA_SAMPLENO, X_BULK_BIO) %>%
-  summarise(STATION_CODE = first(AQUAMONITOR_CODE),
-            SAMPLE_NO = first(BIOTA_SAMPLENO),
-            Pooled_no = first(X_BULK_BIO),
-            .groups = "drop")
-
-get_list <- function(i){
-  list(
-    SAMPLE_NO = df$SAMPLE_NO[i],
-    Fish_no = strsplit(df$Pooled_no[i], ",")[[1]] %>% as.numeric()
-    )
+check <- df_muscle %>%
+  add_count(STATION_CODE, SAMPLE_NO) %>%
+  filter(n > 1)
+if (nrow(check) > 0){
+  stop("Duplicates!")
 }
-# get_list(1)
-
-df_liver_33F <- 1:nrow(df) %>% map(get_list) 
-
-# 2020: seems like X_BULK_BIO has not been filled out  
-# We do it manually  
-df_liver_33F[[1]]$Fish_no <- 1:5
-df_liver_33F[[2]]$Fish_no <- 6:10
-df_liver_33F[[3]]$Fish_no <- 11:15
 
 ```
 
 
+#### Liver 33F   
 #### Muscle 33F
-```{r}
-df <- df_samples %>%
-  filter(TISSUE %in% "MU-Muskel" & AQUAMONITOR_CODE %in% "33F") %>%
-  group_by(AQUAMONITOR_CODE, BIOTA_SAMPLENO, X_BULK_BIO) %>%
-  summarise(STATION_CODE = first(AQUAMONITOR_CODE),
-            SAMPLE_NO = first(BIOTA_SAMPLENO),
-            Pooled_no = first(X_BULK_BIO),
-            .groups = "drop")
 
-get_list <- function(i){
-  list(
-    SAMPLE_NO = df$SAMPLE_NO[i],
-    Fish_no = strsplit(df$Pooled_no[i], ",")[[1]] %>% as.numeric()
-    )
-}
-# get_list(1)
+- No flatfish data in 2021! See old code if you need it  
 
-df_muscle_33F <- 1:nrow(df) %>% map(get_list) 
 
-# 2020: seems like X_BULK_BIO has not been filled out  
-# We do it manually  
-df_muscle_33F[[1]]$Fish_no <- 1:5
-df_muscle_33F[[2]]$Fish_no <- 6:10
-df_muscle_33F[[3]]$Fish_no <- 11:15
 
-```
-
-## df_ind - length and weight data  
+## 3.df_ind - length and weight data  
 Basis: the file of LABWARE samples (df_samples) and weight/length data (data_ind_fish)   
 Fish individual Length/weight are added to df_ind  
 ```{r}
@@ -883,11 +688,12 @@ df_ind <- bind_rows(
     select(-Sampleno),
   df_muscle %>% 
     count(STATION_CODE, Fish_no) %>%
-    select(-n),
-  tibble(STATION_CODE = "33F",
-         Fish_no = df_liver_33F %>% purrr::transpose() %>% .$Fish_no %>% unlist() %>% sort()),
-  tibble(STATION_CODE = "33F",
-         Fish_no = df_muscle_33F %>% purrr::transpose() %>% .$Fish_no %>% unlist() %>% sort())
+    select(-n)
+  # The next two is not needed in 2021 - no flatfish data  
+  # tibble(STATION_CODE = "33F",
+  #        Fish_no = df_liver_33F %>% purrr::transpose() %>% .$Fish_no %>% unlist() %>% sort()),
+  # tibble(STATION_CODE = "33F",
+  #        Fish_no = df_muscle_33F %>% purrr::transpose() %>% .$Fish_no %>% unlist() %>% sort())
   ) %>%
   # Delete duplicates of STATION_CODE + Fish_no
   count(STATION_CODE, Fish_no) %>%
@@ -912,6 +718,7 @@ range(df_ind$Weight, na.rm = TRUE)  # must not include zero
 ### Check where we lack data  
 - Lack some gonad weight data  
 - 2019 - also lacking 13B, 19B, 43B2 and 53B
+- 2021 - also lacking many 02B, 80B + some 10B, 23B, 24B, 36B  13B, 19B, 43B2 and 53B
 ```{r}
 # df_ind
 df_ind %>%
@@ -923,7 +730,9 @@ df_ind %>%
 
 ## Table 00
 ```{r}
+
 data_00 <- data.frame(RECID = "00", RLABO = "NIVA", CNTRY = 58, MYEAR = selected_year, RFVER = "3.2.5")
+
 ```
 
 ## Table 03  
@@ -946,6 +755,16 @@ df_smpno <- read.table(textConnection("
   'Platichthys flesus'     6      9
 'Somateria mollissima'     9     11
 "), header = TRUE, stringsAsFactors = FALSE)
+
+df_smpno <- df_smpno %>%
+  filter(LATIN_NAME %in% unique(data_ind2$LATIN_NAME))  
+
+check <- !unique(data_ind2$LATIN_NAME) %in% df_smpno$LATIN_NAME
+if (sum(check) > 0){
+  stop("Some species missing!")
+}
+
+df_smpno
 
 ```
 
@@ -1165,8 +984,28 @@ data_04_fish_main <- 1:nrow(df_station_species) %>%
 # Check
 data_04_fish_main %>% filter(STATION_CODE == "36B") %>% as.data.frame()
 
+# Check for duplicates  
+check <- data_04_fish_main %>%
+    group_by(STATION_CODE, SMPNO, SUBNO) %>%
+    mutate(n = n()) %>%
+    filter(n > 1) %>%
+    arrange(STATION_CODE, SMPNO, SUBNO)
+
+if (nrow(check) > 0){
+  cat(nrow(check), "duplicate data in 'data_04_fish_main' \n")
+  stop("This will lead to duplicates in table 04. Please fix! (error occured in section 'Table 04 c')")
+} else {
+  cat("No duplicates in 'data_04_fish_main' \n")
+}
 
 ```
+
+## .
+## .
+## . HERE I AM
+## .
+## .
+
 ### d. Comparison with sample file   
 One example station  
 ```{r}
@@ -1231,45 +1070,48 @@ Assuming that
 # We cheat and just do this manually
 #
 
-# One line per fish, for length and weight measurements   
-df1 <- tibble(STATION_CODE = "33F", LATIN_NAME = "Platichthys flesus",
-              Fish_no = 1:15,
-              NOIMP = 1,
-              SAMPLE_NO_Muscle = NA, SAMPLE_NO_Liver = NA,
-              SUBNO = as.numeric(1:15), BULKID = as.character(rep(16:18, each = 5)))
-
-# One line per pooled sample (= 3 lines altogether))
-df2 <- tibble(STATION_CODE = "33F", LATIN_NAME = "Platichthys flesus",
-              Fish_no = NA,
-              NOIMP = 5,
-              SAMPLE_NO_Muscle = 1:3, SAMPLE_NO_Liver = 1:3,
-              SUBNO = as.numeric(16:18), 
-              BULKID = "")
-df <- rbind(df1, df2)
-
-data_04_fish_33F <-  df %>% left_join(df_smpno %>% select(LATIN_NAME, SMPNO), by = "LATIN_NAME")
+# # One line per fish, for length and weight measurements   
+# df1 <- tibble(STATION_CODE = "33F", LATIN_NAME = "Platichthys flesus",
+#               Fish_no = 1:15,
+#               NOIMP = 1,
+#               SAMPLE_NO_Muscle = NA, SAMPLE_NO_Liver = NA,
+#               SUBNO = as.numeric(1:15), BULKID = as.character(rep(16:18, each = 5)))
+# 
+# # One line per pooled sample (= 3 lines altogether))
+# df2 <- tibble(STATION_CODE = "33F", LATIN_NAME = "Platichthys flesus",
+#               Fish_no = NA,
+#               NOIMP = 5,
+#               SAMPLE_NO_Muscle = 1:3, SAMPLE_NO_Liver = 1:3,
+#               SUBNO = as.numeric(16:18), 
+#               BULKID = "")
+# df <- rbind(df1, df2)
+# 
+# data_04_fish_33F <-  df %>% left_join(df_smpno %>% select(LATIN_NAME, SMPNO), by = "LATIN_NAME")
 
 ```
 
 ### h. Check 33F
 ```{r}
-# Sample file
-df_samples %>%
-  filter(AQUAMONITOR_CODE == "33F") %>% 
-  select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>%
-  arrange(TISSUE, BIOTA_SAMPLENO)
-
-# Table 04  
-data_04_fish_33F %>%
-  mutate(Sort = case_when(
-    BULKID == "" ~ SUBNO,
-    !is.na(BULKID) ~ as.numeric(BULKID))
-  ) %>%
-  arrange(Sort) %>%
-  select(-Sort)
+# 
+# # Sample file
+# df_samples %>%
+#   filter(AQUAMONITOR_CODE == "33F") %>% 
+#   select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>%
+#   arrange(TISSUE, BIOTA_SAMPLENO)
+# 
+# # Table 04  
+# data_04_fish_33F %>%
+#   mutate(Sort = case_when(
+#     BULKID == "" ~ SUBNO,
+#     !is.na(BULKID) ~ as.numeric(BULKID))
+#   ) %>%
+#   arrange(Sort) %>%
+#   select(-Sort)
 
 ```
+
 ### i1. Extra samples that may be needed for fish biological effects  
+
 ```{r}
 
 fish_species <- "Gadus morhua"
@@ -1338,7 +1180,13 @@ if (nrow(check) > 0){
 ### j1. Fish table, join together  
 ```{r}
 
-if (nrow(check) == 0){
+no_flatfish <- identical(unique(subset(data_ind2, TISSUE_NAME == "Lever")$LATIN_NAME), "Gadus morhua") 
+
+if (no_flatfish){
+
+  data_04_fish <- data_04_fish_main
+   
+} else if (nrow(check) == 0){
 
   data_04_fish <- rbind(data_04_fish_main, data_04_fish_33F)
    
@@ -1421,7 +1269,7 @@ For eider duck, the same SAMPLE_NO2 = 1 for blood and SAMPLE_NO2 = 1 for egg doe
 data_04_eider <- 
   data_ind2 %>%
   filter(LATIN_NAME %in% c("Somateria mollissima") & MYEAR %in% selected_year) %>% # View()
-  # excude siloxans - some samples have onky siloxans
+  # excude siloxans - some samples have only siloxans
   filter(!PARAM %in% c("D4", "D5", "D6")) %>%   
   count(STATION_CODE, LATIN_NAME, TISSUE_NAME, SAMPLE_NO) %>% # View()
   arrange(TISSUE_NAME, SAMPLE_NO) %>%            # first blood SAMPLE_NO 1-15, then egg SAMPLE_NO 1-15.   
@@ -1645,6 +1493,10 @@ data_conc_1$PARAM[sel] <- "N15D"
 sel <- data_conc_1$PARAM %in% "Fett"; sum(sel)
 data_conc_1$PARAM[sel] <- "FATWT%"
 
+# The new (2021) "SCCP" and "MCCP" should be OK. For LOQ-values: value = LOQ, Flag1 = "<")
+# (Note: the "eskl. LOQ" vesrions have these set to value = 0!)
+# but for previous years probably the "including LOQ-version" has been used
+
 ```
 
 ### a2. Filter data to keep only those parameters that we need
@@ -1679,10 +1531,6 @@ tab <- data_conc_1 %>%
   sort(decreasing = TRUE)
 tab
 # dput(names(tab)) 
-
-```
-```{r}
-
 
 ```
 
@@ -1856,9 +1704,6 @@ message(nrow(data_conc_back) - nrow(data_conc), " EROD observations without GOSO
 ```
 
 
-```{r}
-```
-
 
 
 ### b. Unit lookup table  
@@ -1981,13 +1826,16 @@ if (manual_write){
     data_conc_fishmuscle$SMPNO[not_ok] <- 1  # set SMPN to 1 (assumong this is cod)
   }
   
+  # Otherwise:
+  View(data_conc_fishmuscle[not_ok,], title = "Not ok")
+  
 }
 
 
 if (sum(not_ok) == 0){
   cat("All OK\n")
 } else {
-  cat ("Still lacking SMPNO + SUBNO!")
+  stop("Still lacking SMPNO + SUBNO!")
 }
 
 #
