@@ -31,40 +31,71 @@ get_nivabase_data(str)
 
 
 ## Where files will be saved  
-```{r}
 
+```r
 save_folder_txt <- "Files_to_ICES/2020/Test"
 save_folder_rds <- "Files_to_ICES/2020/Rdata"
 save_folder_excel <- "Files_to_ICES/2020/Excel"
-
 ```
 
 ### Selected year  
-```{r}
 
+```r
 selected_year <- 2020
-
 ```
 
 
 ## 0. Libraries and functions
-```{r}
-library(tidyverse)
-library(lubridate)
 
+```r
+library(tidyverse)
+```
+
+```
+## ── Attaching packages ─────────────────────────────────────── tidyverse 1.3.1 ──
+```
+
+```
+## ✔ ggplot2 3.3.6     ✔ purrr   0.3.4
+## ✔ tibble  3.1.8     ✔ dplyr   1.0.9
+## ✔ tidyr   1.1.4     ✔ stringr 1.4.0
+## ✔ readr   2.1.1     ✔ forcats 0.5.1
+```
+
+```
+## ── Conflicts ────────────────────────────────────────── tidyverse_conflicts() ──
+## ✖ dplyr::filter() masks stats::filter()
+## ✖ dplyr::lag()    masks stats::lag()
+```
+
+```r
+library(lubridate)
+```
+
+```
+## 
+## Attaching package: 'lubridate'
+```
+
+```
+## The following objects are masked from 'package:base':
+## 
+##     date, intersect, setdiff, union
+```
+
+```r
 library(safejoin) # https://github.com/moodymudskipper/safejoin
 
 # source("01_Get_chemical_data_NIVAbasen_functions.R")  # for get_standard_parametername()
 
 source("844_ICES_submission_check_functions.R")
-
 ```
 
 
 ### Functions  
 Between decimal and minute formats. Note the fixed format (2 signs for degrees, 6 signs for minutes) 
-```{r}
 
+```r
 decimal2minute <- function(x) {
   deg <- floor(x) %>% sprintf("%02.0f", .)
   min <- round(60*(x - floor(x)), 3) %>% sprintf("%02.3f", .)
@@ -84,7 +115,6 @@ minute2decimal <- function(x) {
 # x %>% head()
 # x %>% decimal2minute() %>% head()
 # x %>% decimal2minute() %>% minute2decimal() %>% head()
-
 ```
 
 
@@ -93,7 +123,8 @@ minute2decimal <- function(x) {
 
 ### a1. Get data produced by script 841  
 We only keep the 2019 data
-```{r}
+
+```r
 # dir("Data")
 # Data at sample level (chemical data, biological efect parameters and VDSI)
 # Also in "../Milkys2/Data/101_data_updated_2020-08-05.rds"
@@ -108,10 +139,37 @@ We only keep the 2019 data
 fn <- "Data/841_dat_all_2020"
 
 cat("----------------------------------------\n")
-cat("file written at:\n")
-file.info(fn)$mtime
-cat("----------------------------------------\n")
+```
 
+```
+## ----------------------------------------
+```
+
+```r
+cat("file written at:\n")
+```
+
+```
+## file written at:
+```
+
+```r
+file.info(fn)$mtime
+```
+
+```
+## [1] "2021-12-30 16:56:52 CET"
+```
+
+```r
+cat("----------------------------------------\n")
+```
+
+```
+## ----------------------------------------
+```
+
+```r
 data_all <- readRDS(fn) %>%
   mutate(
     TISSUE_NAME = case_when(
@@ -136,9 +194,29 @@ data_ind2 <- data_all %>%
 # Couple of tables
 #
 xtabs(~ is.na(SAMPLE_NO), data_ind2)
+```
 
+```
+## is.na(SAMPLE_NO)
+## FALSE 
+## 25055
+```
+
+```r
 xtabs(~ addNA(LATIN_NAME), data_ind2)
+```
 
+```
+## addNA(LATIN_NAME)
+##         Gadus morhua   Littorina littorea       Mytilus edulis 
+##                16337                   77                 5250 
+##     Nucella lapillus   Platichthys flesus Somateria mollissima 
+##                  144                  150                 3097 
+##                 <NA> 
+##                    0
+```
+
+```r
 #
 # Data on individual level of fish (lengt, weight, gonad weight)
 #
@@ -151,12 +229,11 @@ data_ind_fish <- readRDS(
 
 # table(data_ind_fish$Station)
 # table(data_ind_fish$STATION_CODE)
-
 ```
 
 #### Check PAH metabolites
-```{r}
 
+```r
 if (FALSE){
   
   data_ind2 %>%
@@ -170,30 +247,30 @@ if (FALSE){
     xtabs(~PARAM + STATION_CODE, .)
   
 }
-
-
 ```
 
 ### a2-0. Change Intersex to code `INTF%`  
 - https://vocab.ices.dk/?CodeID=53682  
 - VDSI is OK   
 
-```{r}
 
+```r
 sel <- data_ind2$PARAM %in% "Intersex"
 data_ind2$PARAM[sel] <- "INTF%"
 
 cat("Intersex changed to code INTF% for", sum(sel), "records")
+```
 
-
+```
+## Intersex changed to code INTF% for 1 records
 ```
 
 
 ### a2-1. Get VDSI + intersex data   
 - Intersex should have code `INTF%` (https://vocab.ices.dk/?CodeID=53682)   
 - NOT NEEDED anymore  
-```{r, message=FALSE}
 
+```r
 #
 # NOT NEEDED (data has been added to database
 #
@@ -284,15 +361,13 @@ cat("Combined data: \n------------------------------------------\n")
 xtabs(~PARAM, dat_snail_sex )
 
 }
-
-
 ```
 
 ### a2-2. Add VDSI + intersex data   
 - NOT NEEDED anymore  
 
-```{r}
 
+```r
 #
 # NOT NEEDED (data has been added to database
 #
@@ -339,28 +414,55 @@ n2 <- nrow(data_ind2)
 message(n2-n1, " rows added to the data")
 
 }
-
-
 ```
 
 
 
 
 ### a3. For checking single stations
-```{r}
 
+```r
 # debugonce(report_station)
 data_all %>% report_station("43B2", "Lever", year = 2020, threshold_samples = 7)
+```
+
+```
+## =======================================================================================
+## Station: 43B2 
+## 
+## In total: 30 samples / 66 parameters 
+## 
+## 
+## 65 parameters has 15 samples 
+## 1 parameters has 1 samples 
+## ----------------------------------------------------------------------------------------
+## 
+## 
+## Parameters with 7 or less samples: 
+## ---------------------------------
+## MCCP eksl. LOQ
+## 
+## ----------------------------------------------------------------------------------------
+## 1 samples has 63 parameters 
+## 14 samples has 62 parameters 
+## 15 samples has 3 parameters 
+## 
+## 
+## Samples with < 50 parameters: 
+## ---------------------------------------
+## 101, 102, 103, 104, 105, 106, 107, 108, 109, 110, 111, 112, 113, 114, 115
+```
+
+```r
 # report_station("30B") 
-
-
 ```
 
 
 ### a4. Data in Aquamonitor format, for dates only   
 We us these data to create ´df_dates´ containing ´SAMPLE_DATE´    
 - NOT NEEDED  
-```{r}
+
+```r
 # 
 # data_AqM <- readRDS("Input_data_2019/101_dat_new1_2020-08-05.rds")
 # 
@@ -415,55 +517,74 @@ We us these data to create ´df_dates´ containing ´SAMPLE_DATE´
 #   arrange(STATION_CODE)
 # 
 # # View(df_dates)
-
 ```
 
 
 ### a5. Add SAMPLE_DATE to data
 - NOT NEEDED  
-```{r}
 
+```r
 # data_ind2 <- data_ind2 %>%
 #   safe_left_join(df_dates,
 #                  by = c("STATION_CODE", "TISSUE_NAME"), 
 #                  na_matches = "never",
 #                  check = "BCVm")
-
 ```
 
 
 ### a6. Check 227G2  
 - NOT NEEDED  
-```{r}
 
+```r
 # data_ind2 %>%
 #   filter(PARAM %in% "VDSI" & STATION_CODE %in% "227G2")  
-
-
 ```
 
 ### b. Checks  
 
 Years
-```{r}
+
+```r
 table(data_ind2$MYEAR)
 ```
 
-SAMPLE_NO 1
-```{r}
+```
+## 
+##  2020 
+## 25055
+```
 
+SAMPLE_NO 1
+
+```r
 data_all %>%
   filter(MYEAR %in% 2020) %>%
   group_by(STATION_CODE, TISSUE_NAME) %>% 
   summarise(Sample_no = paste(min(SAMPLE_NO), "-", max(SAMPLE_NO)),
             .groups = "drop") %>%
   spread(TISSUE_NAME, Sample_no)
+```
 
+```
+## # A tibble: 56 × 8
+##    STATION_CODE Blod  Egg   Galle  Lever   `Liver - microsome` Muskel Whole so…¹
+##    <chr>        <chr> <chr> <chr>  <chr>   <chr>               <chr>  <chr>     
+##  1 02B          <NA>  <NA>  <NA>   1 - 8   <NA>                1 - 15 <NA>      
+##  2 10A2         <NA>  <NA>  <NA>   <NA>    <NA>                <NA>   1 - 3     
+##  3 10B          <NA>  <NA>  <NA>   1 - 115 <NA>                1 - 15 <NA>      
+##  4 11G          <NA>  <NA>  <NA>   <NA>    <NA>                <NA>   1 - 1     
+##  5 11X          <NA>  <NA>  <NA>   <NA>    <NA>                <NA>   1 - 3     
+##  6 131G         <NA>  <NA>  <NA>   <NA>    <NA>                <NA>   1 - 1     
+##  7 13B          <NA>  <NA>  <NA>   1 - 8   <NA>                1 - 15 <NA>      
+##  8 15A          <NA>  <NA>  <NA>   <NA>    <NA>                <NA>   1 - 3     
+##  9 15B          <NA>  <NA>  1 - 15 1 - 15  <NA>                1 - 15 <NA>      
+## 10 15G          <NA>  <NA>  <NA>   <NA>    <NA>                <NA>   1 - 1     
+## # … with 46 more rows, and abbreviated variable name ¹​`Whole soft body`
 ```
 
 SAMPLE_NO 2
-```{r}
 
+```r
 data_all %>%
   filter(MYEAR %in% 2020) %>%
   filter(TISSUE_NAME %in% c("Lever", "Muskel")) %>%
@@ -471,26 +592,71 @@ data_all %>%
   summarise(Sample_no = paste(sort(unique(SAMPLE_NO)), collapse = ", "),
             .groups = "drop") %>%
   spread(TISSUE_NAME, Sample_no)
+```
 
+```
+## # A tibble: 18 × 3
+##    STATION_CODE Lever                                                     Muskel
+##    <chr>        <chr>                                                     <chr> 
+##  1 02B          1, 2, 3, 4, 5, 6, 7, 8                                    1, 2,…
+##  2 10B          1, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 17, 101,… 1, 2,…
+##  3 13B          1, 2, 3, 4, 5, 6, 7, 8                                    1, 2,…
+##  4 15B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15         1, 2,…
+##  5 19B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 101, … 1, 2,…
+##  6 23B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15         1, 2,…
+##  7 24B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 101, 102,… 1, 2,…
+##  8 28B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14             1, 2,…
+##  9 30B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 101, 102, 104, 10… 1, 2,…
+## 10 33F          1, 2, 3                                                   1, 2,…
+## 11 36B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15         1, 2,…
+## 12 43B2         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 101, … 1, 2,…
+## 13 45B2         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14             1, 2,…
+## 14 53B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15         1, 2,…
+## 15 71B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10                             1, 2,…
+## 16 80B          1, 3, 4, 5, 6, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17       1, 3,…
+## 17 96B          1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15         1, 2,…
+## 18 98B1         1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15         1, 2,…
 ```
 
 SAMPLE DATE (cod)
-```{r}
 
+```r
 data_ind2 %>%
   filter(TISSUE_NAME %in% c("Lever", "Muskel")) %>%
   group_by(STATION_CODE) %>% 
   summarise(Sample_date = paste(sort(unique(as.character(SAMPLE_DATE))), collapse = ", "),
             .groups = "drop")
+```
 
+```
+## # A tibble: 18 × 2
+##    STATION_CODE Sample_date
+##    <chr>        <chr>      
+##  1 02B          2020-08-18 
+##  2 10B          2020-08-20 
+##  3 13B          2020-11-01 
+##  4 15B          2020-09-01 
+##  5 19B          2020-09-27 
+##  6 23B          2020-10-13 
+##  7 24B          2020-10-27 
+##  8 28B          2020-10-01 
+##  9 30B          2020-11-02 
+## 10 33F          2020-08-26 
+## 11 36B          2020-11-01 
+## 12 43B2         2020-11-15 
+## 13 45B2         2020-09-13 
+## 14 53B          2020-10-11 
+## 15 71B          2020-12-01 
+## 16 80B          2020-09-15 
+## 17 96B          2020-10-22 
+## 18 98B1         2020-08-16
 ```
   
 #### Drop I964  
 We drop I964 - Toraneskaien (B4), Mo i Rana (industry station)
-```{r}
 
+```r
 data_ind2 <- data_ind2 %>% filter(!STATION_CODE %in% "I964")
-
 ```
 
 #### Drop new stations, OR NOT
@@ -498,18 +664,17 @@ we may or may not drop the following stations (as they are new and not in the st
     + 19B (Svalbard)  78.33153483	15.14101617 (mail fra Norman torsdag 23. august 2019 10.15)
     + 28A2 Ålesund havn  
     + 97A3 Bodø havn  
-```{r}
 
+```r
 DROP_NEW_STATIONS <- FALSE
 
 if (DROP_NEW_STATIONS)
   data_ind2 <- data_ind2 %>% filter(!STATION_CODE %in% c("19B", "28A2", "97A3"))
-
 ```
 
 #### Drop NA stations  
-```{r}
 
+```r
 sel <- is.na(data_ind2$STATION_CODE)
 # data_ind2[sel,]
 
@@ -517,21 +682,32 @@ sel <- is.na(data_ind2$STATION_CODE)
 data_ind2 <- data_ind2[!sel,]
 
 cat("Removed", sum(sel), "recods that had no station code\n")
+```
 
+```
+## Removed 0 recods that had no station code
 ```
 
 #### Parameter list
-```{r}
 
+```r
 # xtabs(~PARAM, data_ind2 %>% filter(MYEAR == 2020))
-
 ```
 
 #### Check some perfluor compounds
-```{r}
+
+```r
 # grep("BD", unique(data_ind2$PARAM), value = TRUE) 
 grep("PFH", unique(data_ind2$PARAM), value = TRUE) 
+```
 
+```
+## [1] "PFHxA"                             "PFHpA"                            
+## [3] "PFHxS"                             "7H-dodekafluorheptansyre (HPFHpA)"
+## [5] "Perfluorheptansulfonat (PFHpS)"
+```
+
+```r
 # None of these:
 data_ind2 %>%
   filter(PARAM == "Perfluorheksansulfonat (PFHxS)") %>%
@@ -542,21 +718,58 @@ data_ind2 %>%
             Min_ww = min(VALUE_WW), max_ww = max(VALUE_WW), 
             Q_limit = median(VALUE_WW[!is.na(FLAG1)])) %>%
   select(-PARAM)
+```
 
+```
+## Warning in min(VALUE_WW): no non-missing arguments to min; returning Inf
+```
+
+```
+## Warning in max(VALUE_WW): no non-missing arguments to max; returning -Inf
+```
+
+```
+## `summarise()` has grouped output by 'MYEAR', 'PARAM', 'STATION_CODE',
+## 'LATIN_NAME'. You can override using the `.groups` argument.
+## Adding missing grouping variables: `PARAM`
+```
+
+```
+## # A tibble: 0 × 10
+## # Groups:   MYEAR, PARAM, STATION_CODE, LATIN_NAME [0]
+## # … with 10 variables: PARAM <chr>, MYEAR <dbl>, STATION_CODE <chr>,
+## #   LATIN_NAME <chr>, TISSUE_NAME <chr>, N <int>, Median_ww <dbl>,
+## #   Min_ww <dbl>, max_ww <dbl>, Q_limit <dbl>
+```
+
+```r
 # None of these:
 data_ind2 %>%
   filter(PARAM == "Perfluorheksansulfonat (PFHxS)" & LATIN_NAME %in% "Somateria mollissima") %>%
   select(MYEAR, PARAM, STATION_CODE, LATIN_NAME, TISSUE_NAME, VALUE_WW, FLAG1, UNIT, DRYWT, FAT_PERC) %>%
   arrange(TISSUE_NAME, VALUE_WW)
+```
 
+```
+##  [1] MYEAR        PARAM        STATION_CODE LATIN_NAME   TISSUE_NAME 
+##  [6] VALUE_WW     FLAG1        UNIT         DRYWT        FAT_PERC    
+## <0 rows> (or 0-length row.names)
 ```
 
 #### Check uncertainty (UNCRT)
-```{r}
 
+```r
 # str(data_ind2)
 xtabs(~ is.na(UNCRT), data_ind2)
+```
 
+```
+## is.na(UNCRT)
+## FALSE  TRUE 
+## 13310 11745
+```
+
+```r
 df1 <- data_ind2 %>%
   mutate(UNCRT_lacking = is.na(UNCRT)) %>%
   group_by(PARAM) %>%
@@ -570,29 +783,50 @@ df2 <- data_ind2 %>%
   pivot_wider(names_from = "Lab", values_from = "UNCRT_lacking")
 
 df <- left_join(df1, df2)
+```
 
+```
+## Joining, by = "PARAM"
+```
+
+```r
 df %>%
   filter(UNCRT_lacking == 0)
+```
 
-
+```
+## # A tibble: 93 × 5
+##    PARAM  UNCRT_lacking Eurofins  NILU  NIVA
+##    <chr>          <dbl>    <dbl> <dbl> <dbl>
+##  1 ACNE               0        0    NA    NA
+##  2 ACNLE              0        0    NA    NA
+##  3 AG                 0        0     0    NA
+##  4 ANT                0        0    NA    NA
+##  5 AS                 0        0     0    NA
+##  6 BAA                0        0    NA    NA
+##  7 BAP                0        0    NA    NA
+##  8 BBJF               0        0    NA    NA
+##  9 BDE100             0        0     0    NA
+## 10 BDE119             0        0     0    NA
+## # … with 83 more rows
 ```
 
 
 ### b1. Get tables submitted to ICES in 2016
 For comparison and getting the PARAM we want
-```{r}
+
+```r
 load(file = "../Milkys_2018/Input_data/22_ICES_tables_2016-10-06.RData")     # data file from script 22 used in 2017
 
 data_03_2016 <- data_03
 data_10_2016 <- data_10
 data_21_2016 <- data_21
 data_91_2016 <- data_91
-
 ```
 
 ### b2. Get tables submitted to ICES in 2019 (2018 data)
-```{r}
 
+```r
 folder_data <- "../Milkys/ICES/delivered to Mildir"
 # dir(folder_data)
 # fns <- dir(folder_data, ".NO", full.names = TRUE)
@@ -609,7 +843,6 @@ if (FALSE){
   data_2018[["91"]] %>% xtabs(~STATN, .)
 
 }
-
 ```
 
 
@@ -618,8 +851,8 @@ if (FALSE){
 ### c. Also get the newest 2017 data produced by script 10  
 We call it 'data_ind2_10'  
 We do this only to add uncertainty and quantification limit
-```{r}
 
+```r
 # NOT NEEDED - WE SHOULD ALREADY HAVE uncertainty and quantification limit
 # str(data_ind2)
 
@@ -630,24 +863,22 @@ We do this only to add uncertainty and quantification limit
 # xtabs(~is.na(QUANTIFICATION_LIMIT), data_ind2_10 %>% filter(PARAM %in% "EROD"))
 # xtabs(~is.na(DETLI), data_10_2016 %>% filter(PARAM %in% "EROD"))
 # data_10_2016 %>% filter(PARAM %in% "EROD") %>% pull(DETLI)
-
 ```
 
 ### d. Data used for submitting 2017 data
-```{r}
 
+```r
 df_ind_old <- read.csv("../Milkys_2018/Data/09_df_ind.csv", stringsAsFactors = FALSE)
 df_liver_old <- read.csv("../Milkys_2018/Data/09_df_liver.csv", stringsAsFactors = FALSE)
 df_muscle_old <- read.csv("../Milkys_2018/Data/09_df_muscle.csv", stringsAsFactors = FALSE)
 df_liver_33F_old <- readRDS("../Milkys_2018/Data/09_df_liver_33F.RData")
 df_muscle_33F_old <- readRDS("../Milkys_2018/Data/09_df_muscle_33F.RData")
-
 ```
 
 
 ### e1. 2019 fish  individual data
-```{r}
 
+```r
 # df_samples <- readRDS(file = "Data/01_df_samples_2019.rds")
 df_samples <- readRDS("Files_to_Jupyterhub_2020/Labware_samples_2020_2021-07-02.rds")
 
@@ -656,14 +887,13 @@ if (FALSE)
   df_samples %>% 
     select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>% 
     View()
-
 ```
 
 ### e2. Check for errors in df_samples    
 Lacking X_BULK_BIO where there should have been a number   
 - this is the case for 53B liver  
-```{r}
 
+```r
 check <- df_samples %>%
   # filter(AQUAMONITOR_CODE == "53B")  %>% 
   select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>% 
@@ -679,12 +909,17 @@ check <- df_samples %>%
   select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION2, BIOTA_SAMPLENO, X_BULK_BIO, Fish_no)
 
 check
+```
 
+```
+## [1] AQUAMONITOR_CODE TISSUE           DESCRIPTION2     BIOTA_SAMPLENO  
+## [5] X_BULK_BIO       Fish_no         
+## <0 rows> (or 0-length row.names)
 ```
 
 ### e3. Fix df_samples  
-```{r}
 
+```r
 # Check that we are doing the right thing below
 if (FALSE){
   df_samples %>%
@@ -711,7 +946,6 @@ df_samples <- df_samples %>%
     AQUAMONITOR_CODE == "53B" & TISSUE == "MU-Muskel" ~ as.character(Fish_no),
     TRUE ~ X_BULK_BIO)
   )
-
 ```
 
 
@@ -719,7 +953,8 @@ df_samples <- df_samples %>%
 Basis: the file of LABWARE samples (df_samples)   
 
 #### Liver except 33F
-```{r}
+
+```r
 # colnames(df_liver_old)
 df_liver <- df_samples %>%
   filter(TISSUE %in% "LI-Lever") %>%
@@ -761,15 +996,34 @@ df_liver <- df_liver %>%
   select(-Pooled_no)
 
 df_liver
-
 ```
 
-```{r}
+```
+## # A tibble: 230 × 10
+##    STATION_CODE SAMPLE_NO Pooled FiskN…¹ FiskN…² FiskN…³ Vekt1 Vekt2 Vekt3   sum
+##    <chr>            <dbl> <chr>    <dbl>   <dbl>   <dbl> <dbl> <dbl> <dbl> <dbl>
+##  1 02B                  1 enkel        1      NA      NA  12.2  NA      NA  12.2
+##  2 02B                  2 enkel        2      NA      NA  11.4  NA      NA  11.4
+##  3 02B                  3 bland        9      14      NA  11.2  12.4    NA  23.5
+##  4 02B                  4 bland        5       6      NA  12.1  12.0    NA  24.1
+##  5 02B                  5 bland        7      16      NA  11.5  11.9    NA  23.4
+##  6 02B                  6 bland        4      11      NA  12.3  12.0    NA  24.3
+##  7 02B                  7 bland        3      12      NA  12.2  12.1    NA  24.3
+##  8 02B                  8 bland        8      10      NA  11.8  11.9    NA  23.7
+##  9 10B                  1 bland        1       2      NA  12.9  11.8    NA  24.7
+## 10 10B                  3 bland        3      19      NA  11.4  12.0    NA  23.4
+## # … with 220 more rows, and abbreviated variable names ¹​FiskNr_1, ²​FiskNr_2,
+## #   ³​FiskNr_3
+```
+
+
+```r
 df_muscle <- df_samples %>%
   filter(TISSUE %in% "MU-Muskel" & AQUAMONITOR_CODE != "33F")
 ```
 
-```{r}
+
+```r
 df_muscle_old <- df_muscle
 ```
 
@@ -777,8 +1031,8 @@ df_muscle_old <- df_muscle
 
 
 #### Muscle (except 33F)
-```{r}
 
+```r
 # colnames(df_liver_old)
 df_muscle <- df_samples %>%
   filter(TISSUE %in% "MU-Muskel" & AQUAMONITOR_CODE != "33F") %>%
@@ -799,7 +1053,13 @@ if (mean(df_muscle$Pooled == "enkel") == 1){
 } else {
   cat(sum(df_muscle$Pooled == "bland"), "pooled samples of muscle! Check, and change code if necessary! \n")
 }
+```
 
+```
+## No pooled samples of muscle - OK to continue
+```
+
+```r
 if (FALSE)
   df_muscle %>%
     filter(Pooled == "bland")
@@ -813,13 +1073,29 @@ df_muscle <- df_muscle %>%
   )
 
 df_muscle
+```
 
+```
+## # A tibble: 255 × 5
+##    STATION_CODE SAMPLE_NO Pooled_no Pooled Fish_no
+##    <chr>            <dbl> <chr>     <chr>    <dbl>
+##  1 02B                  1 <NA>      enkel        1
+##  2 02B                  2 <NA>      enkel        2
+##  3 02B                  3 <NA>      enkel        3
+##  4 02B                  4 <NA>      enkel        4
+##  5 02B                  5 <NA>      enkel        5
+##  6 02B                  6 <NA>      enkel        6
+##  7 02B                  7 <NA>      enkel        7
+##  8 02B                  8 <NA>      enkel        8
+##  9 02B                  9 <NA>      enkel        9
+## 10 02B                 10 <NA>      enkel       10
+## # … with 245 more rows
 ```
 
 
 #### Liver 33F
-```{r}
 
+```r
 df <- df_samples %>%
   filter(TISSUE %in% "LI-Lever" & AQUAMONITOR_CODE %in% "33F") %>%
   group_by(AQUAMONITOR_CODE, BIOTA_SAMPLENO, X_BULK_BIO) %>%
@@ -843,12 +1119,12 @@ df_liver_33F <- 1:nrow(df) %>% map(get_list)
 df_liver_33F[[1]]$Fish_no <- 1:5
 df_liver_33F[[2]]$Fish_no <- 6:10
 df_liver_33F[[3]]$Fish_no <- 11:15
-
 ```
 
 
 #### Muscle 33F
-```{r}
+
+```r
 df <- df_samples %>%
   filter(TISSUE %in% "MU-Muskel" & AQUAMONITOR_CODE %in% "33F") %>%
   group_by(AQUAMONITOR_CODE, BIOTA_SAMPLENO, X_BULK_BIO) %>%
@@ -872,14 +1148,13 @@ df_muscle_33F <- 1:nrow(df) %>% map(get_list)
 df_muscle_33F[[1]]$Fish_no <- 1:5
 df_muscle_33F[[2]]$Fish_no <- 6:10
 df_muscle_33F[[3]]$Fish_no <- 11:15
-
 ```
 
 ## df_ind - length and weight data  
 Basis: the file of LABWARE samples (df_samples) and weight/length data (data_ind_fish)   
 Fish individual Length/weight are added to df_ind  
-```{r}
 
+```r
 df_ind <- bind_rows(
   # Get STATION_CODE + Fish_no for each part
   df_liver %>% 
@@ -901,6 +1176,13 @@ df_ind <- bind_rows(
   filter(!is.na(Fish_no))
 
 nrow(df_ind)
+```
+
+```
+## [1] 331
+```
+
+```r
 # Add fish length and weight to the data
 df_ind <- df_ind %>%
   safe_left_join(    # using safe_lef_join, see https://github.com/moodymudskipper/safejoin 
@@ -911,24 +1193,59 @@ df_ind <- df_ind %>%
   )
 
 range(df_ind$Length, na.rm = TRUE)  # must not include zero
-range(df_ind$Weight, na.rm = TRUE)  # must not include zero
+```
 
+```
+## [1] 28.7 99.0
+```
+
+```r
+range(df_ind$Weight, na.rm = TRUE)  # must not include zero
+```
+
+```
+## [1]  232 8500
 ```
 
 ### Check where we lack data  
 - Lack some gonad weight data  
 - 2019 - also lacking 13B, 19B, 43B2 and 53B
-```{r}
+
+```r
 # df_ind
 df_ind %>%
   group_by(STATION_CODE) %>%
   summarise_all(~mean(is.na(.)))
+```
 
+```
+## # A tibble: 18 × 5
+##    STATION_CODE Fish_no Length Weight Gonad_weight
+##    <chr>          <dbl>  <dbl>  <dbl>        <dbl>
+##  1 02B                0      0      0        0    
+##  2 10B                0      0      0        1    
+##  3 13B                0      0      0        0    
+##  4 15B                0      0      0        0    
+##  5 19B                0      0      0        0    
+##  6 23B                0      0      0        0.238
+##  7 24B                0      0      0        0.2  
+##  8 28B                0      0      0        1    
+##  9 30B                0      0      0        0.517
+## 10 33F                0      0      0        1    
+## 11 36B                0      0      0        0.158
+## 12 43B2               0      0      0        0    
+## 13 45B2               0      0      0        1    
+## 14 53B                0      0      0        0.375
+## 15 71B                0      0      0        0.652
+## 16 80B                0      0      0        0.333
+## 17 96B                0      0      0        0.6  
+## 18 98B1               0      0      0        1
 ```
 
 
 ## Table 00
-```{r}
+
+```r
 data_00 <- data.frame(RECID = "00", RLABO = "NIVA", CNTRY = 58, MYEAR = selected_year, RFVER = "3.2.5")
 ```
 
@@ -940,8 +1257,8 @@ data_00 <- data.frame(RECID = "00", RLABO = "NIVA", CNTRY = 58, MYEAR = selected
 Updated with Eider duck Somateria mollissima in 2019 (must be updated also for 2018)  
     + SMPNO = 9 (More or less by random)  
     + SMLNK = 11 - links to table 20, where it refers to SMTYP = HAN (hand picking)   
-```{r}
 
+```r
 df_smpno <- read.table(textConnection("
             LATIN_NAME SMPNO  SMLNK
         'Gadus morhua'     1      8
@@ -952,12 +1269,12 @@ df_smpno <- read.table(textConnection("
   'Platichthys flesus'     6      9
 'Somateria mollissima'     9     11
 "), header = TRUE, stringsAsFactors = FALSE)
-
 ```
 
 ### Create data 03 table  
 By aggregating the data  
-```{r}
+
+```r
 df_station <- data_ind2 %>%
   # filter(MYEAR %in% myear & !LATIN_NAME %in% 'Somateria mollissima') %>%  # NOTE: DELETES EIDER DUCK
   # filter(MYEAR %in% myear) %>%  # NOTE: DELETES EIDER DUCK
@@ -989,17 +1306,27 @@ data_03 <- data.frame(RECID = "03",
 ```
 
 ### Check that SMPNO has been set
-```{r}
 
+```r
 xtabs(~SPECI + is.na(SMPNO), data_03)
+```
 
+```
+##                       is.na(SMPNO)
+## SPECI                  FALSE
+##   Gadus morhua            17
+##   Littorina littorea       1
+##   Mytilus edulis          28
+##   Nucella lapillus         8
+##   Platichthys flesus       1
+##   Somateria mollissima     1
 ```
 
 
 ## Table 04
 ### a. Fish, test
-```{r}
 
+```r
 ex_station <- "30B"
 # ex_station <- "53B"
 
@@ -1011,38 +1338,154 @@ df2 <- df_liver %>%
 
 # 1. df_muscle
 df1 %>% head()
+```
+
+```
+## # A tibble: 6 × 5
+##   STATION_CODE SAMPLE_NO Pooled_no Pooled Fish_no
+##   <chr>            <dbl> <chr>     <chr>    <dbl>
+## 1 30B                  1 <NA>      enkel        1
+## 2 30B                  2 <NA>      enkel        2
+## 3 30B                  3 <NA>      enkel        3
+## 4 30B                  4 <NA>      enkel        4
+## 5 30B                  5 <NA>      enkel        5
+## 6 30B                  6 <NA>      enkel        6
+```
+
+```r
 # 2. df_muscle
 df2 %>% head()
+```
 
+```
+##   STATION_CODE SAMPLE_NO Pooled FiskNr_1 FiskNr_2 FiskNr_3    Vekt1    Vekt2
+## 1          30B         1  enkel        3       NA       NA 12.21746       NA
+## 2          30B         2  enkel        5       NA       NA 12.95388       NA
+## 3          30B         3  enkel        8       NA       NA 12.05124       NA
+## 4          30B         4  enkel       14       NA       NA 11.71092       NA
+## 5          30B         5  enkel       13       NA       NA 12.43485       NA
+## 6          30B         6  bland        6       40       30 12.03629 12.06585
+##      Vekt3      sum
+## 1       NA 12.21746
+## 2       NA 12.95388
+## 3       NA 12.05124
+## 4       NA 11.71092
+## 5       NA 12.43485
+## 6 11.99464 36.09677
+```
+
+```r
 # 3. Tables
 cat("Example tables from raw data: Station 30B \n--------------------------------------------\n\n")
+```
+
+```
+## Example tables from raw data: Station 30B 
+## --------------------------------------------
+```
+
+```r
 cat("Liver \n")
+```
+
+```
+## Liver
+```
+
+```r
 data_ind2 %>%
   filter(STATION_CODE %in% ex_station & MYEAR %in% selected_year & TISSUE_NAME %in% "Lever") %>%
   xtabs(~SAMPLE_NO2, .)
+```
+
+```
+## SAMPLE_NO2
+##   1   2   3   4   5   6   7   8   9  10  11  12 101 102 104 105 106 107 108 109 
+##  92  92  91  92  92  92  90  92  91  90  92  92   3   3   3   3   3   3   3   3 
+## 110 111 112 113 114 115 
+##   3   3   3   3   3   3
+```
+
+```r
 cat("\nMuscle \n")
+```
+
+```
+## 
+## Muscle
+```
+
+```r
 data_ind2 %>%
   filter(STATION_CODE %in% ex_station & MYEAR %in% selected_year & TISSUE_NAME %in% "Muskel") %>%
   xtabs(~SAMPLE_NO2, .)
+```
 
+```
+## SAMPLE_NO2
+##  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15 
+##  7  7  7  7  7  7  7  7  7  7  7  7  7  7  7
+```
+
+```r
 # Muscle
 i1 <- df1$Fish_no                                                     # all 'muscle' fish
 cat("Muscle fish (specimen numbers): \n")
-i1
+```
 
+```
+## Muscle fish (specimen numbers):
+```
+
+```r
+i1
+```
+
+```
+##  [1]  1  2  3  4  5  6  7  8  9 10 11 12 13 14 15
+```
+
+```r
 # Liver
 bulkid <- with(df2, paste(FiskNr_1, FiskNr_2, FiskNr_3, sep = "~"))   # collect ind. numbers
 bulkid <- gsub("~NA", "", bulkid, fixed = TRUE)                       # remove NA's
 pooled <- grepl("~", bulkid)                                          # which are pooled? 
 i2 <- df2$FiskNr_1[!pooled]                                           # get all unpooled fish
 cat("Fish without pooled samples: \n")
-i2
+```
 
+```
+## Fish without pooled samples:
+```
+
+```r
+i2
+```
+
+```
+## [1]  3  5  8 14 13
+```
+
+```r
 # Muscle samples (assumed to be unpooled)
 df <- tibble(SPECI = "Gadus morhua", Tissue = "Muscle", SUBNO = i1, BULKID = "")
 cat("\nMake df: \n")
-cat("- start with 'muscle' fish - nrow:", nrow(df), "\n")
+```
 
+```
+## 
+## Make df:
+```
+
+```r
+cat("- start with 'muscle' fish - nrow:", nrow(df), "\n")
+```
+
+```
+## - start with 'muscle' fish - nrow: 15
+```
+
+```r
 # Add unpooled liver samples NOT overlapping with muscle samples (quite rare situation)
 liver_extra_unpooled_samples <- i2[!i2 %in% i1]
 if (length(liver_extra_unpooled_samples) > 0)
@@ -1051,6 +1494,13 @@ if (length(liver_extra_unpooled_samples) > 0)
     tibble(SPECI = "Gadus morhua", Tissue = "Liver", SUBNO = liver_extra_unpooled_samples, BULKID = "")
   )
 cat("- add unpooled liver samples NOT overlapping with muscle samples - nrow:", nrow(df), "\n")
+```
+
+```
+## - add unpooled liver samples NOT overlapping with muscle samples - nrow: 15
+```
+
+```r
 liver_pooled_samples_n <- sum(pooled)
 
 # Add pooled liver samples 
@@ -1062,10 +1512,41 @@ if (liver_pooled_samples_n > 0){
   )
 }
 cat("- pooled samples added - nrow:", nrow(df), "\n")
+```
 
+```
+## - pooled samples added - nrow: 22
+```
+
+```r
 # 4. Final df
 df %>% as.data.frame()
+```
 
+```
+##           SPECI Tissue SUBNO   BULKID
+## 1  Gadus morhua Muscle     1         
+## 2  Gadus morhua Muscle     2         
+## 3  Gadus morhua Muscle     3         
+## 4  Gadus morhua Muscle     4         
+## 5  Gadus morhua Muscle     5         
+## 6  Gadus morhua Muscle     6         
+## 7  Gadus morhua Muscle     7         
+## 8  Gadus morhua Muscle     8         
+## 9  Gadus morhua Muscle     9         
+## 10 Gadus morhua Muscle    10         
+## 11 Gadus morhua Muscle    11         
+## 12 Gadus morhua Muscle    12         
+## 13 Gadus morhua Muscle    13         
+## 14 Gadus morhua Muscle    14         
+## 15 Gadus morhua Muscle    15         
+## 16 Gadus morhua  Liver    16  6~40~30
+## 17 Gadus morhua  Liver    17  7~19~27
+## 18 Gadus morhua  Liver    18 11~44~37
+## 19 Gadus morhua  Liver    19 10~22~23
+## 20 Gadus morhua  Liver    20  21~1~26
+## 21 Gadus morhua  Liver    21 12~41~24
+## 22 Gadus morhua  Liver    22 15~39~33
 ```
 
 
@@ -1074,8 +1555,8 @@ Note:
     + Muscle samples are assumed to be unpooled (except for 33F, which is treated specially below)  
     + The case of "unpooled liver samples NOT overlapping with muscle samples" has not been tested  
     + See "ICES/ICES - notes on SUBNO, BULKID etc.docx" for explanation  
-```{r}
 
+```r
 generate_04_fish_station <- function(station_code, latin_name, 
                                      df_individuals_muscle, df_individuals_liver,
                                      lookuptable_smpno = df_smpno){
@@ -1136,7 +1617,56 @@ generate_04_fish_station <- function(station_code, latin_name,
 df <- generate_04_fish_station("71B", "Gadus morhua", df_muscle, df_liver)
 df <- generate_04_fish_station("02B", "Gadus morhua", df_muscle, df_liver)
 df %>% as.data.frame()
+```
 
+```
+##    STATION_CODE   LATIN_NAME Fish_no NOIMP SAMPLE_NO_Muscle SAMPLE_NO_Liver
+## 1           02B Gadus morhua       1     1                1               1
+## 2           02B Gadus morhua       2     1                2               2
+## 3           02B Gadus morhua       3     1                3              NA
+## 4           02B Gadus morhua       4     1                4              NA
+## 5           02B Gadus morhua       5     1                5              NA
+## 6           02B Gadus morhua       6     1                6              NA
+## 7           02B Gadus morhua       7     1                7              NA
+## 8           02B Gadus morhua       8     1                8              NA
+## 9           02B Gadus morhua       9     1                9              NA
+## 10          02B Gadus morhua      10     1               10              NA
+## 11          02B Gadus morhua      11     1               11              NA
+## 12          02B Gadus morhua      12     1               12              NA
+## 13          02B Gadus morhua      13     1               13              NA
+## 14          02B Gadus morhua      14     1               14              NA
+## 15          02B Gadus morhua      16     1               15              NA
+## 16          02B Gadus morhua      NA     2               NA               3
+## 17          02B Gadus morhua      NA     2               NA               4
+## 18          02B Gadus morhua      NA     2               NA               5
+## 19          02B Gadus morhua      NA     2               NA               6
+## 20          02B Gadus morhua      NA     2               NA               7
+## 21          02B Gadus morhua      NA     2               NA               8
+##    SUBNO BULKID SMPNO
+## 1      1            1
+## 2      2            1
+## 3      3     21     1
+## 4      4     20     1
+## 5      5     18     1
+## 6      6     18     1
+## 7      7     19     1
+## 8      8     22     1
+## 9      9     17     1
+## 10    10     22     1
+## 11    11     20     1
+## 12    12     21     1
+## 13    13            1
+## 14    14     17     1
+## 15    16     19     1
+## 16    17            1
+## 17    18            1
+## 18    19            1
+## 19    20            1
+## 20    21            1
+## 21    22            1
+```
+
+```r
 # For further exploration
 
 explore_table_04 <- FALSE
@@ -1155,13 +1685,21 @@ if (explore_table_04){
 
 ### c. Create 'data_04_fish_main'  
 I.e. data_04 for all fish stations except 33F ('main table')
-```{r}
 
+```r
 stat_fish <- unique(df_muscle$STATION_CODE)
 df_station_species <- data_ind2 %>%
   filter(STATION_CODE %in% stat_fish & MYEAR %in% selected_year) %>%
   group_by(STATION_CODE, LATIN_NAME) %>%
   summarise(N = n())
+```
+
+```
+## `summarise()` has grouped output by 'STATION_CODE'. You can override using the
+## `.groups` argument.
+```
+
+```r
 data_04_fish_main <- 1:nrow(df_station_species) %>%  
   map_df(~generate_04_fish_station(
     df_station_species$STATION_CODE[.x], df_station_species$LATIN_NAME[.x],
@@ -1170,21 +1708,89 @@ data_04_fish_main <- 1:nrow(df_station_species) %>%
 
 # Check
 data_04_fish_main %>% filter(STATION_CODE == "36B") %>% as.data.frame()
+```
 
-
+```
+##    STATION_CODE   LATIN_NAME Fish_no NOIMP SAMPLE_NO_Muscle SAMPLE_NO_Liver
+## 1           36B Gadus morhua       1     1                1              NA
+## 2           36B Gadus morhua       2     1                2              NA
+## 3           36B Gadus morhua       3     1                3               3
+## 4           36B Gadus morhua       4     1                4              NA
+## 5           36B Gadus morhua       5     1                5               5
+## 6           36B Gadus morhua       6     1                6               6
+## 7           36B Gadus morhua       7     1                7              NA
+## 8           36B Gadus morhua       8     1                8               8
+## 9           36B Gadus morhua       9     1                9               9
+## 10          36B Gadus morhua      10     1               10              10
+## 11          36B Gadus morhua      12     1               12              12
+## 12          36B Gadus morhua      13     1               13              13
+## 13          36B Gadus morhua      14     1               14              14
+## 14          36B Gadus morhua      15     1               15              15
+## 15          36B Gadus morhua      16     1               11              11
+## 16          36B Gadus morhua      11     1               NA              NA
+## 17          36B Gadus morhua      17     1               NA              NA
+## 18          36B Gadus morhua      20     1               NA              NA
+## 19          36B Gadus morhua      21     1               NA              NA
+## 20          36B Gadus morhua      NA     2               NA               1
+## 21          36B Gadus morhua      NA     2               NA               2
+## 22          36B Gadus morhua      NA     2               NA               4
+## 23          36B Gadus morhua      NA     2               NA               7
+##    SUBNO BULKID SMPNO
+## 1      1     22     1
+## 2      2     23     1
+## 3      3            1
+## 4      4     24     1
+## 5      5            1
+## 6      6            1
+## 7      7     25     1
+## 8      8            1
+## 9      9            1
+## 10    10            1
+## 11    12            1
+## 12    13            1
+## 13    14            1
+## 14    15            1
+## 15    16            1
+## 16    11     25     1
+## 17    17     23     1
+## 18    20     22     1
+## 19    21     24     1
+## 20    22            1
+## 21    23            1
+## 22    24            1
+## 23    25            1
 ```
 ### d. Comparison with sample file   
 One example station  
-```{r}
 
+```r
 example_station <- "02B"
 
 df_samples %>%
   filter(AQUAMONITOR_CODE %in% example_station & TISSUE == "LI-Lever") %>% 
   select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>%
   arrange(TISSUE, BIOTA_SAMPLENO)
+```
 
-
+```
+##   AQUAMONITOR_CODE   TISSUE                              DESCRIPTION
+## 1              02B LI-Lever       02B Kirkøy (north) - torsk lever 1
+## 2              02B LI-Lever       02B Kirkøy (north) - torsk lever 2
+## 3              02B LI-Lever 02B Kirkøy (north) - torsk lever 9 og 14
+## 4              02B LI-Lever  02B Kirkøy (north) - torsk lever 5 og 6
+## 5              02B LI-Lever 02B Kirkøy (north) - torsk lever 7 og 16
+## 6              02B LI-Lever 02B Kirkøy (north) - torsk lever 4 og 11
+## 7              02B LI-Lever 02B Kirkøy (north) - torsk lever 3 og 12
+## 8              02B LI-Lever 02B Kirkøy (north) - torsk lever 8 og 10
+##   BIOTA_SAMPLENO X_BULK_BIO
+## 1              1       <NA>
+## 2              2       <NA>
+## 3              3      9, 14
+## 4              4       5, 6
+## 5              5      7, 16
+## 6              6      4, 11
+## 7              7      3, 12
+## 8              8      8, 10
 ```
 
 
@@ -1197,8 +1803,8 @@ Example of pooled sample:
 - SUBNO = 22 (a single line) corresponds to a single pooled liver sample, with SAMPLE_NO = 8   
 - BULKID = 22 (three lines) corresponds to the three fish (9,14,20) the liver sample is taken from,
 each of which has a length and weight, at 9 and 14 has in addition a muscle sample   
-```{r}
 
+```r
 data_04_fish_main %>% 
   filter(STATION_CODE == example_station) %>%
   # select(STATION_CODE, SUBNO, BULKID) %>%
@@ -1209,30 +1815,81 @@ data_04_fish_main %>%
   ) %>%
   arrange(Sort) %>%
   select(-Sort)
+```
 
+```
+## # A tibble: 21 × 9
+##    STATION_CODE LATIN_NAME   Fish_no NOIMP SAMPLE_N…¹ SAMPL…² SUBNO BULKID SMPNO
+##    <chr>        <chr>          <dbl> <dbl>      <dbl>   <dbl> <dbl> <chr>  <int>
+##  1 02B          Gadus morhua       1     1          1       1     1 ""         1
+##  2 02B          Gadus morhua       2     1          2       2     2 ""         1
+##  3 02B          Gadus morhua      13     1         13      NA    13 ""         1
+##  4 02B          Gadus morhua       9     1          9      NA     9 "17"       1
+##  5 02B          Gadus morhua      14     1         14      NA    14 "17"       1
+##  6 02B          Gadus morhua      NA     2         NA       3    17 ""         1
+##  7 02B          Gadus morhua       5     1          5      NA     5 "18"       1
+##  8 02B          Gadus morhua       6     1          6      NA     6 "18"       1
+##  9 02B          Gadus morhua      NA     2         NA       4    18 ""         1
+## 10 02B          Gadus morhua       7     1          7      NA     7 "19"       1
+## # … with 11 more rows, and abbreviated variable names ¹​SAMPLE_NO_Muscle,
+## #   ²​SAMPLE_NO_Liver
 ```
 
 
 ### f. Check number of individuals per sample 
-```{r}
+
+```r
 cat("Muscle - number of fish per sample:\n")
+```
+
+```
+## Muscle - number of fish per sample:
+```
+
+```r
 data_04_fish_main %>%
   filter(!is.na(SAMPLE_NO_Muscle)) %>%
   count(STATION_CODE, SUBNO, NOIMP) %>%
   xtabs(~NOIMP + STATION_CODE, .)
+```
 
+```
+##      STATION_CODE
+## NOIMP 02B 10B 13B 15B 19B 23B 24B 28B 30B 36B 43B2 45B2 53B 71B 80B 96B 98B1
+##     1  15  15  15  15  15  15  15  15  15  15   15   15  15  15  15  15   15
+```
+
+```r
 cat("\n\nLiver - number of fish per sample:\n")
+```
+
+```
+## 
+## 
+## Liver - number of fish per sample:
+```
+
+```r
 data_04_fish_main %>%
   filter(!is.na(SAMPLE_NO_Liver)) %>%
   count(STATION_CODE, SUBNO, NOIMP) %>%
   xtabs(~NOIMP + STATION_CODE, .)
 ```
 
+```
+##      STATION_CODE
+## NOIMP 02B 10B 13B 15B 19B 23B 24B 28B 30B 36B 43B2 45B2 53B 71B 80B 96B 98B1
+##     1   2  10   2  15  15   9   8  12   5  11   15    9  11   5  15  15   15
+##     2   6   5   6   0   0   6   6   2   0   4    0    0   0   0   0   0    0
+##     3   0   0   0   0   0   0   0   0   7   0    0    5   4   5   0   0    0
+```
+
 ### g. Fish table, add 33F (special case)  
 Assuming that 
     + Liver and muscle samples are from the same fish
     + All samples are pooled  
-```{r}
+
+```r
 #
 # We cheat and just do this manually
 #
@@ -1254,17 +1911,36 @@ df2 <- tibble(STATION_CODE = "33F", LATIN_NAME = "Platichthys flesus",
 df <- rbind(df1, df2)
 
 data_04_fish_33F <-  df %>% left_join(df_smpno %>% select(LATIN_NAME, SMPNO), by = "LATIN_NAME")
-
 ```
 
 ### h. Check 33F
-```{r}
+
+```r
 # Sample file
 df_samples %>%
   filter(AQUAMONITOR_CODE == "33F") %>% 
   select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>%
   arrange(TISSUE, BIOTA_SAMPLENO)
+```
 
+```
+##   AQUAMONITOR_CODE    TISSUE                   DESCRIPTION BIOTA_SAMPLENO
+## 1              33F  LI-Lever  33F Sande - Flatfisk lever 1              1
+## 2              33F  LI-Lever  33F Sande - Flatfisk lever 2              2
+## 3              33F  LI-Lever  33F Sande - Flatfisk lever 3              3
+## 4              33F MU-Muskel 33F Sande - Flatfisk muskel 1              1
+## 5              33F MU-Muskel 33F Sande - Flatfisk muskel 2              2
+## 6              33F MU-Muskel 33F Sande - Flatfisk muskel 3              3
+##   X_BULK_BIO
+## 1       <NA>
+## 2       <NA>
+## 3       <NA>
+## 4       <NA>
+## 5       <NA>
+## 6       <NA>
+```
+
+```r
 # Table 04  
 data_04_fish_33F %>%
   mutate(Sort = case_when(
@@ -1273,11 +1949,35 @@ data_04_fish_33F %>%
   ) %>%
   arrange(Sort) %>%
   select(-Sort)
+```
 
 ```
+## # A tibble: 18 × 9
+##    STATION_CODE LATIN_NAME      Fish_no NOIMP SAMPL…¹ SAMPL…² SUBNO BULKID SMPNO
+##    <chr>        <chr>             <int> <dbl>   <int>   <int> <dbl> <chr>  <int>
+##  1 33F          Platichthys fl…       1     1      NA      NA     1 "16"       6
+##  2 33F          Platichthys fl…       2     1      NA      NA     2 "16"       6
+##  3 33F          Platichthys fl…       3     1      NA      NA     3 "16"       6
+##  4 33F          Platichthys fl…       4     1      NA      NA     4 "16"       6
+##  5 33F          Platichthys fl…       5     1      NA      NA     5 "16"       6
+##  6 33F          Platichthys fl…      NA     5       1       1    16 ""         6
+##  7 33F          Platichthys fl…       6     1      NA      NA     6 "17"       6
+##  8 33F          Platichthys fl…       7     1      NA      NA     7 "17"       6
+##  9 33F          Platichthys fl…       8     1      NA      NA     8 "17"       6
+## 10 33F          Platichthys fl…       9     1      NA      NA     9 "17"       6
+## 11 33F          Platichthys fl…      10     1      NA      NA    10 "17"       6
+## 12 33F          Platichthys fl…      NA     5       2       2    17 ""         6
+## 13 33F          Platichthys fl…      11     1      NA      NA    11 "18"       6
+## 14 33F          Platichthys fl…      12     1      NA      NA    12 "18"       6
+## 15 33F          Platichthys fl…      13     1      NA      NA    13 "18"       6
+## 16 33F          Platichthys fl…      14     1      NA      NA    14 "18"       6
+## 17 33F          Platichthys fl…      15     1      NA      NA    15 "18"       6
+## 18 33F          Platichthys fl…      NA     5       3       3    18 ""         6
+## # … with abbreviated variable names ¹​SAMPLE_NO_Muscle, ²​SAMPLE_NO_Liver
+```
 ### i1. Extra samples that may be needed for fish biological effects  
-```{r}
 
+```r
 fish_species <- "Gadus morhua"
 sel_tissues <- c("Blod", "Galle", "Liver - microsome")
 
@@ -1301,7 +2001,13 @@ check <- df1 %>%
   filter(is.na(In_table_04))
 
 cat(nrow(check), "specimens lack in 'data_04_fish_main'")
+```
 
+```
+## 0 specimens lack in 'data_04_fish_main'
+```
+
+```r
 if (nrow(check) > 0){
   
   stop("You must create 'data_04_fish_extra' for the lacking specimens. See nextchunk. (Error in section 'Table 04 i1')")
@@ -1311,15 +2017,18 @@ if (nrow(check) > 0){
   cat("\nNo specimens lacking, no need to create extra table 04 data for biological effect data")
   
 }
+```
 
-
+```
+## 
+## No specimens lacking, no need to create extra table 04 data for biological effect data
 ```
 
 ### i2. Fish table, fish specimens only used for biological effects  
 - If any speciemns in 23B, 53B, 30B are only used for biological effects, they have not been included in df_samples and therefore they don't make it into 'data_04_fish_main'   
 - Note: code is not finished - see comments    
-```{r}
 
+```r
 if (nrow(check) > 0){
   
   # NOTE: this code is not finished - must add new SUBNO numbers (wher it says 'extra_subno_numbers' in the code
@@ -1337,13 +2046,16 @@ if (nrow(check) > 0){
   cat("These extra data ('data_04_fish_extra') is not needed in this case (see previous chunk) ")
   
 }
+```
 
+```
+## These extra data ('data_04_fish_extra') is not needed in this case (see previous chunk)
 ```
 
 
 ### j1. Fish table, join together  
-```{r}
 
+```r
 if (nrow(check) == 0){
 
   data_04_fish <- rbind(data_04_fish_main, data_04_fish_33F)
@@ -1355,13 +2067,16 @@ if (nrow(check) == 0){
 }
 
 cat("'data_04_fish' created - it has", nrow(data_04_fish), "lines")
+```
 
+```
+## 'data_04_fish' created - it has 390 lines
 ```
 
 
 ### j2. Check fish table
-```{r}
 
+```r
 check <- data_04_fish %>%
     group_by(STATION_CODE, SMPNO, SUBNO) %>%
     mutate(n = n()) %>%
@@ -1374,7 +2089,13 @@ if (nrow(check) > 0){
 } else {
   cat("No duplicates in 'data_04_fish' \n")
 }
+```
 
+```
+## No duplicates in 'data_04_fish'
+```
+
+```r
 if (FALSE){
 
   check2 <- data_04_fish_main %>%
@@ -1396,7 +2117,8 @@ if (FALSE){
 
 
 ### k. Mussels 
-```{r}
+
+```r
 data_04_bluemussel <- data_ind2 %>%
   filter(LATIN_NAME %in% "Mytilus edulis" & MYEAR %in% selected_year) %>%
   mutate(SAMPLE_NO2 = SAMPLE_NO) %>%
@@ -1408,7 +2130,8 @@ data_04_bluemussel <- data_04_bluemussel %>%
 ```
 
 ### l. Snails
-```{r}
+
+```r
 data_04_snail <- data_ind2 %>%
   filter(LATIN_NAME %in% c("Nucella lapillus", "Littorina littorea") & MYEAR %in% selected_year) %>%
   group_by(STATION_CODE, LATIN_NAME) %>%
@@ -1419,11 +2142,26 @@ data_04_snail <- data_ind2 %>%
 data_04_snail
 ```
 
+```
+## # A tibble: 9 × 4
+##   STATION_CODE LATIN_NAME         SAMPLE_NO2 SMPNO
+##   <chr>        <chr>                   <dbl> <int>
+## 1 11G          Nucella lapillus            1     3
+## 2 131G         Nucella lapillus            1     3
+## 3 15G          Nucella lapillus            1     3
+## 4 227G2        Nucella lapillus            1     3
+## 5 22G          Nucella lapillus            1     3
+## 6 36G          Nucella lapillus            1     3
+## 7 71G          Littorina littorea          1     3
+## 8 76G          Nucella lapillus            1     3
+## 9 98G          Nucella lapillus            1     3
+```
+
 
 ### m. Eider duck  
 For eider duck, the same SAMPLE_NO2 = 1 for blood and SAMPLE_NO2 = 1 for egg doesn't mean that this is the same individual (obviously). So we use SUBNO 1-15 for blood SAMPLE_NO 1-15, and SUBNO 16-30 for egg SAMPLE_NO 1-15.  
-```{r}
 
+```r
 data_04_eider <- 
   data_ind2 %>%
   filter(LATIN_NAME %in% c("Somateria mollissima") & MYEAR %in% selected_year) %>% # View()
@@ -1436,14 +2174,48 @@ data_04_eider <-
   ungroup()
 data_04_eider$SUBNO <- 1:nrow(data_04_eider)     # SUBNO given = 1-30
 data_04_eider
+```
 
+```
+##    STATION_CODE           LATIN_NAME TISSUE_NAME SAMPLE_NO2   n SMPNO SUBNO
+## 1           19N Somateria mollissima        Blod          1 100     9     1
+## 2           19N Somateria mollissima        Blod          2  99     9     2
+## 3           19N Somateria mollissima        Blod          3  99     9     3
+## 4           19N Somateria mollissima        Blod          4 101     9     4
+## 5           19N Somateria mollissima        Blod          5 100     9     5
+## 6           19N Somateria mollissima        Blod          6  99     9     6
+## 7           19N Somateria mollissima        Blod          7  98     9     7
+## 8           19N Somateria mollissima        Blod          8  98     9     8
+## 9           19N Somateria mollissima        Blod          9 100     9     9
+## 10          19N Somateria mollissima        Blod         10 101     9    10
+## 11          19N Somateria mollissima        Blod         11 101     9    11
+## 12          19N Somateria mollissima        Blod         12  97     9    12
+## 13          19N Somateria mollissima        Blod         13  98     9    13
+## 14          19N Somateria mollissima        Blod         14  99     9    14
+## 15          19N Somateria mollissima        Blod         15  96     9    15
+## 16          19N Somateria mollissima         Egg          1 101     9    16
+## 17          19N Somateria mollissima         Egg          2 101     9    17
+## 18          19N Somateria mollissima         Egg          3 101     9    18
+## 19          19N Somateria mollissima         Egg          4 101     9    19
+## 20          19N Somateria mollissima         Egg          5 101     9    20
+## 21          19N Somateria mollissima         Egg          6 101     9    21
+## 22          19N Somateria mollissima         Egg          7 101     9    22
+## 23          19N Somateria mollissima         Egg          8 101     9    23
+## 24          19N Somateria mollissima         Egg          9 101     9    24
+## 25          19N Somateria mollissima         Egg         10 101     9    25
+## 26          19N Somateria mollissima         Egg         11 101     9    26
+## 27          19N Somateria mollissima         Egg         12 101     9    27
+## 28          19N Somateria mollissima         Egg         13 101     9    28
+## 29          19N Somateria mollissima         Egg         14 101     9    29
+## 30          19N Somateria mollissima         Egg         15 101     9    30
 ```
 
 ### n. Put together data_04  
 For blue mussel and snail, SUBNO = SAMPLE_NO2  
 For fish, we have constructed SUBNO (see above)  
 For eider, SUBNO 
-```{r}
+
+```r
 data_04_1 <- data.frame(
   RECID = "04", 
   CRUIS = "AA711", 
@@ -1524,11 +2296,11 @@ data_04 <- rbind(data_04_1, data_04_2, data_04_3, data_04_4)
 # data_04 %>% filter(STNNO %in% "36B")
 # data_04 %>% filter(is.na(SUBNO))
 # data_04 %>% filter(SUBNO == "")
-
 ```
 
 ### o. Check the crucial columns
-```{r}
+
+```r
 check <- apply(
   is.na(data_04 %>% select( RECID,  CRUIS,  STNNO,  SMPNO,  SUBNO,  NOIMP)), 
   2, sum
@@ -1538,14 +2310,28 @@ if (sum(check == rep(0, 6)) == 6){
 } else {
   cat("ERROR! One or more columns RECID,  CRUIS,  STNNO,  SMPNO,  SUBNO,  NOIMP lack data\n\n")
 }
+```
 
+```
+## All records have values for RECID,  CRUIS,  STNNO,  SMPNO,  SUBNO,  NOIMP
+```
+
+```r
 apply(is.na(data_04), 2, sum)
+```
+
+```
+##  RECID  CRUIS  STNNO  SMPNO  SUBNO  NOIMP  ORGSP  SEXCO  STAGE  CONES  ASTSA 
+##      0      0      0      0      0      0    511    472    511    511    511 
+##  NODIS BULKID 
+##    511     90
+```
+
+```r
 # data_04 %>% filter(STNNO %in% c("24B", "53B", "96B")) %>% arrange(STNNO, SMPNO, SUBNO)
 
 
 # data_04 %>% filter(is.na(SUBNO))
-
-
 ```
 
 ## Table 21
@@ -1556,7 +2342,8 @@ then biological effects added in the end. They have only meaning internally in t
 SO FAR WE JUST USE LAST YEAR'S TABLE :-)  
 
 ### Generate lookup
-```{r}
+
+```r
 df_amlnk <- data_10_2016 %>%
   group_by(PARAM, AMLNK) %>%
   summarise(n = n(),
@@ -1568,8 +2355,8 @@ df_amlnk$n <- NULL
 - GOSOI (gonadal somatic index = (gonad weight/whole organism weight) x 100), https://vocab.ices.dk/?CodeID=51654     
 - INTF% = intersex, https://vocab.ices.dk/?CodeID=53682       
 - C13D and N15D = isotope ratio δ13C:12C (https://vocab.ices.dk/?CodeID=197194) and isotope ratio δ15N:14N (https://vocab.ices.dk/?CodeID=197195)   
-```{r}
 
+```r
 params_new <- c("GOSOI", "INT%", "C13D", "N15D")
 # params_new <- c("GOSOI", "INT%")
 
@@ -1584,7 +2371,6 @@ for (param in params_new){
     )
   }
 }
-
 ```
 
 
@@ -1599,8 +2385,8 @@ Table 10 is the combined rows of the following tables:
 ### a1. Make data_conc_1   
 **Note make sure that all estimates are on wet-weight basis**    
 - Note that siloxanes "D4", "D5", "D6" are not included because they are not in the ICES vocabulary  
-```{r}
 
+```r
 par_ices <- unique(data_10_2016$PARAM) %>% sort()
 # Add some
 par_ices <- c(par_ices, "HCHA", "HCHG", "HCB") %>% unique() %>% sort() 
@@ -1611,7 +2397,14 @@ par_ices <- c(par_ices, "HCHA", "HCHG", "HCB") %>% unique() %>% sort()
 
 par_niva <- data_ind2 %>% filter(MYEAR %in% selected_year) %>% pull(PARAM) %>% unique() %>% sort()
 par_ices[!par_ices %in% par_niva]
+```
 
+```
+##  [1] "BD100"  "BD126"  "BD153"  "BD154"  "BD183"  "BD209"  "FATWT%" "LNMEA" 
+##  [9] "PFDA"   "PFUnda" "TBBPA"  "TBP"    "TBTIN"  "WTMEA"
+```
+
+```r
 data_conc_1 <- data_ind2 %>% 
   filter(MYEAR %in% selected_year) %>%
   mutate(SAMPLE_NO2 =                              # setting SAMPLE_NO2 (which is used in 2018 version)
@@ -1623,43 +2416,98 @@ data_conc_1 <- data_ind2 %>%
 # data_ind2 %>% 
 #   filter(STATION_CODE == "23B" & PARAM %in% "EROD") %>% 
 #   select(STATION_CODE, PARAM, SAMPLE_NO, SAMPLE_NO2)
-
 ```
 
 ### a2. Change parameter names where ICES name differs  
-```{r}
 
+```r
 # Change BDE to BD for the following. NOTE: "BDE28"  "BDE47"  "BDE99" should NOT be changed (!)
 sel <- data_conc_1$PARAM %in% c("BDE100", "BDE126", "BDE153", "BDE154", "BDE183", "BDE209")
 data_conc_1$PARAM[sel] <- sub("BDE", "BD", data_conc_1$PARAM[sel])
 
 sel <- data_conc_1$PARAM %in% "PFUdA"; sum(sel)
+```
+
+```
+## [1] 192
+```
+
+```r
 data_conc_1$PARAM[sel] <- "PFUnda"
 sel <- data_conc_1$PARAM %in% "PFDcA"; sum(sel)
+```
+
+```
+## [1] 192
+```
+
+```r
 data_conc_1$PARAM[sel] <- "PFDA"
 
 sel <- data_conc_1$PARAM %in% "TBT"; sum(sel)   # Note this is TBT cation weight = 2.44 * TBTIN (TBT tin weight)
+```
+
+```
+## [1] 36
+```
+
+```r
 data_conc_1$PARAM[sel] <- "TBSN+"
 
 sel <- data_conc_1$PARAM %in% "Delta13C"; sum(sel)  
+```
+
+```
+## [1] 340
+```
+
+```r
 data_conc_1$PARAM[sel] <- "C13D"
 sel <- data_conc_1$PARAM %in% "Delta15N"; sum(sel)  
+```
+
+```
+## [1] 340
+```
+
+```r
 data_conc_1$PARAM[sel] <- "N15D"
 
 # This did NOT do in 2018:
 # Fat:
 sel <- data_conc_1$PARAM %in% "Fett"; sum(sel)
-data_conc_1$PARAM[sel] <- "FATWT%"
+```
 
+```
+## [1] 332
+```
+
+```r
+data_conc_1$PARAM[sel] <- "FATWT%"
 ```
 
 ### a2. Filter data to keep only those parameters that we need
-```{r}
 
+```r
 # Parameters 
 par_niva2 <- data_conc_1 %>% pull(PARAM) %>% unique() %>% sort()
 cat("\nCheck parameters not found in this year's data:  \n")
+```
+
+```
+## 
+## Check parameters not found in this year's data:
+```
+
+```r
 par_ices[!par_ices %in% par_niva2]   # "FATWT%" "LNMEA"  "TBP"    "WTMEA"  
+```
+
+```
+## [1] "LNMEA" "TBBPA" "TBP"   "TBTIN" "WTMEA"
+```
+
+```r
                                      # We will add "FATWT%" and "LNMEA" later
 
 # Let us use TBSN+ instead of TBTIN
@@ -1671,38 +2519,146 @@ par_ices <- c(par_ices, "TBSN+")
 data_conc_2 <- data_conc_1 %>% filter(PARAM %in% par_ices)
 
 cat("\nCheck final parameters:\n")
+```
+
+```
+## 
+## Check final parameters:
+```
+
+```r
 tab <- data_conc_2 %>% xtabs(~PARAM, .)
 tab
+```
 
+```
+## PARAM
+##   ACNE  ACNLE     AG   ALAD    ANT     AS    BAA    BAP BAP3OH   BBJF  BD100 
+##     26     26    335     47     26    341     26     26     60     26    213 
+##  BD126  BD153  BD154  BD183  BD209  BDE28  BDE47  BDE99  BGHIP    BKF  CB101 
+##    213    213    213    213    213    213    213    213     26     26    331 
+##  CB118  CB138  CB153  CB180   CB28   CB52     CD     CO     CR     CU  DBA3A 
+##    331    331    331    331    331    331    341    334    340    341     26 
+##  DDEPP  DDTPP DRYWT%   EROD FATWT%    FLE    FLU  HBCDA  HBCDB  HBCDG    HCB 
+##    149    149    581     46    332     26     26    232    232    232    176 
+##   HCHA   HCHG     HG   ICDP   MCCP    NAP     NI     PA  PA1OH     PB   PFBS 
+##    146    146    371     26    230     26    340     26     60    341      6 
+##   PFDA  PFHpA  PFHxA   PFNA   PFOA   PFOS  PFOSA PFUnda    PYR PYR1OH   SCCP 
+##    192    192    192    192    192    192    192    192     26     60    230 
+##     SN  TBSN+  TDEPP   VDSI     ZN 
+##    335     36    149      8    341
+```
+
+```r
 # cat("\n\nCheck excluded parameters:\n")
 # data_conc_1 %>% filter(!PARAM %in% par_ices) %>% xtabs(~PARAM, .)
 
 # Parameters with data over LOQ that are excluded:
 cat("\n\nParameters with data over LOQ that are excluded:\n")
+```
+
+```
+## 
+## 
+## Parameters with data over LOQ that are excluded:
+```
+
+```r
 tab <- data_conc_1 %>% 
   filter(!PARAM %in% par_ices & is.na(FLAG1)) %>% 
   xtabs(~PARAM, .) %>% 
   sort(decreasing = TRUE)
 tab
+```
+
+```
+## PARAM
+##                       % C                       % N                       C/N 
+##                       340                       340                       340 
+##                      C13D                      N15D                     CB_S7 
+##                       340                       340                       325 
+##                     HBCDD                     BDE6S                     BDESS 
+##                       208                       201                       201 
+##                     BDE49                      PFAS                     BDE66 
+##                       186                       181                       154 
+##                     DDTEP                    BDE119                  Dieldrin 
+##                       145                       142                       117 
+##                        D4                        D5          Nonaklor, trans- 
+##                       106                       106                       104 
+##                     Mirex      Oktaklorstyren (OCS)                        D6 
+##                       100                        94                        93 
+##                     PROTV        alfa-Klordan (cis)         Heptaklor epoksid 
+##                        93                        92                        87 
+##            MCCP eksl. LOQ        Toksafen Parlar 50                     DDDOP 
+##                        84                        76                        69 
+##        Toksafen Parlar 26                     DDTOP                Oxyklordan 
+##                        60                        59                        54 
+##                     AY380                     PYR1O            SCCP eksl. LOQ 
+##                        51                        51                        51 
+##     gamma-Klordan (trans)                      PA1O                     CB105 
+##                        44                        34                        30 
+##                     CB128                     CB156                     CB167 
+##                        30                        30                        30 
+##                     CB187                      CB99                 Sum-HepCB 
+##                        30                        30                        30 
+##                     CB170                      CB74                      PeCB 
+##                        29                        29                        29 
+##                     CB183                 Sum-HexCB                     BDE77 
+##                        28                        28                        27 
+##                     CB209                     BAP3O                     CB157 
+##                        27                        26                        26 
+##                 Sum-PenCB                     CB114     Tributyltinn (TBT)-Sn 
+##                        25                        24                        24 
+##                     CB123                      CB66                 Sum-TriCB 
+##                        23                        23                        23 
+##                     BDE17                      KPAH                       P_S 
+##                        22                        22                        22 
+##                     PAH16                 Sum-TetCB                     CB141 
+##                        22                        22                        21 
+##                     DDEOP                     CB189                     CB194 
+##                        21                        20                        20 
+##                     CB206                      CB31                      CB47 
+##                        20                        20                        20 
+##                    Krysen                     MBTIN    Monobutyltinn (MBT)-Sn 
+##                        19                        18                        18 
+##                     CB149                     DBTIN   Dibutyltinn-Sn (DBT-Sn) 
+##                        16                        16                        16 
+##                     PFHxS                       QCB                       TBA 
+##                        15                        15                        15 
+##        Toksafen Parlar 62                     TPTIN    Trifenyltinn (TPhT)-Sn 
+##                        11                         9                         9 
+##                     CB122                     BDE85 Total PFOS/PFOA inkl. LOQ 
+##                         8                         7                         6 
+##                      CB33                      CB37                      CB18 
+##                         5                         5                         2 
+##                    Endrin                    BDE184                     BDE71 
+##                         2                         1                         1 
+##                      HCHB                     INTF% 
+##                         1                         1
+```
+
+```r
 # dput(names(tab)) 
-
 ```
-```{r}
 
-
-```
 
 
 ### a3. Check that basis is only W (wet weight basis)
-```{r}
 
+```r
 data_conc_2 %>% xtabs(~BASIS, .)
+```
 
+```
+## BASIS
+##     W 
+## 13227
 ```
 
 ### a4. Check availability of dry weight  
 - Should be lacking only for blood and egg   
-```{r}
+
+```r
 # Dry weight:
 # sel <- data_conc_2$PARAM %in% "DRYWT%"; sum(sel)
 
@@ -1715,7 +2671,16 @@ data_conc_2 %>%
   filter(!is.na(CB118)) %>%
   count(STATION_CODE, TISSUE_NAME, Lack_dryweight = is.na(`DRYWT%`)) %>%
   filter(Lack_dryweight)
+```
 
+```
+##   STATION_CODE TISSUE_NAME Lack_dryweight  n
+## 1          02B       Lever           TRUE  1
+## 2          19N        Blod           TRUE 15
+## 3          19N         Egg           TRUE 15
+```
+
+```r
 # Check availability of dry weight for HG (as example for muscle) 
 data_conc_2 %>%
   filter(PARAM %in% c("DRYWT%", "HG")) %>%
@@ -1725,19 +2690,27 @@ data_conc_2 %>%
   filter(!is.na(HG)) %>%
   count(STATION_CODE, TISSUE_NAME, Lack_dryweight = is.na(`DRYWT%`)) %>%
   filter(Lack_dryweight)
+```
 
+```
+##   STATION_CODE TISSUE_NAME Lack_dryweight  n
+## 1          19N        Blod           TRUE 15
+## 2          19N         Egg           TRUE 15
+```
+
+```r
 # Check bird data
 # data_conc_2 %>%
 #   filter(STATION_CODE == "19N") %>%
 #   count(TISSUE_NAME, PARAM)
-
 ```
 
 ### a5. Check uncertainty (UNCRT)   
 If problems here, check either   
     - script 34 (for chemical variables from Eurofins or NILU)  
     - script 02 (for VDSI and the biological effect variables in cod)  
-```{r}
+
+```r
 labels <- c("1 - Under LOQ", "2 - Over LOQ, NA", 
           "3 - Over LOQ, zero", "4 - Over LOQ, OK")
 
@@ -1745,7 +2718,16 @@ labels <- c("1 - Under LOQ", "2 - Over LOQ, NA",
 data_conc_2 %>% 
   filter(PARAM == "BDE47" & is.na(FLAG1)) %>%
   xtabs(~Lab + is.na(UNCRT), .)
+```
 
+```
+##           is.na(UNCRT)
+## Lab        FALSE
+##   Eurofins   183
+##   NILU        16
+```
+
+```r
 df_uncertainty <- data_conc_2 %>%
   mutate(Uncert = 
            case_when(
@@ -1760,7 +2742,26 @@ tab <- df_uncertainty %>%
   count(PARAM, Lab, Uncert) %>%
   pivot_wider(names_from = "Uncert", values_from = "n", values_fill = 0, names_sort = TRUE)
 tab
+```
 
+```
+## # A tibble: 113 × 5
+##    PARAM Lab      `1 - Under LOQ` `2 - Over LOQ, NA` `4 - Over LOQ, OK`
+##    <chr> <chr>              <int>              <int>              <int>
+##  1 ACNE  Eurofins              26                  0                  0
+##  2 ACNLE Eurofins              18                  0                  8
+##  3 AG    Eurofins              77                  0                228
+##  4 AG    NILU                   0                  0                 30
+##  5 ALAD  NIVA                   0                 47                  0
+##  6 ANT   Eurofins               8                  0                 18
+##  7 AS    Eurofins               0                  0                311
+##  8 AS    NILU                   0                  0                 30
+##  9 BAA   Eurofins               8                  0                 18
+## 10 BAP   Eurofins              14                  0                 12
+## # … with 103 more rows
+```
+
+```r
 sel <- names(tab) %in% labels
 tot <- apply(tab[sel], 1, sum, na.rm = TRUE)       # note hard-coded columns
 sel <- names(tab) %in% c("2 - Over LOQ, NA", "3 - Over LOQ, zero")
@@ -1776,14 +2777,31 @@ tab <- tab %>%
   arrange(NotOK)
 
 tab
+```
 
+```
+## # A tibble: 113 × 7
+##    PARAM Lab      `1 - Under LOQ` `2 - Over LOQ, NA` 4 - Over LOQ,…¹ Total NotOK
+##    <chr> <chr>              <int>              <int>           <int> <int> <dbl>
+##  1 ACNLE Eurofins              18                  0               8    26     0
+##  2 AG    Eurofins              77                  0             228   305     0
+##  3 AG    NILU                   0                  0              30    30     0
+##  4 ANT   Eurofins               8                  0              18    26     0
+##  5 AS    Eurofins               0                  0             311   311     0
+##  6 AS    NILU                   0                  0              30    30     0
+##  7 BAA   Eurofins               8                  0              18    26     0
+##  8 BAP   Eurofins              14                  0              12    26     0
+##  9 BBJF  Eurofins               5                  0              21    26     0
+## 10 BD100 Eurofins               1                  0             182   183     0
+## # … with 103 more rows, and abbreviated variable name ¹​`4 - Over LOQ, OK`
+```
+
+```r
 # To print list of parameters
 # tab %>%
 #   filter(NotOK == 100) %>%
 #   pull(PARAM) %>% 
 #   dput()
-
-
 ```
 
 
@@ -1791,8 +2809,8 @@ tab
     - Must be given for all EROD samples  
     - Taken from data_ind_fish
     - Creates `data_conc`    
-```{r}   
 
+```r
 # Make data to go into 'data_to_add' below (Gonadal somatic index )
 data_for_leftjoin <- data_ind_fish %>%
   mutate(VALUE_WW = Gonad_weight/Weight*100) %>%
@@ -1837,13 +2855,12 @@ if (FALSE){
 if (sum(data_conc_2$PARAM %in% "GOSOI") == 0){      # Make sure we add data only once
   data_conc <- bind_rows(data_conc_2, data_to_add)
 }
-
 ```
 
 ### a6-2. Remove EROD without GOSOI    
 - EROD withou GOSOI is an error in the OCES database ('Cross record/field check (condition not met)')    
-```{r}
 
+```r
 data_conc_back <- data_conc
 # data_conc <- data_conc_back
 
@@ -1858,22 +2875,45 @@ data_conc <- data_conc %>%
   filter(!(PARAM %in% "EROD" & is.na(GOSOI)))
 
 message(nrow(data_conc_back) - nrow(data_conc), " EROD observations without GOSOI deleted")
+```
 
+```
+## 2 EROD observations without GOSOI deleted
 ```
 
 
-```{r}
-```
+
 
 
 
 ### b. Unit lookup table  
 - From UNIT (Nivabase) to MUNIT (ICES)  
-```{r}
 
+```r
 xtabs(~UNIT, data_conc)
-xtabs(~MUNIT, data_10_2016)
+```
 
+```
+## UNIT
+##                   %                 idx               Index             MG_P_KG 
+##                 913                  44                   8                3760 
+##   ng/min/mg protein pmol/min/mg protein             UG_P_KG 
+##                  47                  44                8453
+```
+
+```r
+xtabs(~MUNIT, data_10_2016)
+```
+
+```
+## MUNIT
+##                   %                   g               mg/kg                  mm 
+##                 906                 306                3535                 306 
+##                ng/g   ng/min/mg protein pmol/min/mg protein               ug/kg 
+##                 180                  46                  45                7058
+```
+
+```r
 # we need only these units, as the rest will be dropped
 df_munit <- data.frame(
   UNIT = c("MG_P_KG", "NG_P_G", "UG_P_KG", "PERCENT",
@@ -1895,14 +2935,14 @@ df_munit <- data.frame(
 # data_10_2016 %>% 
 #   filter(PARAM %in% c("PA1O", "PYR1O", "BAP3O", "PA1OH", "PYR1OH", "BAP3OH", "ALAD", "EROD")) %>%
 #   count(PARAM, MUNIT)
-
 ```
 
 
 ### c1. Fish, get SUBNO
 
 #### c1a1. Definitions
-```{r}
+
+```r
 # Define fish species
 fish_species <- c('Gadus morhua', 'Platichthys flesus', 'Limanda limanda')
 
@@ -1919,19 +2959,27 @@ df_matrx <- tibble(
 #### c1a2. Check when SAMPLE_NO_Muscle =/= Fish_no  
 This could potentially cause trouble, as biological effects follow Fish_no, not SAMPLE_NO_Muscle as assumed in c1a3.   
 But this is no problem: only 2 cases, for 02B and 36B - which don't have biological effects   
-```{r}
 
+```r
 data_04_fish %>%
   filter(Fish_no != SAMPLE_NO_Muscle)
+```
 
+```
+## # A tibble: 2 × 9
+##   STATION_CODE LATIN_NAME   Fish_no NOIMP SAMPLE_NO…¹ SAMPL…² SUBNO BULKID SMPNO
+##   <chr>        <chr>          <dbl> <dbl>       <dbl>   <dbl> <dbl> <chr>  <int>
+## 1 02B          Gadus morhua      16     1          15      NA    16 "19"       1
+## 2 36B          Gadus morhua      16     1          11      11    16 ""         1
+## # … with abbreviated variable names ¹​SAMPLE_NO_Muscle, ²​SAMPLE_NO_Liver
 ```
 
 
 #### c1a3. Muscle part (not including biological effects)    
 (biological effects includes EROD, which is in liver, but samples are numbered following specimen number)
 - Join "SAMPLE_NO2" (from concentration data) = "SAMPLE_NO_Muscle" (in 'data_04_fish')
-```{r}
 
+```r
 sel_tissues <- "Muskel"
 data_conc_fishmuscle <- data_conc %>%
   filter(LATIN_NAME %in% fish_species & TISSUE_NAME %in% sel_tissues)  %>%
@@ -1953,7 +3001,13 @@ if (n1 == n2){
 } else {
   cat("Creating data_conc_fishmuscle - join NOT OK!\n")
 }
+```
 
+```
+## Creating data_conc_fishmuscle - join OK
+```
+
+```r
 # data_conc_fishmuscle %>% filter(STATION_CODE == "24B" & PARAM %in% "HG") %>% as.data.frame()
 # data_conc_fishmuscle %>% filter(STATION_CODE == "23B" & PARAM %in% "EROD") %>% as.data.frame()
 
@@ -1968,7 +3022,13 @@ if (n1 == n2){
 #    has no ordinary muscle data, but has biol. effect data
 not_ok <- is.na(data_conc_fishmuscle$SMPNO)
 cat("Lacking SMPNO + SUBNO:", sum(not_ok), "records\n")  # 0
+```
 
+```
+## Lacking SMPNO + SUBNO: 0 records
+```
+
+```r
 #
 # If >0 records lack SMPno + SUBNO, we can skip the manual write
 #
@@ -1995,7 +3055,13 @@ if (sum(not_ok) == 0){
 } else {
   cat ("Still lacking SMPNO + SUBNO!")
 }
+```
 
+```
+## All OK
+```
+
+```r
 #
 # In first try, this resukts in "Still lacking SMPNO + SUBNO!"
 # This code shows that this is lacking for BLod, Gall Liver - microsome and WO for 
@@ -2018,18 +3084,14 @@ if (FALSE){
 }
 
 # Check if problems
-
-
-
-
 ```
 
 #### c1a4. Biological effects + length and weight  
 (biological effects includes EROD, which is in liver, but samples are numbered as muscle)  
 - Join "SAMPLE_NO2" (from concentration data) = "Fish_no" (in 'data_04_fish')   
 - I.e., SAMPLE_NO2 follows numbered following specimen number - in contrast with muscle data (see previous chunk)  
-```{r}
 
+```r
 sel_tissues <- c("Blod", "Galle", "Liver - microsome", "WO")
 data_conc_fishbiol <- data_conc %>%
   filter(LATIN_NAME %in% fish_species & 
@@ -2052,7 +3114,13 @@ if (n1 == n2){
 } else {
   cat("Creating data_conc_fishbiol - join NOT OK!\n")
 }
+```
 
+```
+## Creating data_conc_fishbiol - join OK
+```
+
+```r
 # data_conc_fishbiol %>% filter(STATION_CODE == "24B" & PARAM %in% "HG") %>% as.data.frame()
 # data_conc_fishbiol %>% filter(STATION_CODE == "23B" & PARAM %in% "EROD") %>% as.data.frame()
 
@@ -2066,7 +3134,13 @@ if (n1 == n2){
 # Check SMPNO - lacking for one special case, where fish no 15 
 not_ok <- is.na(data_conc_fishbiol$SMPNO)
 cat("Lacking SMPNO + SUBNO:", sum(not_ok), "records\n")  # 0
+```
 
+```
+## Lacking SMPNO + SUBNO: 0 records
+```
+
+```r
 #
 # If >0 records lack SMPno + SUBNO, we can skip the manual write
 #
@@ -2093,7 +3167,13 @@ if (sum(not_ok) == 0){
 } else {
   cat ("Still lacking SMPNO + SUBNO!")
 }
+```
 
+```
+## All OK
+```
+
+```r
 #
 # In first try, this resukts in "Still lacking SMPNO + SUBNO!"
 # This code shows that this is lacking for BLod, Gall Liver - microsome and WO for 
@@ -2116,21 +3196,37 @@ if (FALSE){
 }
 
 # Check if problems
-
-
-
-
 ```
 
 
 #### c1a5. Check 33F
-```{r}
+
+```r
 # Sample file
 df_samples %>%
   filter(AQUAMONITOR_CODE == "33F") %>% 
   select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>%
   arrange(TISSUE, BIOTA_SAMPLENO)
+```
 
+```
+##   AQUAMONITOR_CODE    TISSUE                   DESCRIPTION BIOTA_SAMPLENO
+## 1              33F  LI-Lever  33F Sande - Flatfisk lever 1              1
+## 2              33F  LI-Lever  33F Sande - Flatfisk lever 2              2
+## 3              33F  LI-Lever  33F Sande - Flatfisk lever 3              3
+## 4              33F MU-Muskel 33F Sande - Flatfisk muskel 1              1
+## 5              33F MU-Muskel 33F Sande - Flatfisk muskel 2              2
+## 6              33F MU-Muskel 33F Sande - Flatfisk muskel 3              3
+##   X_BULK_BIO
+## 1       <NA>
+## 2       <NA>
+## 3       <NA>
+## 4       <NA>
+## 5       <NA>
+## 6       <NA>
+```
+
+```r
 # Table 04  
 data_04_fish_33F %>%
   mutate(Sort = case_when(
@@ -2139,13 +3235,37 @@ data_04_fish_33F %>%
   ) %>%
   arrange(Sort) %>%
   select(-Sort)
+```
 
+```
+## # A tibble: 18 × 9
+##    STATION_CODE LATIN_NAME      Fish_no NOIMP SAMPL…¹ SAMPL…² SUBNO BULKID SMPNO
+##    <chr>        <chr>             <int> <dbl>   <int>   <int> <dbl> <chr>  <int>
+##  1 33F          Platichthys fl…       1     1      NA      NA     1 "16"       6
+##  2 33F          Platichthys fl…       2     1      NA      NA     2 "16"       6
+##  3 33F          Platichthys fl…       3     1      NA      NA     3 "16"       6
+##  4 33F          Platichthys fl…       4     1      NA      NA     4 "16"       6
+##  5 33F          Platichthys fl…       5     1      NA      NA     5 "16"       6
+##  6 33F          Platichthys fl…      NA     5       1       1    16 ""         6
+##  7 33F          Platichthys fl…       6     1      NA      NA     6 "17"       6
+##  8 33F          Platichthys fl…       7     1      NA      NA     7 "17"       6
+##  9 33F          Platichthys fl…       8     1      NA      NA     8 "17"       6
+## 10 33F          Platichthys fl…       9     1      NA      NA     9 "17"       6
+## 11 33F          Platichthys fl…      10     1      NA      NA    10 "17"       6
+## 12 33F          Platichthys fl…      NA     5       2       2    17 ""         6
+## 13 33F          Platichthys fl…      11     1      NA      NA    11 "18"       6
+## 14 33F          Platichthys fl…      12     1      NA      NA    12 "18"       6
+## 15 33F          Platichthys fl…      13     1      NA      NA    13 "18"       6
+## 16 33F          Platichthys fl…      14     1      NA      NA    14 "18"       6
+## 17 33F          Platichthys fl…      15     1      NA      NA    15 "18"       6
+## 18 33F          Platichthys fl…      NA     5       3       3    18 ""         6
+## # … with abbreviated variable names ¹​SAMPLE_NO_Muscle, ²​SAMPLE_NO_Liver
 ```
 
 
 #### c1b. Liver part (EXCLUDING EROD, which is in liver but is numbered following specimen number)  
-```{r}
 
+```r
 data_conc_fishliver <- data_conc %>%
   filter(LATIN_NAME %in% fish_species & TISSUE_NAME %in% "Lever")
 
@@ -2165,11 +3285,23 @@ if (n1 == n2){
 } else {
   cat("Join NOT OK\n")
 }
+```
 
+```
+## Join OK
+```
+
+```r
 # Check SMPNO
 not_ok <- is.na(data_conc_fishliver$SMPNO)
 cat("Number of SMPNO not ok: ", sum(not_ok))  # should be zero
+```
 
+```
+## Number of SMPNO not ok:  0
+```
+
+```r
 # Check
 # data_conc_fishmuscle[not_ok,]
 
@@ -2187,12 +3319,11 @@ if (sum(not_ok) != 0){
 }
 
 # apply(is.na(data_conc_fishliver), 2, sum)
-
 ```
 
 #### c1c. If some SMPNO lacking: Check data
-```{r}
 
+```r
 # data_04_fish %>% filter(STATION_CODE == "23B")
 check <- FALSE
 
@@ -2209,14 +3340,12 @@ if (check){
     filter(STATION_CODE == "28B")
   
 }
-
-
 ```
 
 #### c1d. Combine, add MUNIT and AMLNK   
 - makes `data_conc_fish`  
-```{r}
 
+```r
 data_conc_fish <- rbind(data_conc_fishmuscle, data_conc_fishbiol, data_conc_fishliver)
 # apply(is.na(data_conc_fish), 2, sum)
 
@@ -2236,7 +3365,13 @@ data_conc_fish <- data_conc_fish %>%
     )
 
 cat("'data_conc_fish' created with", nrow(data_conc_fish), "number of rows \n")
+```
 
+```
+## 'data_conc_fish' created with 9116 number of rows
+```
+
+```r
 # apply(is.na(data_conc_fish), 2, sum)
 
 #
@@ -2256,22 +3391,28 @@ cat("'data_conc_fish' created with", nrow(data_conc_fish), "number of rows \n")
 # Info from Anders in mail 22 NOv 2018: "Microsomalfraksjonen lages ved å ultrasentrifugere S9-fraksjonen" 
 #
 sel <- data_conc_fish$PARAM %in% c("EROD"); sum(sel)
-data_conc_fish$MATRX[sel] <- "LIS9"
+```
 
+```
+## [1] 44
+```
+
+```r
+data_conc_fish$MATRX[sel] <- "LIS9"
 ```
 
 ### c2. Set uncertainty = 0 to NA  
 No longer needed, we set UNCRT directly
-```{r}
+
+```r
 # sel <- !is.na(data_conc_fish$UNCERTAINTY) & data_conc_fish$UNCERTAINTY == 0
 # table(sel)
 # data_conc_fish$UNCERTAINTY[sel] <- NA
-
 ```
 
 ### c3. data_10, fish part
-```{r}
 
+```r
 data_10_fish <- data.frame(
   RECID = "10", 
   CRUIS = "AA711", 
@@ -2301,38 +3442,245 @@ data_10_fish <- data.frame(
 xtabs(~PARAM +  is.na(MATRX), data_conc_fish)
 ```
 
+```
+##         is.na(MATRX)
+## PARAM    FALSE
+##   AG       231
+##   ALAD      47
+##   AS       231
+##   BAP3OH    60
+##   BD100    152
+##   BD126    152
+##   BD153    152
+##   BD154    152
+##   BD183    152
+##   BD209    152
+##   BDE28    152
+##   BDE47    152
+##   BDE99    152
+##   CB101    223
+##   CB118    223
+##   CB138    223
+##   CB153    223
+##   CB180    223
+##   CB28     223
+##   CB52     223
+##   CD       231
+##   CO       230
+##   CR       230
+##   CU       231
+##   DDEPP    105
+##   DDTPP    105
+##   DRYWT%   490
+##   EROD      44
+##   FATWT%   232
+##   GOSOI     44
+##   HBCDA    171
+##   HBCDB    171
+##   HBCDG    171
+##   HCB      105
+##   HCHA     105
+##   HCHG     105
+##   HG       258
+##   MCCP     169
+##   NI       230
+##   PA1OH     60
+##   PB       231
+##   PFDA     138
+##   PFHpA    138
+##   PFHxA    138
+##   PFNA     138
+##   PFOA     138
+##   PFOS     138
+##   PFOSA    138
+##   PFUnda   138
+##   PYR1OH    60
+##   SCCP     169
+##   SN       231
+##   TDEPP    105
+##   ZN       231
+```
+
 ### c4. Set quantification limit = 1 for EROD
-```{r}
+
+```r
 sel <- data_10_fish$PARAM == "EROD"; sum(sel)
+```
+
+```
+## [1] 44
+```
+
+```r
 data_10_fish$DETLI[sel] <- 1
 ```
 
 ### c5. Checks
-```{r}
+
+```r
 cat("Table 10 - missing values\n")
+```
+
+```
+## Table 10 - missing values
+```
+
+```r
 apply(is.na(data_10_fish), 2, sum)
+```
+
+```
+## RECID CRUIS STNNO SMPNO SUBNO MATRX DEPHU DEPHL PARAM MUNIT BASIS AMLNK VFLAG 
+##     0     0     0     0     0     0  9116  9116     0     0     0   315  9116 
+## QFLAG VALUE PERCR SIGND UNCRT METCU DETLI LMQNT 
+##  7221     0  9116  9116  2506     0  9072  9116
+```
+
+```r
 # xtabs(~PARAM, data_10_fish)
 
 cat("\n\nTable 10\n")
+```
+
+```
+## 
+## 
+## Table 10
+```
+
+```r
 data_10_fish %>% 
   count(STNNO, MATRX, SUBNO) %>% 
   xtabs(~MATRX + STNNO, .)
+```
 
+```
+##       STNNO
+## MATRX  02B 10B 13B 15B 19B 23B 24B 28B 30B 33F 36B 43B2 45B2 53B 71B 80B 96B
+##   LI     8  15   8  15  15  15  14  14  12   3  15   15   14  15  10  15  15
+##   LIS9   0   0   0   0   0  15   0   0  14   0   0    0    0  15   0   0   0
+##   MU    15  15  15  15  15  17  15  15  15   3  15   15   15  15  15  15  15
+##       STNNO
+## MATRX  98B1
+##   LI     15
+##   LIS9    0
+##   MU     15
+```
+
+```r
 cat("\n\nOriginal data\n")
+```
+
+```
+## 
+## 
+## Original data
+```
+
+```r
 data_conc %>%
   count(STATION_CODE, TISSUE_NAME, SAMPLE_NO) %>%
   xtabs(~TISSUE_NAME + STATION_CODE, .)
+```
 
+```
+##                    STATION_CODE
+## TISSUE_NAME         02B 10A2 10B 11G 11X 131G 13B 15A 15B 15G 19B 19N 227G2 22A
+##   Blod                0    0   0   0   0    0   0   0   0   0   0  15     0   0
+##   Egg                 0    0   0   0   0    0   0   0   0   0   0  15     0   0
+##   Galle               0    0   0   0   0    0   0   0  15   0   0   0     0   0
+##   Lever               8    0  15   0   0    0   8   0  15   0  15   0     0   0
+##   Liver - microsome   0    0   0   0   0    0   0   0   0   0   0   0     0   0
+##   Muskel             15    0  15   0   0    0  15   0  15   0  15   0     0   0
+##   Whole soft body     0    3   0   1   3    1   0   3   0   1   0   0     1   3
+##   WO                  0    0   0   0   0    0   0   0   0   0   0   0     0   0
+##                    STATION_CODE
+## TISSUE_NAME         22G 23B 24B 26A2 28A2 28B 30A 30B 31A 33F 36A1 36B 36G 43B2
+##   Blod                0  17   0    0    0   0   0  15   0   0    0   0   0    0
+##   Egg                 0   0   0    0    0   0   0   0   0   0    0   0   0    0
+##   Galle               0  16   0    0    0   0   0  14   0   0    0   0   0    0
+##   Lever               0  15  14    0    0  14   0  12   0   3    0  15   0   15
+##   Liver - microsome   0  15   0    0    0   0   0  14   0   0    0   0   0    0
+##   Muskel              0  15  15    0    0  15   0  15   0   3    0  15   0   15
+##   Whole soft body     1   0   0    3    3   0   3   0   3   0    3   0   1    0
+##   WO                  0  15   0    0    0   0   0  14   0   0    0   0   0    0
+##                    STATION_CODE
+## TISSUE_NAME         45B2 53B 56A 57A 64A 65A 71A 71B 71G 76A2 76G 80B 91A2 96B
+##   Blod                 0  15   0   0   0   0   0   0   0    0   0   0    0   0
+##   Egg                  0   0   0   0   0   0   0   0   0    0   0   0    0   0
+##   Galle                0  15   0   0   0   0   0   0   0    0   0   0    0   0
+##   Lever               14  15   0   0   0   0   0  10   0    0   0  15    0  15
+##   Liver - microsome    0  15   0   0   0   0   0   0   0    0   0   0    0   0
+##   Muskel              15  15   0   0   0   0   0  15   0    0   0  15    0  15
+##   Whole soft body      0   0   3   3   3   3   1   0   1    3   1   0    3   0
+##   WO                   0  15   0   0   0   0   0   0   0    0   0   0    0   0
+##                    STATION_CODE
+## TISSUE_NAME         97A2 97A3 98A2 98B1 98G I023 I024 I131A I133 I241 I301 I304
+##   Blod                 0    0    0    0   0    0    0     0    0    0    0    0
+##   Egg                  0    0    0    0   0    0    0     0    0    0    0    0
+##   Galle                0    0    0    0   0    0    0     0    0    0    0    0
+##   Lever                0    0    0   15   0    0    0     0    0    0    0    0
+##   Liver - microsome    0    0    0    0   0    0    0     0    0    0    0    0
+##   Muskel               0    0    0   15   0    0    0     0    0    0    0    0
+##   Whole soft body      3    3    3    0   1    3    3     3    3    3    3    3
+##   WO                   0    0    0    0   0    0    0     0    0    0    0    0
+##                    STATION_CODE
+## TISSUE_NAME         I965 I969
+##   Blod                 0    0
+##   Egg                  0    0
+##   Galle                0    0
+##   Lever                0    0
+##   Liver - microsome    0    0
+##   Muskel               0    0
+##   Whole soft body      3    3
+##   WO                   0    0
+```
+
+```r
 cat("\n\nMissing uncertainties  \n")
+```
+
+```
+## 
+## 
+## Missing uncertainties
+```
+
+```r
 data_10_fish %>%
   filter(is.na(UNCRT)) %>%
   xtabs(~PARAM, .)
+```
 
+```
+## PARAM
+##   ALAD BAP3OH  BD126  BD183 DRYWT%   EROD FATWT%  PA1OH   PFDA  PFHpA  PFHxA 
+##     47     60    152    152    490     44    232     60    138    138    138 
+##   PFNA   PFOA   PFOS  PFOSA PFUnda PYR1OH  TDEPP 
+##    138    138    138    138    138     60    105
+```
+
+```r
 cat("\n\nMissing units  \n")
+```
+
+```
+## 
+## 
+## Missing units
+```
+
+```r
 data_10_fish %>%
   filter(is.na(MUNIT)) %>%
   xtabs(~PARAM, .)
+```
 
+```
+## < table of extent 0 >
+```
+
+```r
 if (FALSE){
   
   cat("\n\nMissing values of VALUE:  \n")
@@ -2341,37 +3689,94 @@ if (FALSE){
     View()
   
 }
-
-
 ```
 ### c6. Check SMPNO
-```{r}
 
+```r
 xtabs(~is.na(SMPNO), data_10_fish)  
+```
+
+```
+## is.na(SMPNO)
+## FALSE 
+##  9116
+```
+
+```r
 xtabs(~is.na(SMPNO), data_conc_fish)  
+```
+
+```
+## is.na(SMPNO)
+## FALSE 
+##  9116
+```
+
+```r
 xtabs(~is.na(SMPNO), data_conc_fishmuscle)  
+```
+
+```
+## is.na(SMPNO)
+## FALSE 
+##   516
+```
+
+```r
 xtabs(~is.na(SMPNO), data_conc_fishliver)  
+```
 
+```
+## is.na(SMPNO)
+## FALSE 
+##  8285
+```
+
+```r
 xtabs(~STATION_CODE + is.na(SMPNO), data_conc_fish)  
+```
 
+```
+##             is.na(SMPNO)
+## STATION_CODE FALSE
+##         02B    211
+##         10B    405
+##         13B    346
+##         15B    450
+##         19B    645
+##         23B    830
+##         24B    602
+##         28B    492
+##         30B    679
+##         33F     81
+##         36B    735
+##         43B2   645
+##         45B2   293
+##         53B    825
+##         71B    200
+##         80B    636
+##         96B    315
+##         98B1   726
+```
+
+```r
 # xtabs(~PARAM + is.na(SMPNO), data_conc_fish)  
-
 ```
 
 ### c7. Check last year (2018)
-```{r}
 
+```r
 # fn1 <- "../Milkys_2018/ICES/Test/NIVA2017CF.NO"
 # dat1 <- read_ices_file(fn1) %>%  add_field_codes()
 # dat1[["10"]] %>% 
 #   count(STNNO, MATRX, SUBNO) %>% 
 #   xtabs(~MATRX + STNNO, .)
-
 ```
 
 ### d. Blue mussel  
 Add SMPNO, MUNIT, AMLNK
-```{r}
+
+```r
 data_conc_bluemussel <- data_conc %>%
   filter(LATIN_NAME %in% 'Mytilus edulis') %>%
   left_join(df_smpno %>% select(LATIN_NAME, SMPNO)) %>%
@@ -2383,21 +3788,27 @@ data_conc_bluemussel <- data_conc %>%
       PARAM %in% c("DRYWT%", "FATWT%") ~ "%",
       TRUE ~ MUNIT)
     )
-  
+```
+
+```
+## Joining, by = "LATIN_NAME"
+## Joining, by = "UNIT"
+## Joining, by = "PARAM"
 ```
 
 ### e1. Set uncertainty = 0 to NA  
 No longer needed
-```{r}
+
+```r
 # sel <- !is.na(data_conc_bluemussel$UNCERTAINTY) & data_conc_bluemussel$UNCERTAINTY == 0
 # table(sel)
 # data_conc_bluemussel$UNCERTAINTY[sel] <- NA
-
 ```
 
 ### e2. data_10, blue mussel part
 For blue mussel, we set SUBNO = SAMPLE_NO2
-```{r}
+
+```r
 data_10_bluemussel <- data.frame(
   RECID = "10", 
   CRUIS = "AA711", 
@@ -2438,8 +3849,8 @@ NOT NEEDED in 2019
 
 ### g. Length Ver. 2: Makes 'data_10_length2'  
 Adds length and weight to the data using df_ind and data_04_fish
-```{r}
 
+```r
 df_fishlength <- data_04_fish %>%
   filter(!is.na(Fish_no)) %>%
   left_join(df_ind, by = c("STATION_CODE", "Fish_no")) %>%
@@ -2480,8 +3891,8 @@ data_10_length2 <- data.frame(
 
 
 ### h. Snail data: VDSI, TBSN+ and DRYWT%
-```{r}
 
+```r
 # data_conc %>% filter(PARAM %in% "TBSN+") %>% data.frame()
 df_snail <- data_conc %>% 
   filter(LATIN_NAME %in% c("Nucella lapillus", "Littorina littorea")) %>% # xtabs(~PARAM, .)
@@ -2489,6 +3900,14 @@ df_snail <- data_conc %>%
   left_join(df_amlnk) %>%
   mutate(SAMPLE_NO2 = 1) %>%     # Note - we just assume a single pooled sample from each snail station
   data.frame()
+```
+
+```
+## Joining, by = "LATIN_NAME"
+## Joining, by = "PARAM"
+```
+
+```r
 # df_snail %>% head(6)
 
 data_10_vdsi <- data.frame(
@@ -2526,21 +3945,80 @@ data_10_vdsi <- data_10_vdsi %>%
       TRUE ~ MUNIT)
   ) %>% 
   select(-UNIT)
+```
 
+```
+## Joining, by = "UNIT"
+```
+
+```r
 cat("---------------------------------------------------------------\n")
-cat("Parameters: \n---------------------------------------------------------------\n")
-xtabs(~PARAM, data_10_vdsi)
-cat("\n\n---------------------------------------------------------------\n")
-cat("Units: \n---------------------------------------------------------------\n")
-xtabs(~addNA(MUNIT), data_10_vdsi)
+```
 
+```
+## ---------------------------------------------------------------
+```
+
+```r
+cat("Parameters: \n---------------------------------------------------------------\n")
+```
+
+```
+## Parameters: 
+## ---------------------------------------------------------------
+```
+
+```r
+xtabs(~PARAM, data_10_vdsi)
+```
+
+```
+## PARAM
+##   ACNE  ACNLE     AG    ANT     AS    BAA    BAP   BBJF  BGHIP    BKF     CD 
+##      1      1      1      1      1      1      1      1      1      1      1 
+##     CO     CR     CU  DBA3A  DDEPP  DDTPP DRYWT% FATWT%    FLE    FLU    HCB 
+##      1      1      1      1      1      1      9      1      1      1      1 
+##   HCHA   HCHG     HG   ICDP    NAP     NI     PA     PB    PYR     SN  TBSN+ 
+##      1      1      1      1      1      1      1      1      1      1      9 
+##  TDEPP   VDSI     ZN 
+##      1      8      1
+```
+
+```r
+cat("\n\n---------------------------------------------------------------\n")
+```
+
+```
+## 
+## 
+## ---------------------------------------------------------------
+```
+
+```r
+cat("Units: \n---------------------------------------------------------------\n")
+```
+
+```
+## Units: 
+## ---------------------------------------------------------------
+```
+
+```r
+xtabs(~addNA(MUNIT), data_10_vdsi)
+```
+
+```
+## addNA(MUNIT)
+##     %   IDX mg/kg ug/kg  <NA> 
+##    10     8    11    30     0
 ```
 
 ### i. Eider duck    
   
 - SUBNO 16-30 should have EH - Egg homogenate of yolk and albumin    
 - SUBNO 1-15 should have BL - Blood  
-```{r}
+
+```r
 # Use left join to data_04_eider to add SUBNO 
 # df_eider <- 
 df1 <- data_conc %>% 
@@ -2551,6 +4029,13 @@ df1 <- data_conc %>%
   ) %>%
   as.data.frame()
 nrow(df1)
+```
+
+```
+## [1] 1253
+```
+
+```r
 df2 <- df1 %>%
   left_join(df_smpno, by = "LATIN_NAME")    # adds SMPNO and SMLNK
 df3 <- df2 %>%
@@ -2571,6 +4056,13 @@ if (nrow(df1) == nrow(data_conc_eider)){
 } else {
   cat("Joins NOT OK! \n\n")
 }
+```
+
+```
+## Joins ok
+```
+
+```r
 # View(data_conc_eider)
 
 data_10_eider <- data.frame(
@@ -2604,7 +4096,8 @@ data_10_eider <- data.frame(
 
 
 ### j. Combine fish, blue mussel and fat weight/dryweight
-```{r}
+
+```r
 # Length version 1
 # data_10 <- rbind(data_10_fish, data_10_bluemussel, data_10_fatdry, data_10_length, data_10_vdsi)
 
@@ -2620,15 +4113,34 @@ data_10$VALUE <- round(data_10$VALUE, 5)
 # data_10 %>% filter(PARAM == "VDSI") %>% View()
 
 xtabs(~is.na(UNCRT), data_10)
+```
 
+```
+## is.na(UNCRT)
+## FALSE  TRUE 
+##  9987  3944
 ```
 
 ### k1 - Fix some stuff
-```{r}
+
+```r
 # Delete records without value
 sel <- is.na(data_10$VALUE); sum(sel)  
-xtabs(~STNNO + PARAM, data_10[sel,])
+```
 
+```
+## [1] 0
+```
+
+```r
+xtabs(~STNNO + PARAM, data_10[sel,])
+```
+
+```
+## < table of extent 0 x 0 >
+```
+
+```r
 data_10 <- data_10[!sel,]
 
 # Set SMPNO to be numeric
@@ -2649,21 +4161,47 @@ data_10$SMPNO <- as.numeric(data_10$SMPNO)
 #     and has been deprecated.
 
 sel <- data_10$PARAM %in% "PFOSA"; sum(sel)
+```
+
+```
+## [1] 192
+```
+
+```r
 data_10$PARAM[sel] <- "PFOSD"
 cat("PARAM changed from PFOSA to PFOSD for", sum(sel), "records\n")
+```
 
+```
+## PARAM changed from PFOSA to PFOSD for 192 records
+```
+
+```r
 # Check that all records have SMPNO
 sum(is.na((data_10$SMPNO)))  # should be zero
+```
 
+```
+## [1] 0
+```
+
+```r
 # Set BASIS to "" for length, wet weigth etc. + VDSI
 # xtabs(~PARAM, data_10)
 sel <- data_10$PARAM %in% c("FATWT%", "DRYWT%", "LNMEA", "WTMEA", "VDSI"); sum(sel)
-data_10$BASIS[sel] <- ""
+```
 
+```
+## [1] 1583
+```
+
+```r
+data_10$BASIS[sel] <- ""
 ```
 
 ### k2. Check why we lack SMPNO (if needed)
-```{r}
+
+```r
 if (sum(is.na(data_10$SMPNO)) > 0){
   # Which stations lack SMPNO?
   xtabs(~STNNO + is.na(SMPNO), data_10)
@@ -2678,62 +4216,144 @@ if (sum(is.na(data_10$SMPNO)) > 0){
 }
 ```
 
+```
+## SMPNO is OK
+```
+
 ### k3 - METCU may not be filled in when UNCRT is blank
-```{r}
 
+```r
 cat("Before: \n")
-xtabs(~is.na(UNCRT) + addNA(METCU), data_10)
+```
 
+```
+## Before:
+```
+
+```r
+xtabs(~is.na(UNCRT) + addNA(METCU), data_10)
+```
+
+```
+##             addNA(METCU)
+## is.na(UNCRT)         % <NA>
+##        FALSE    0 9987    0
+##        TRUE   662 3282    0
+```
+
+```r
 # Set 
 sel <- is.na(data_10$UNCRT)
 data_10$METCU[sel] <- NA
 
 cat("\nAfter: \n")
-xtabs(~is.na(UNCRT) + addNA(METCU), data_10)
+```
 
+```
+## 
+## After:
+```
+
+```r
+xtabs(~is.na(UNCRT) + addNA(METCU), data_10)
+```
+
+```
+##             addNA(METCU)
+## is.na(UNCRT)    % <NA>
+##        FALSE 9987    0
+##        TRUE     0 3944
 ```
 
 ### k4 - MATRX BL required for PARAM ALAD
-```{r}
+
+```r
 sel <- data_10$PARAM %in% "ALAD"
 # table(addNA(data_10$MATRX[sel]))
 
 data_10$MATRX[sel] <- "BL"
 table(addNA(data_10$MATRX[sel]))
+```
 
+```
+## 
+##   BL <NA> 
+##   47    0
 ```
 
 ### k5 - GOSOI   
     - Effects parameters LISOI and GOSOI should report MUNIT index in the valid range of 0-50
     - Effects parameter GOSOI should be reported in MATRX GO
-```{r}
 
+```r
 sel <- data_10$PARAM %in% "GOSOI"
 
 # Isn't this OK?
 table(addNA(data_10$MUNIT[sel]))
-summary(data_10$VALUE[sel])
+```
 
+```
+## 
+##  idx <NA> 
+##   44    0
+```
+
+```r
+summary(data_10$VALUE[sel])
+```
+
+```
+##    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
+## 0.04167 0.43389 0.75872 1.02157 1.26210 4.40075
+```
+
+```r
 # Fix MUNIT
 table(addNA(data_10$MATRX[sel]))
-data_10$MATRX[sel] <- "GO"
+```
 
+```
+## 
+##   MU <NA> 
+##   44    0
+```
+
+```r
+data_10$MATRX[sel] <- "GO"
 ```
 
 ### k6 - PARAM Bile metabolites, fix    
     - PARAM Bile metabolites must be reported in matrix BI (bile) (WGBEC2013)  
     - Recommended MUNIT for Bile metabolites is nanogram/gram (WGBEC2013) (BUT written "ng/g")  
     - PARAM bile metabolites require reporting of DETLI (WGBEC2013)  
-```{r}
 
+```r
 sel <- data_10$PARAM %in% c("PA1O", "PYR1O", "BAP3O", "PA1OH", "PYR1OH", "BAP3OH")
 
 # Fix MATRX
 table(addNA(data_10$MATRX[sel]))
+```
+
+```
+## 
+##   MU <NA> 
+##  180    0
+```
+
+```r
 data_10$MATRX[sel] <- "BI"
 
 # Fix MUNIT
 table(addNA(data_10$MUNIT[sel]))
+```
+
+```
+## 
+## ug/kg  <NA> 
+##   180     0
+```
+
+```r
 data_10$MUNIT[sel] <- "ng/g"
 
 # DETLI is (SO FAR) set to zero
@@ -2751,63 +4371,147 @@ data_10 <- data_10 %>%
                            is.na(Min) ~ DETLI)
          ) %>%
   select(-Min)
+```
 
+```
+## Joining, by = "PARAM"
+```
+
+```r
 # Change QFLAG from < to D
 # But no QFLAGS for these, so don't have to worry about that
-
 ```
 
 
 ### k7. UNCRT for DRYWT% FATWT%  LNMEA  WTMEA    
 Set to 10% (SD = 5%)
-```{r}
 
+```r
 # Det.limit - never there
 table(is.na(data_conc$DETECTION_LIMIT))
+```
 
+```
+## 
+##  TRUE 
+## 13269
+```
+
+```r
 # Lacking UNCRT:
 #   DRYWT% FATWT%  LNMEA   PFBS  WTMEA
 sel <- is.na(data_10$UNCRT)
 xtabs(~PARAM, data_10[sel,])
-xtabs(~PARAM, data_10[sel,]) %>% names() %>% dput()
+```
 
+```
+## PARAM
+##   ALAD BAP3OH  BD126  BD183  DBA3A DRYWT%   EROD FATWT%    HCB  LNMEA  PA1OH 
+##     47     60    183    183     26    581     44    309     30    331     60 
+##   PFBS   PFDA  PFHpA  PFHxA   PFNA   PFOA   PFOS  PFOSD PFUnda PYR1OH  TDEPP 
+##      6    192    192    192    192    192    192    192    192     60    149 
+##   VDSI  WTMEA 
+##      8    331
+```
+
+```r
+xtabs(~PARAM, data_10[sel,]) %>% names() %>% dput()
+```
+
+```
+## c("ALAD", "BAP3OH", "BD126", "BD183", "DBA3A", "DRYWT%", "EROD", 
+## "FATWT%", "HCB", "LNMEA", "PA1OH", "PFBS", "PFDA", "PFHpA", "PFHxA", 
+## "PFNA", "PFOA", "PFOS", "PFOSD", "PFUnda", "PYR1OH", "TDEPP", 
+## "VDSI", "WTMEA")
+```
+
+```r
 # Set UNCRT
 sel <- data_10$PARAM %in% c("DRYWT%", "FATWT%", "LNMEA", "WTMEA"); sum(sel)
+```
+
+```
+## [1] 1575
+```
+
+```r
 data_10$UNCRT[sel] <- 10
 data_10$METCU[sel] <- "%"
 
 # View(data_10[sel,])
-
 ```
 
 
 ### k8. DETLI for DRYWT% FATWT%  LNMEA  WTMEA    
 Set to 10% (SD = 5%)
-```{r}
 
+```r
 # Det.limit - never there
 table(is.na(data_conc$DETECTION_LIMIT))
+```
 
+```
+## 
+##  TRUE 
+## 13269
 ```
 
 ### k9a. For less-thans (QFLAG = <), set UNCRT = NA
-```{r}
-cat("Before: \n")
-xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
 
+```r
+cat("Before: \n")
+```
+
+```
+## Before:
+```
+
+```r
+xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
+```
+
+```
+##             addNA(METCU)
+## addNA(QFLAG)    % <NA>
+##         <    2175 1446
+##         <NA> 9364  946
+```
+
+```r
 sel_lt <- data_10$QFLAG %in% "<"; sum(sel)
+```
+
+```
+## [1] 1575
+```
+
+```r
 data_10$UNCRT[sel_lt] <- NA
 data_10$METCU[sel_lt] <- NA
 
 cat("\nAfter: \n")
-xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
+```
 
+```
+## 
+## After:
+```
+
+```r
+xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
+```
+
+```
+##             addNA(METCU)
+## addNA(QFLAG)    % <NA>
+##         <       0 3621
+##         <NA> 9364  946
 ```
 
 
 ### k9b. When UNCRT present, set METCU  
-```{r}
 
+```r
 # This is all old
 
 # sel_uncrt <- !is.na(data_10$UNCRT)
@@ -2825,43 +4529,60 @@ xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
 # 
 # cat("\nCheck METCU again \n") 
 # table(addNA(data_10$METCU), sel_uncrt)
-
 ```
 
 ### k9c. Clear DETLI for PAH metabolites   
 - We use QFLAG instead  
-```{r}
 
+```r
 sel <- data_10$PARAM %in% c("PA1OH", "PYR1OH", "BAP3OH")  
 sum(sel)
+```
 
+```
+## [1] 180
+```
+
+```r
 data_10$DETLI[sel] <- NA
-
 ```
 
 ### k9c. Change QFLAG and set LMQNT  
 - Change QFLAG from < to Q   
-```{r}
 
+```r
 sel_uncrt <- !is.na(data_10$QFLAG)
 message(sum(sel_uncrt), " values are under LOQ - we set QFLAG and LMQNT for these")  
+```
 
+```
+## 3621 values are under LOQ - we set QFLAG and LMQNT for these
+```
+
+```r
 data_10$QFLAG[sel_uncrt] <- "Q"
 data_10$LMQNT[sel_uncrt] <- data_10$VALUE[sel_uncrt]
-
 ```
 
 
 ### k10a. Detection limits in tab 10 and original data   
-```{r}
-xtabs(~is.na(DETLI), data_10)
-# xtabs(~is.na(DETECTION_LIMIT), data_conc)
 
+```r
+xtabs(~is.na(DETLI), data_10)
+```
 
 ```
-### k10b. Detection limits, metals in liver
-```{r}
+## is.na(DETLI)
+## FALSE  TRUE 
+##    44 13887
+```
 
+```r
+# xtabs(~is.na(DETECTION_LIMIT), data_conc)
+```
+### k10b. Detection limits, metals in liver
+
+```r
 #
 # Check metals in liver
 #
@@ -2883,7 +4604,22 @@ df <- data_10 %>%
     ) %>%
   arrange(loq_min)
 df
+```
 
+```
+## # A tibble: 7 × 4
+##   PARAM loq_median loq_min loq_max
+##   <chr>      <dbl>   <dbl>   <dbl>
+## 1 CD         0.001   0.001   0.001
+## 2 CO         0.001   0.001   0.001
+## 3 PB         0.005   0.005   0.005
+## 4 CR         0.01    0.01    0.01 
+## 5 NI         0.01    0.01    0.01 
+## 6 SN         0.01    0.01    0.01 
+## 7 AG         0.05    0.05    0.05
+```
+
+```r
 #
 # Set DETLI for metals in liver, based on table shown below
 #
@@ -2909,13 +4645,11 @@ df_loq_metals <- bind_rows(
     PARAM = c("CU","AS","ZN"),
     loq_min = c(0.010, 0.050, 0.050)
   ))
-              
-
 ```
 
 ### k10c. Detection limits, metals in blue mussel
-```{r}
 
+```r
 matrix <- "SB"
 df1 <- data_10 %>%
   filter(PARAM %in% pars_metals & QFLAG %in% "Q" & MATRX %in% matrix) %>%
@@ -2927,7 +4661,16 @@ df1 <- data_10 %>%
     loq_max = max(VALUE)
     ) 
 df1
+```
 
+```
+## # A tibble: 1 × 4
+##   PARAM loq_median loq_min loq_max
+##   <chr>      <dbl>   <dbl>   <dbl>
+## 1 AG          0.05    0.05    0.05
+```
+
+```r
 df2 <- data_10 %>%
   filter(PARAM %in% pars_metals & is.na(QFLAG) & MATRX %in% matrix) %>%
   ungroup() %>%
@@ -2939,7 +4682,30 @@ df2 <- data_10 %>%
   arrange(val_min)
 df2 %>%
   left_join(df_loq_metals)
+```
 
+```
+## Joining, by = "PARAM"
+```
+
+```
+## # A tibble: 11 × 4
+##    PARAM val_median val_min loq_min
+##    <chr>      <dbl>   <dbl>   <dbl>
+##  1 HG         0.014   0.005  NA    
+##  2 SN         0.04    0.014   0.01 
+##  3 CO         0.071   0.037   0.001
+##  4 CR         0.2     0.069   0.01 
+##  5 CD         0.16    0.07    0.001
+##  6 PB         0.23    0.071   0.005
+##  7 NI         0.2     0.089   0.01 
+##  8 AG         0.2     0.2     0.05 
+##  9 CU         1.35    0.51    0.01 
+## 10 AS         2.15    1       0.05 
+## 11 ZN        17.5    11       0.05
+```
+
+```r
 #
 # Conclusion: we use the same limits as we used for liver 
 #
@@ -2952,13 +4718,11 @@ sel <- with(data_10, MATRX %in% matrix & PARAM %in% c("CR","NI","SN", "CU"))
 data_10$DETLI[sel] <- 0.010
 sel <- with(data_10, MATRX %in% matrix & PARAM %in% c("AG", "ZN", "AS"))
 data_10$DETLI[sel] <- 0.050
-
-
 ```
 
 ### k10d. Detection limits, mercury in muscle
-```{r}
 
+```r
 matrix <- "MU"
 df1 <- data_10 %>%
   filter(PARAM %in% pars_metals & QFLAG %in% "Q" & MATRX %in% matrix) %>%
@@ -2970,8 +4734,27 @@ df1 <- data_10 %>%
     loq_max = max(VALUE)
     )  %>%
   arrange(loq_min)
-df1
+```
 
+```
+## Warning in min(VALUE): no non-missing arguments to min; returning Inf
+```
+
+```
+## Warning in max(VALUE): no non-missing arguments to max; returning -Inf
+```
+
+```r
+df1
+```
+
+```
+## # A tibble: 0 × 4
+## # … with 4 variables: PARAM <chr>, loq_median <dbl>, loq_min <dbl>,
+## #   loq_max <dbl>
+```
+
+```r
 df2 <- data_10 %>%
   filter(PARAM %in% pars_metals & is.na(QFLAG) & MATRX %in% matrix) %>%
   ungroup() %>%
@@ -2982,91 +4765,146 @@ df2 <- data_10 %>%
     ) %>%
   arrange(val_min)
 df2
+```
 
+```
+## # A tibble: 1 × 3
+##   PARAM val_median val_min
+##   <chr>      <dbl>   <dbl>
+## 1 HG         0.088   0.002
+```
+
+```r
 matrix <- "MU"
 sel <- with(data_10, QFLAG %in% "Q" & MATRX %in% matrix & PARAM %in% c("CD","CO"))
-
 ```
 
 ### k11. Set MUNIT for FAT% and test for remaining missing units    
-```{r}
 
+```r
 sel <- with(data_10, PARAM %in% c("DRYWT%","FATWT%") & !MUNIT %in% "%")
 data_10$MUNIT[sel] <- "%"
 
 cat("MUNIT set for", sum(sel), "DRYWT% records.")
+```
 
+```
+## MUNIT set for 23 DRYWT% records.
+```
+
+```r
 # Missing units
 cat("\n\nMissing units: \n----------------------------------------------------------\n")
+```
+
+```
+## 
+## 
+## Missing units: 
+## ----------------------------------------------------------
+```
+
+```r
 check <- data_10 %>%
   filter(is.na(MUNIT)) 
 cat(nrow(check), "records lack MUNIT \n")
+```
 
+```
+## 0 records lack MUNIT
+```
+
+```r
 if (nrow(check) > 0){
   cat("Missing MUNIT - Parameters: \n")
   xtabs(~PARAM, check)
   stop("All records must have MUNIT! (Table 10 k11)")
 }
-
-
 ```
 
 ### k12. Check 'VALUE <= DETLI but QFLAG is not specified'    
 (As it is called in the DATSU check)  
-```{r}
 
+```r
 check <- data_10 %>%
   filter(VALUE <= DETLI) 
 # nrow(check)
 
 # All are PAH metabolites  
 xtabs(~PARAM + is.na(QFLAG), check)
+```
 
+```
+##       is.na(QFLAG)
+## PARAM  FALSE TRUE
+##   AG      77    1
+##   CD       1    0
+##   CO       1    0
+##   CR       2    0
+##   EROD     0    2
+##   NI       7    0
+##   PB      53    5
+##   SN       6    0
+```
+
+```r
 # Change DETLI to 90% of VALUE for these cases  
 data_10 <- data_10 %>%
   mutate(DETLI = case_when(
     VALUE <= DETLI & is.na(QFLAG) ~ 0.9*VALUE,
     TRUE ~ DETLI)
   )
-
 ```
 
 ### k13. Check BASIS for GOSOI measurements     
 DATSU: 'BASIS is for contaminant and chemical analysis only'  
-```{r}
 
+```r
 xtabs(~addNA(BASIS), data_10)
+```
 
+```
+## addNA(BASIS)
+##           W  <NA> 
+##  1583 12348     0
+```
 
+```r
 # Set BASIS to 'not available' for these cases  
 data_10 <- data_10 %>%
   mutate(BASIS = case_when(
     PARAM %in% "GOSOI" ~ as.character(NA),
     TRUE ~ BASIS)
   )
-
 ```
 ### k14. Check type of error (METCU)      
 DATSU: 'BASIS is for contaminant and chemical analysis only'  
-```{r}
 
+```r
 xtabs(~addNA(METCU), data_10)
+```
 
+```
+## addNA(METCU)
+##    % <NA> 
+## 9364 4567
+```
 
+```r
 # Set BASIS to 'not available' for these cases  
 data_10 <- data_10 %>%
   mutate(BASIS = case_when(
     PARAM %in% "GOSOI" ~ as.character(NA),
     TRUE ~ BASIS)
   )
-
 ```
 
 
 ## Table 21 - analytic methods
 
 ### a. Check PARAM relative to table 10
-```{r}
+
+```r
 # data_21 <- data_21_2016  # restore from "backup"
 data_21_back <- data_21  # make backup
 
@@ -3075,37 +4913,50 @@ data_21 <- data_2018[["21"]] %>%
   mutate(AMLNK = as.numeric(AMLNK))
 
 column_order_21 <- names(data_21)
-
 ```
 
 
 ### b1. Check if some parameters in data_10 lack AMLNK  
-```{r}
 
+```r
 check1 <- data_10 %>%
   count(PARAM, AMLNK) %>%
   filter(is.na(AMLNK))
 
 check1
+```
 
+```
+##   PARAM AMLNK   n
+## 1   HCB    NA 176
+## 2  HCHA    NA 146
+## 3  HCHG    NA 146
+## 4 TBSN+    NA  36
 ```
 
 ### b2. Check if some parameters in data_10 are lacking a data_21 entry  
-```{r}
 
+```r
 check2 <- data_10 %>%
   count(PARAM, AMLNK) %>%
   left_join(data_21 %>% select(AMLNK, ALABO), by = "AMLNK") %>% 
   filter(is.na(ALABO))
 
 check2
+```
 
+```
+##   PARAM AMLNK   n ALABO
+## 1   HCB    NA 176  <NA>
+## 2  HCHA    NA 146  <NA>
+## 3  HCHG    NA 146  <NA>
+## 4 TBSN+    NA  36  <NA>
 ```
 
 ### b3a. Modify AMLNK in data_10   
 So the AMLNK for TBSN+ in data_10 points to the TBT line in data_21  
-```{r}
 
+```r
 if ("TBSN+" %in% check1$PARAM) {
   
   # First, find AMLNK for TBTIN (note that we use 'old' data, as these have been deleted from 'data_10'....)
@@ -3124,13 +4975,15 @@ if ("TBSN+" %in% check1$PARAM) {
   cat("Modified AMLNK in data_10 so AMLNK for TBSN+ in data_10 points to the TBT line in data_21 ")
   
 }
+```
 
-
+```
+## Modified AMLNK in data_10 so AMLNK for TBSN+ in data_10 points to the TBT line in data_21
 ```
 ### b3b. Add extra parameters  
 Must both add a new AMLNK to table 10 and add a line with this AMLNK to table 21
-```{r}
 
+```r
 #
 # Functions
 #
@@ -3170,26 +5023,66 @@ table_21_add <- function(existing_data_21, amlnk){
 
 amlnk <- data_10 %>% table_10_amlnk_get("HCHA")
 data_10 <- data_10 %>% table_10_amlnk_set("HCHA", amlnk)
-data_21 <- data_21 %>% table_21_add(amlnk)
+```
 
+```
+## AMLNK set to 74 for 146 HCHA records
+```
+
+```r
+data_21 <- data_21 %>% table_21_add(amlnk)
+```
+
+```
+## 1 row with AMLNK 74 added to table 21
+```
+
+```r
 cat("\n")
+```
+
+```r
 amlnk <- data_10 %>% table_10_amlnk_get("HCHG")
 data_10 <- data_10 %>% table_10_amlnk_set("HCHG", amlnk)
-data_21 <- data_21 %>% table_21_add(amlnk)
+```
 
+```
+## AMLNK set to 75 for 146 HCHG records
+```
+
+```r
+data_21 <- data_21 %>% table_21_add(amlnk)
+```
+
+```
+## 1 row with AMLNK 75 added to table 21
+```
+
+```r
 cat("\n")
+```
+
+```r
 amlnk <- data_10 %>% table_10_amlnk_get("HCB")
 data_10 <- data_10 %>% table_10_amlnk_set("HCB", amlnk)
+```
+
+```
+## AMLNK set to 76 for 176 HCB records
+```
+
+```r
 data_21 <- data_21 %>% table_21_add(amlnk)
+```
 
-
-
+```
+## 1 row with AMLNK 76 added to table 21
 ```
 
 
 ### b4. Repeat checks (same as in b1 and b2)  
-```{r}
 
+```r
 # Check if some parameters in data_10 lack AMLNK  
 check1 <- data_10 %>%
   count(PARAM, AMLNK) %>%
@@ -3207,10 +5100,14 @@ if (nrow(check1) == 0 & nrow(check2) == 0){
 } else {
   stop("Either some data_10 data lack AMLNK, or some AMLNK point to a non-existing line in data_21. You must edit one of them. (Error in section 'Table 21 b4')")
 }
+```
 
 ```
+## All data_10 data have AMLNK, and all point to a line in data_21
+```
 ### b5. Find records in table 21 tha are not used  
-```{r}
+
+```r
 # data_21 %>% colnames() %>% dput()
 amlnk_missing <- data_21 %>% filter(!AMLNK %in% data_10$AMLNK) %>% pull(AMLNK)
 param_in_21_but_not_in_10 <- data_10_2016 %>%
@@ -3219,25 +5116,42 @@ param_in_21_but_not_in_10 <- data_10_2016 %>%
   summarise(N = n(), .groups = "drop")
 
 cat("Parameters in data_21 that are not in data_10: \n")
+```
+
+```
+## Parameters in data_21 that are not in data_10:
+```
+
+```r
 param_in_21_but_not_in_10 %>% pull(PARAM)
+```
+
+```
+## [1] "TBBPA"
+```
+
+```r
 #  "TBBPA" "TBP"
 ```
 
 ### b6. Those records are deleted from table 21
-```{r}
 
+```r
 data_21 <- data_21 %>% 
   filter(!AMLNK %in% param_in_21_but_not_in_10$AMLNK)
 
 cat(length(param_in_21_but_not_in_10$AMLNK), "lines deleted from data_21")
+```
 
+```
+## 1 lines deleted from data_21
 ```
 
 
 ### c. Add PARAM and MUNIT (will be removed afterwards)  
 These are fetched from data_10 
-```{r}
 
+```r
 # Backup (for debugging)
 # data_21_back <- data_21  # make backup
 # data_21 <- data_21_back  # restore from backup
@@ -3279,7 +5193,13 @@ if (FALSE){
 
 # Check 
 cat("Number of AMLNK without a corresponding PARAM (should be 0):", sum(is.na(data_21$PARAM)), "\n")
+```
 
+```
+## Number of AMLNK without a corresponding PARAM (should be 0): 0
+```
+
+```r
 # xtabs(~PARAM + MUNIT, data_10)
 # xtabs(~PARAM + MUNIT, data_21)
 # data_21 <- data_21 %>% select(-PARAM, -MUNIT)    # remove these variables (if error)
@@ -3287,15 +5207,28 @@ cat("Number of AMLNK without a corresponding PARAM (should be 0):", sum(is.na(da
 
 ### d. Check existing METOA codes  
 For biol. effects only
-```{r}
+
+```r
 xtabs(~METOA, data_21)
+```
+
+```
+## METOA
+##     AAS-CV      GC-MS     GC-MSD     GC-NCI        GRV    HPLC-FD HPLC-MS-MS 
+##          1         13         15          9          4          3          3 
+## HPLC-MS-NE     ICP-MS        KIN       VISO 
+##          9         10          2          2
+```
+
+```r
 # xtabs(~PARAM + METOA, data_21 %>% filter(METOA != ""))
 ```
 
 
 
 ### e1. Create 'ICES_METOA_codes2.xlsx'  
-```{r}
+
+```r
 #
 # This was used to create 'ICES_METOA_codes2.xlsx' (based on 'ICES_METOA_codes.xlsx')
 # Also some manual additions to that file was done (length, wight, VDSI etc.) so don't repeat this code
@@ -3330,20 +5263,26 @@ xtabs(~METOA, data_21)
 ```
 
 ### e2. Read method data   
-```{r}
 
+```r
 df_metoa <- readxl::read_excel("../Milkys_2018/Input_data/ICES_METOA_codes2.xlsx")
 
 # Change PFOSA to PFOSD in the method data
 sel <- df_metoa$PARAM %in% "PFOSA"; sum(sel)
+```
+
+```
+## [1] 1
+```
+
+```r
 df_metoa$PARAM[sel] <- "PFOSD"
-
-
 ```
 
 ### f. Rename original METOA and add new ones  
 By join with df_metoa. Note that both PARAM and UNIT are used for the join!  
-```{r}
+
+```r
 # data_21_back <- data_21  # make backup
 # data_21 <- data_21_2016  # restore from backup
 
@@ -3360,50 +5299,81 @@ if (n2 != n1)
 sel_lacking <- with(data_21, is.na(METOA) & (is.na(METOA_orig) | METOA_orig %in% ""))
 # Should be zero
 cat("Number of parameters without METOA or METOA_orig (should be zero):", sum(sel_lacking), "\n")
+```
+
+```
+## Number of parameters without METOA or METOA_orig (should be zero): 0
+```
+
+```r
 # data_21[sel_lacking,] %>% select(PARAM, MUNIT, METOA, METOA_orig)
 
 # Where we lack METOA, we use METOA_orig
 sel <- is.na(data_21$METOA)
 data_21$METOA[sel] <- data_21$METOA_orig[sel]
 cat("Number of codes gotten from METOA from last year:", sum(sel), "\n")
+```
 
+```
+## Number of codes gotten from METOA from last year: 8
+```
+
+```r
 # Check
 lacking_metoa <- is.na(data_21$METOA) | data_21$METOA %in% ""
 
 # Should be zero
 cat("Number of parameters without METOA (should be zero):", sum(lacking_metoa), "\n")
+```
 
+```
+## Number of parameters without METOA (should be zero): 0
+```
+
+```r
 if (sum(lacking_metoa) > 0){
   df <- data_21[lacking_metoa,]
   df
   data_10 %>% filter(AMLNK %in% df$AMLNK) %>% pull(PARAM) %>% unique()
 }
-
-
-
 ```
 
 ### Add METOA for GOSOI, FATWT and VDSI
-```{r}
+
+```r
 sel <- data_21$PARAM %in% "VDSI"; sum(sel)
+```
+
+```
+## [1] 1
+```
+
+```r
 data_21$METOA[sel] <- "VISO"  # Visual observation/identification
 
 sel <- data_21$PARAM %in% c("GOSOI", "FATWT%"); sum(sel)
-data_21$METOA[sel] <- "GRV"
+```
 
+```
+## [1] 2
+```
+
+```r
+data_21$METOA[sel] <- "GRV"
 ```
 
 
-```{r}
+
+```r
 # sel <- data_21$PARAM %in% "PFOSA"; sum(sel)
 # data_21$PARAM[sel] <- "Perfluorooctanesulfonic acid amide"
 # cat("PARAM changed from PFOSA to Perfluorooctanesulfonic acid amide for", sum(sel), "records\n")
-
 ```
 
 
 ### Pick correct variables in correct order  
-```{r}
+
+```r
 vars <- c("RECID", "AMLNK", "ALABO", "METDC", "REFSK", "METST", "METFP", 
   "METPT", "METCX", "METPS", "METOA", "AGDET", "SREFW", "SPECI", 
   "RLIST", "ORGSP", "SIZRF", "FORML")
@@ -3428,32 +5398,56 @@ It lacks
 **NOTE:** A check of the data in script 26 shows that **97A3 (Bodø havn)** is still lacking in table 91. See `Start making data_91` below.  
 
 ### a. Get 2018 data (submitted in 2019)  
-```{r}
 
+```r
 data_91 <- data_2018[["91"]]
 column_order_91 <- names(data_91)
-
 ```
     
   
 ### b. Check lacking stations  
-```{r}
 
+```r
 sel <- data_03$STNNO %in% data_91$STNNO
 cat("\nTable 03 stations not in table 91: \n")
-data_03[!sel,] %>% pull(STNNO)
+```
 
+```
+## 
+## Table 03 stations not in table 91:
+```
+
+```r
+data_03[!sel,] %>% pull(STNNO)
+```
+
+```
+## [1] "71A"  "97A3"
+```
+
+```r
 sel <- data_10$STNNO %in% data_91$STNNO
 cat("\nTable 10 stations not in table 91: \n")
-data_10[!sel,] %>% pull(STNNO) %>% unique()
+```
 
+```
+## 
+## Table 10 stations not in table 91:
+```
+
+```r
+data_10[!sel,] %>% pull(STNNO) %>% unique()
+```
+
+```
+## [1] "71A"  "97A3"
 ```
 
 
 
 ### c1. Add 97A3 (the actual Bodø harbour)     
-```{r}
 
+```r
 new_stations <- "97A3"
 new_lat <- 67.2963
 new_lon <- 14.3956
@@ -3483,11 +5477,14 @@ if (sum(check) == 0){
 } else {
   cat("Some, but not all, stations are already in data set. CHECK.\n")
 }
+```
 
 ```
+## 1 new stations added
+```
 ### c2. Add 71A (Bjørkøya, Grenland)     
-```{r}
 
+```r
 # data_2018[["91"]] %>% View()
 
 new_stations <- "71A"
@@ -3519,50 +5516,93 @@ if (sum(check) == 0){
 } else {
   cat("Some, but not all, stations are already in data set. CHECK.\n")
 }
+```
 
+```
+## 1 new stations added
 ```
 
 ### d. Remove stations not needed  
-```{r}
 
+```r
 sel <- data_91$STNNO %in% data_03$STNNO  
 cat("\nStations not in table 03: \n")
-data_91[!sel,] %>% pull(STNNO)
+```
 
+```
+## 
+## Stations not in table 03:
+```
+
+```r
+data_91[!sel,] %>% pull(STNNO)
+```
+
+```
+## [1] "51A"  "52A"  "I714"
+```
+
+```r
 sel <- data_91$STNNO %in% unique(data_10$STNNO)  
 cat("\nStations not in table 10: \n")
-data_91[!sel,] %>% pull(STNNO)
+```
 
+```
+## 
+## Stations not in table 10:
+```
+
+```r
+data_91[!sel,] %>% pull(STNNO)
+```
+
+```
+## [1] "51A"  "52A"  "I714"
+```
+
+```r
 # Remove those data lines nor found in table 10  
 data_91 <- data_91[sel,]
 cat("\n", sum(!sel), "stations deleted from table 91 \n")
+```
 
+```
+## 
+##  3 stations deleted from table 91
 ```
 
 ### e. Fix coordinates of station 76A2  
 ICES station dictionary: "Latitude, Longitude (58.7327 9.28104) Latitude range +/-, Longitude range +/- (0.00718, 0.01381)"  
 - This also fits with "Kartbase.xlsx"  
-```{r}
 
+```r
 station <- "76A2" 
 sel <- with(data_91, STNNO %in% station)
 
 cat("Existing coordinates for", station, ":", 
     minute2decimal(data_91$LATIT[sel]), ",", minute2decimal(data_91$LONGI[sel]), "\n")
+```
 
+```
+## Existing coordinates for 76A2 : 58.73013 , 9.738083
+```
+
+```r
 data_91$LONGI[sel] <- decimal2minute(9.28104)
 
 cat("New coordinates for", station, ":", 
     minute2decimal(data_91$LATIT[sel]), ",", minute2decimal(data_91$LONGI[sel]), "\n")
+```
 
-
+```
+## New coordinates for 76A2 : 58.73013 , 9.281033
 ```
 
 
 ### f. Sample dates   
 - Taken from raw data, 
-```{r}
 
+```r
 data_for_dates <- data_ind2 %>%
   filter(!is.na(SAMPLE_DATE)) %>%
   distinct(STATION_CODE, SAMPLE_DATE)
@@ -3609,8 +5649,21 @@ if (nrow(check_dates_1) > 0){
   }
   
 }
-cat("\n")
+```
 
+```
+## Some stations have >1 date
+```
+
+```
+## Warning: Mean date used for stations with more than have >1 date. Check 'check_dates_1'.
+```
+
+```r
+cat("\n")
+```
+
+```r
 # Check if we have all dates we need
 sel <- data_91$STNNO %in% df_dates$STNNO  
 if (sum(!sel) > 0){
@@ -3618,13 +5671,15 @@ if (sum(!sel) > 0){
 } else {
   message("All stations are found in 'df_dates'")
 }
+```
 
+```
+## All stations are found in 'df_dates'
 ```
 
 ### g. Add new dates
-```{r}
 
-
+```r
 data_91 <- data_91 %>%
   # Remove old date
   select(-SDATE) %>%
@@ -3633,9 +5688,6 @@ data_91 <- data_91 %>%
 
 # Correct column order
 data_91 <- data_91[column_order_91]
-
-
-
 ```
 
 
@@ -3647,10 +5699,18 @@ Original table is just 1 line - we will just use last year's table
 REVISION: Use
 * SHIPC = AA36 unspecified fishing vessel for all fish stations except 30B  
 * SHIPC = 58TB 	TRYGVE BRAARUD for 30B
-```{r}
+
+```r
 # Original
 data_90
+```
 
+```
+##   RECID SHIPC CRUIS OWNER PRDAT
+## 1    90  AA71 AA711
+```
+
+```r
 data_90 <- tibble(
   RECID = rep(90,3),
   SHIPC = c("AA36", "AA71", "58TB"),
@@ -3660,12 +5720,21 @@ data_90 <- tibble(
 )
 
 data_90
+```
 
+```
+## # A tibble: 3 × 5
+##   RECID SHIPC CRUIS OWNER PRDAT
+##   <dbl> <chr> <dbl> <lgl> <lgl>
+## 1    90 AA36      1 NA    NA   
+## 2    90 AA71      2 NA    NA   
+## 3    90 58TB      3 NA    NA
 ```
 
 ### Also change CRUIS in other tables  
 I.e.:  "data_90" "data_91" "data_03" "data_04" "data_10"
-```{r}
+
+```r
 # data_03
 
 data_03 <- data_03 %>%
@@ -3719,7 +5788,6 @@ if (FALSE){
     print(data_10 %>% filter(CRUIS == cr) %>% pull(STNNO) %>% unique())
   }
 }
-
 ```
 
 
@@ -3730,7 +5798,8 @@ if (FALSE){
 ## Table 92 - station info   
 Only temp for 23B, 30B, 53B   
 Line 21, PARAMs EROD and CYP1A require the reporting of bottom temperature (BotTemp) in record 92 (WGBEC2013)
-```{r}
+
+```r
 data_92 <- tibble(
   RECID = "92",
   CRUIS = c(1,3,1),          # See table 90
@@ -3750,7 +5819,8 @@ data_92 <- tibble(
 
 
 ### Check 1 - duplicates in 04
-```{r}
+
+```r
 # Are there duplicates in table 04? 
 check <- data_04 %>%
     group_by(CRUIS, STNNO, SMPNO, SUBNO) %>%
@@ -3760,7 +5830,13 @@ check <- data_04 %>%
     select(RECID:NOIMP, SUBNO, NOIMP, BULKID, everything())
   
 cat("Number of duplicates in table 04: ", nrow(check), "\n")
+```
 
+```
+## Number of duplicates in table 04:  0
+```
+
+```r
 if (nrow(check) > 0){
 
   cat("Please remove the duplicates.\n\n")
@@ -3781,12 +5857,12 @@ if (FALSE){
     arrange(STATION_CODE, SMPNO, SUBNO)
   
   }
-
 ```
 
 
 ### Check 2 - duplicates in 10
-```{r}
+
+```r
 # Are there duplicates in table 10? 
 check <- data_10 %>%
   group_by(CRUIS, STNNO, SMPNO, SUBNO, MATRX, PARAM) %>%
@@ -3796,7 +5872,13 @@ check <- data_10 %>%
   select(CRUIS, STNNO, SMPNO, SUBNO, MATRX, PARAM, VALUE, everything())
 
 cat("Number of duplicates in table 10: ", nrow(check), "\n")
+```
 
+```
+## Number of duplicates in table 10:  0
+```
+
+```r
 if (nrow(check) > 0){
 
   cat("Please remove the duplicates.\n\n")
@@ -3812,12 +5894,12 @@ if (nrow(check) > 0){
   tab2
   
 }
-
 ```
 
 
 ### Check 3 - join 10 + 91
-```{r}
+
+```r
 #
 # Stations: Measurement table vs station table
 #
@@ -3826,7 +5908,13 @@ check <- data_10 %>%
                  na_matches = "never", check = "VMN")
 
 cat("Checked measurement table (10) vs station table (91). If no error, check has passed.")
+```
 
+```
+## Checked measurement table (10) vs station table (91). If no error, check has passed.
+```
+
+```r
 # If lack of matches, do this:
 if (FALSE){
   df <- full_join(
@@ -3840,8 +5928,8 @@ if (FALSE){
 
 
 ### Check 4 - join 10 + 04
-```{r}
 
+```r
 #
 # Stations and sample numbers: Measurement table vs sample table
 #
@@ -3850,7 +5938,13 @@ check <- data_10 %>%
                  na_matches = "never", check = "VMN")
 
 cat("Checked measurement table (10) vs sample table (04). If no error, check has passed.")
+```
 
+```
+## Checked measurement table (10) vs sample table (04). If no error, check has passed.
+```
+
+```r
 # If errors, do this:
 if (FALSE){
   
@@ -3869,51 +5963,125 @@ if (FALSE){
   ) %>%
     filter(is.na(tab10) | is.na(tab04))
 }
-
 ```
 
 
 ### Check 5 - join 91 + 92
-```{r}
 
+```r
 check <- data_91 %>%
   safe_left_join(data_92, by = c("CRUIS", "STNNO"), 
                  na_matches = "never", check = "VN")
 
 cat("Checked station table (91) vs station information table (92). If no error, check has passed.")
+```
 
+```
+## Checked station table (91) vs station information table (92). If no error, check has passed.
+```
+
+```r
 if (FALSE){
   data_04 %>%
     group_by(CRUIS, STNNO, SMPNO, SUBNO) %>%
     mutate(n = n()) %>%
     filter(n > 1)
 }
-
 ```
 
 
 ### Check 6 - Missing values  
 
 #### a. Number of missing values per variable
-```{r}
 
+```r
 # Missing values
 cat("Missing values: \n----------------------------------------------------------\n")
+```
+
+```
+## Missing values: 
+## ----------------------------------------------------------
+```
+
+```r
 cat("Table 04\n")
+```
+
+```
+## Table 04
+```
+
+```r
 apply(is.na(data_04), 2, sum)
+```
+
+```
+##  RECID  CRUIS  STNNO  SMPNO  SUBNO  NOIMP  ORGSP  SEXCO  STAGE  CONES  ASTSA 
+##      0      0      0      0      0      0    511    472    511    511    511 
+##  NODIS BULKID 
+##    511     90
+```
+
+```r
 cat("Table 10\n")
+```
+
+```
+## Table 10
+```
+
+```r
 apply(is.na(data_10), 2, sum)
+```
+
+```
+## RECID CRUIS STNNO SMPNO SUBNO MATRX DEPHU DEPHL PARAM MUNIT BASIS AMLNK VFLAG 
+##     0     0     0     0     0     0 13931 13931     0     0    44     0 13931 
+## QFLAG VALUE PERCR SIGND UNCRT METCU DETLI LMQNT 
+## 10310     0 13931 13931  4567  4567 10798 10310
+```
+
+```r
 cat("\n")
 ```
 
 #### b. Missing uncertainties
-```{r}
 
+```r
 cat("Missing uncertainties: \n----------------------------------------------------------\n")
-xtabs(~is.na(UNCRT) + addNA(QFLAG), data_10)
+```
 
+```
+## Missing uncertainties: 
+## ----------------------------------------------------------
+```
+
+```r
+xtabs(~is.na(UNCRT) + addNA(QFLAG), data_10)
+```
+
+```
+##             addNA(QFLAG)
+## is.na(UNCRT)    Q <NA>
+##        FALSE    0 9364
+##        TRUE  3621  946
+```
+
+```r
 cat("\n\n")
+```
+
+```r
 cat("Missing uncertainties (data above LOQ) by parameter: \n----------------------------------------------------------\n")
+```
+
+```
+## Missing uncertainties (data above LOQ) by parameter: 
+## ----------------------------------------------------------
+```
+
+```r
 data_10 %>% 
   mutate(Status = case_when(
     !is.na(QFLAG) ~ "Under LOQ",
@@ -3921,29 +6089,120 @@ data_10 %>%
     is.na(UNCRT) ~ "Over LOQ, lacks UNCRT")
   ) %>%
   xtabs(~PARAM + Status, .)
+```
 
+```
+##         Status
+## PARAM    Over LOQ, has UNCRT Over LOQ, lacks UNCRT Under LOQ
+##   ACNE                     0                     0        26
+##   ACNLE                    8                     0        18
+##   AG                     258                     0        77
+##   ALAD                     0                    47         0
+##   ANT                     18                     0         8
+##   AS                     341                     0         0
+##   BAA                     18                     0         8
+##   BAP                     12                     0        14
+##   BAP3OH                   0                    29        31
+##   BBJF                    21                     0         5
+##   BD100                  198                     0        15
+##   BD126                    0                   138        75
+##   BD153                   74                     0       139
+##   BD154                  180                     0        33
+##   BD183                    0                     4       209
+##   BD209                    0                     0       213
+##   BDE28                  167                     0        46
+##   BDE47                  199                     0        14
+##   BDE99                  164                     0        49
+##   BGHIP                   16                     0        10
+##   BKF                     15                     0        11
+##   CB101                  272                     0        59
+##   CB118                  319                     0        12
+##   CB138                  297                     0        34
+##   CB153                  314                     0        17
+##   CB180                  253                     0        78
+##   CB28                   210                     0       121
+##   CB52                   250                     0        81
+##   CD                     332                     0         9
+##   CO                     333                     0         1
+##   CR                     325                     0        15
+##   CU                     341                     0         0
+##   DBA3A                    0                     3        23
+##   DDEPP                  145                     0         4
+##   DDTPP                  122                     0        27
+##   DRYWT%                 581                     0         0
+##   EROD                     0                    44         0
+##   FATWT%                 332                     0         0
+##   FLE                      0                     0        26
+##   FLU                     21                     0         5
+##   GOSOI                   44                     0         0
+##   HBCDA                  208                     0        24
+##   HBCDB                   24                     0       208
+##   HBCDG                   48                     0       184
+##   HCB                    103                    30        43
+##   HCHA                     2                     0       144
+##   HCHG                     1                     0       145
+##   HG                     371                     0         0
+##   ICDP                    14                     0        12
+##   LNMEA                  331                     0         0
+##   MCCP                   225                     0         5
+##   NAP                      0                     0        26
+##   NI                     322                     0        18
+##   PA                       6                     0        20
+##   PA1OH                    0                    39        21
+##   PB                     288                     0        53
+##   PFBS                     0                     0         6
+##   PFDA                     0                    22       170
+##   PFHpA                    0                     0       192
+##   PFHxA                    0                     0       192
+##   PFNA                     0                     7       185
+##   PFOA                     0                     0       192
+##   PFOS                     0                   171        21
+##   PFOSD                    0                   118        74
+##   PFUnda                   0                    94        98
+##   PYR                     18                     0         8
+##   PYR1OH                   0                    60         0
+##   SCCP                   224                     0         6
+##   SN                     303                     0        32
+##   TBSN+                   24                     0        12
+##   TDEPP                    0                   132        17
+##   VDSI                     0                     8         0
+##   WTMEA                  331                     0         0
+##   ZN                     341                     0         0
 ```
 
 #### c. Missing units
-```{r}
+
+```r
 cat("Missing units: \n----------------------------------------------------------\n")
+```
+
+```
+## Missing units: 
+## ----------------------------------------------------------
+```
+
+```r
 check <- data_10 %>%
   filter(is.na(MUNIT)) 
 cat(nrow(check), "records lack MUNIT \n")
+```
 
+```
+## 0 records lack MUNIT
+```
+
+```r
 if (nrow(check) > 0){
   cat("Missing MUNIT - Parameters: \n")
   xtabs(~PARAM, check)
   stop("All records must have MUNIT! (Check 6c)")
 }
-
-  
 ```
 
 
 ### Check 7
-```{r}
 
+```r
 # Check GOSOI (gonado-somatic index) for EROD samples
 check <- data_10 %>%
   filter(PARAM %in% c("EROD", "GOSOI")) %>%
@@ -3953,17 +6212,22 @@ check <- data_10 %>%
 percent_ok <- mean(!is.na(check$GOSOI))*100
 
 cat(percent_ok, "% of the EROD values have gonado-somatic index (GOSOI) \n")
+```
 
+```
+## 100 % of the EROD values have gonado-somatic index (GOSOI)
+```
+
+```r
 if (percent_ok < 100){
   warning("GOSOI is needed for all EROD values! (Check 7)")
 }
-
 ```
 
 
 ### Check 8
-```{r}
-  
+
+```r
 if (FALSE){
 
     check1 <- data_10 %>% left_join(data_04[,2:6])
@@ -4014,8 +6278,8 @@ if (FALSE){
 ### Write ICES submission file    
 - automatically sets version number (finds the highest existing version number and adds one)  
 - Set up to use UTF-8 when writing, but apparently we need to change the file manually to UTF-8 afterwards anyway (in Notepad++, set encoding to ANSI, then "convert to UTF-8")  
-```{r}
 
+```r
 write_ices_file <- FALSE
  write_ices_file <- TRUE
 
@@ -4024,14 +6288,50 @@ write_ices_file <- FALSE
 # See ?write.table
 #
 cat("Set the way numbers are written as characters: \n")
+```
+
+```
+## Set the way numbers are written as characters:
+```
+
+```r
 cat("Existing setting: \n")
+```
+
+```
+## Existing setting:
+```
+
+```r
 as.character(0.000004)   # check
+```
+
+```
+## [1] "4e-06"
+```
+
+```r
 old_options <- options(scipen = 3)
 cat("New setting: \n")
+```
+
+```
+## New setting:
+```
+
+```r
 as.character(0.000004)   # check again
+```
+
+```
+## [1] "0.000004"
+```
+
+```r
 cat("\n\n")
+```
 
-
+```r
 if (write_ices_file){
 
   if (!dir.exists(save_folder_txt)){
@@ -4073,15 +6373,20 @@ if (write_ices_file){
   cat("Version", version, "written as text file at", as.character(Sys.time()))
 
   } 
+```
 
+```
+## Version 18 written as text file at 2022-09-27 15:34:10
+```
+
+```r
 # Reset options
 options(old_options)
-
 ```
 
 ### Save as R data
-```{r}
 
+```r
 if (write_ices_file){
   
 
@@ -4103,20 +6408,26 @@ if (write_ices_file){
   cat("Filename: ",  paste0(save_folder_rds, "/", fn_rds), "\n")
   
 }
+```
 
+```
+## Version 18 written as rds (R data) file at 2022-09-27 15:34:10 
+## Filename:  Files_to_ICES/2020/Rdata/842_NIVA2020CF_18.rds
+```
+
+```r
 if (FALSE){
   
   # For reading file
   datalist <- readRDS("Files_to_ICES/2020/Rdata/842_NIVA2020CF_09.rds")
   
 }
-
 ```
 
 
 ### Save as Excel file  
-```{r}
 
+```r
 if (FALSE){
   
   library(writexl)
@@ -4129,7 +6440,6 @@ if (FALSE){
   cat("Filename: ",  paste0(save_folder_rds, "/", fn_rds), "\n")
   
 }
-
 ```
 
 
@@ -4143,7 +6453,8 @@ NOTE:
     - The order of the tables in the latter rds files ( a list) differs form the order in vesrion 1-36     
     - In these versions, 
 - (Version 37 doesn't exist, at least not as rds file)
-```{r}
+
+```r
 # Set this to true for restoring the tables 
 # NOTE: will overwrite existing data_XX objects
 restore <- FALSE
@@ -4187,7 +6498,6 @@ if (restore) {
   data_92 <- data_list[["92"]]
   
 }
-
 ```
 
 ## Checks of data  
@@ -4195,8 +6505,8 @@ if (restore) {
 ### Check positions     
 - ICES position strings getting the warning 'Station position appears to be on land'   
 - Checked using norgeskart.no  
-```{r}
 
+```r
 # Turns ICES position string into decimal longitude, latitude
 copy_decimal <- function(string){ 
   str2 <- strsplit(string, ",")[[1]]
@@ -4212,14 +6522,20 @@ copy_decimal <- function(string){
 # For each line, paste into search box of norgeskart.no
 "+59 53.737,+05 6.514" %>% copy_decimal()
 "+69 39.180,+18 58.440" %>% copy_decimal()
-"+79 0.240,+12 6.600" %>% copy_decimal()
+```
 
+```
+## Warning in close.connection(con): unable to open the clipboard
+```
+
+```r
+"+79 0.240,+12 6.600" %>% copy_decimal()
 ```
 
 
 ### Check specific lines in data
-```{r}
 
+```r
 check <- FALSE
 # check <- TRUE
 if (check) {
@@ -4231,16 +6547,14 @@ if (check) {
     strsplit(split = ";") %>%
     map(~.[colnumber])
 }
-
-
 ```
 
 ### Check SHIPC references    
 Mail from Anna (accessions@ices.dk) 4. sept 2019:  
 Due to some critical errors, it is presently impossible to upload the NIVA 2018 CF file to DOME.
 The SHIPC references in all records but record 90 are erroneous, and don’t match the ‘parent’ 90.SHIPC code.  
-```{r}
 
+```r
 if (FALSE){
 
 # Which tables contain SHIPC?
@@ -4269,8 +6583,8 @@ if (FALSE){
 Mail from Anna (accessions@ices.dk) 12. sept 2019: 
 'There is actually a problem with a missing record 91 for the STNNO=97A3 that is used in other record types'.  
 Also lacking from record 92 but that doesnæt matter (only contains bottom temperatures)      
-```{r}
 
+```r
 if (FALSE){
 
   
@@ -4289,12 +6603,11 @@ for (station_code in c("97A2", "97A3")){
 
 
 }
-
 ```
 
 ### Check DRYWT 
-```{r}
 
+```r
 # Check parameters per matrix (excluding LI, MU)
 df <- data_10 %>%
   filter(!MATRX %in% c("LI","MU")) %>%
@@ -4303,23 +6616,86 @@ df <- data_10 %>%
   as.data.frame()
 for (i in seq_len(nrow(df)))
   cat(df[i,1], "\n", df[i,2], "\n\n")
+```
 
+```
+## BI 
+##  PA1OH, PYR1OH, BAP3OH 
+## 
+## BL 
+##  ALAD, CB118, NI, HCB, HBCDA, CD, ZN, PFHxA, PFOA, SN, BD126, BD154, BD209, PFOSD, SCCP, PFHpA, HBCDB, AS, CO, BD100, PFDA, CB180, CR, BDE99, PFOS, PFNA, CB138, BDE47, MCCP, PFUnda, CB101, HG, AG, CB153, HBCDG, BD153, CB52, PB, BD183, BDE28, FATWT%, CU, CB28 
+## 
+## EH 
+##  CD, PB, CO, PFOS, CB138, PFOA, BD153, SN, CB118, CR, BD154, PFHxA, ZN, CB101, BDE47, HBCDG, AG, CU, HCB, SCCP, BD126, NI, PFUnda, PFHpA, PFDA, HG, FATWT%, CB52, PFOSD, BD209, AS, CB28, HBCDB, BDE99, PFNA, BD100, BDE28, MCCP, CB153, CB180, BD183, HBCDA 
+## 
+## GO 
+##  GOSOI 
+## 
+## LIS9 
+##  EROD 
+## 
+## SB 
+##  CO, CU, CB118, CB138, PB, HG, CR, AS, SN, CB28, CD, CB153, NI, CB52, CB101, AG, CB180, FATWT%, ZN, DRYWT%, BBJF, BGHIP, PYR, ACNE, BAA, NAP, ACNLE, BAP, ICDP, DBA3A, PA, ANT, FLE, BKF, FLU, DDTPP, TDEPP, HCB, HCHG, DDEPP, HCHA, TBSN+, HBCDB, BDE28, BD183, BD154, HBCDG, BDE99, BD209, HBCDA, SCCP, BD100, MCCP, BD153, BD126, BDE47, PFHxA, PFOSD, PFHpA, PFDA, PFNA, PFOS, PFOA, PFUnda, PFBS, VDSI 
+## 
+## WO 
+##  LNMEA, WTMEA
+```
 
+```r
 # Count samples
 data_10 %>%
   count(STNNO, SMPNO, SUBNO, MATRX) %>% 
   nrow()   # 1116 samples
+```
 
+```
+## [1] 1138
+```
+
+```r
 # Count measurements per matrix
 data_10 %>%
   count(MATRX)
+```
 
+```
+##   MATRX    n
+## 1    BI  180
+## 2    BL  670
+## 3    EH  630
+## 4    GO   44
+## 5    LI 8285
+## 6  LIS9   44
+## 7    MU  516
+## 8    SB 2900
+## 9    WO  662
+```
+
+```r
 # Percent of samples with dry weight, by matrix 
 data_10 %>%
   group_by(STNNO, SMPNO, SUBNO, MATRX) %>% 
   summarise(Drywt_n = sum(PARAM %in% "DRYWT%"), .groups = "drop") %>%    # count(Drywt_n)  # just checking
   group_by(MATRX) %>%  
   summarise(Drywt_perc = 100*mean(Drywt_n), N = n(), .groups = "drop") 
+```
+
+```
+## # A tibble: 9 × 3
+##   MATRX Drywt_perc     N
+##   <chr>      <dbl> <int>
+## 1 BI           0      60
+## 2 BL           0      62
+## 3 EH           0      15
+## 4 GO           0      44
+## 5 LI          99.6   233
+## 6 LIS9         0      44
+## 7 MU         100     258
+## 8 SB         100      91
+## 9 WO           0     331
+```
+
+```r
   # Lacking for 23% of SB samples
   # Lacking for all:
   #   cod biol. effect parameters (MATRX = BI, BL, LIS9) 
@@ -4333,14 +6709,25 @@ data_10 %>%
   group_by(STNNO, MATRX) %>%
   summarise(Drywt_perc = 100*mean(Drywt_n), N = n(), .groups = "drop") %>%
   filter(Drywt_perc < 100 & MATRX %in% "SB")
-  # 19N ONLY (Eider duck)
+```
 
+```
+## `summarise()` has grouped output by 'STNNO', 'SMPNO', 'SUBNO'. You can override
+## using the `.groups` argument.
+```
+
+```
+## # A tibble: 0 × 4
+## # … with 4 variables: STNNO <chr>, MATRX <chr>, Drywt_perc <dbl>, N <int>
+```
+
+```r
+  # 19N ONLY (Eider duck)
 ```
 
 ### Check a parameter, inc.. uncertainty     
-```{r}
 
-
+```r
 if (FALSE){
   
   param <- "TBSN+"
@@ -4359,9 +6746,6 @@ if (FALSE){
   
   
   }
-
-
-
 ```
 
 
