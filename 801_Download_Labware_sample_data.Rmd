@@ -309,7 +309,6 @@ labware_2020 <- get_nivabase_data(
 
 find_year <- 2021
 
-
 check1 <- get_nivabase_data(
   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where upper(PROSJEKT) like '%MILKYS%'")
 check1 %>%
@@ -333,7 +332,7 @@ check3 %>%
 ```
 
 
-### b. Get data    
+### b1. Get 'check sample' data    
 ```{r}
 
 # o # o # o # o # o # o # o # o # o # o 
@@ -352,6 +351,30 @@ labware_2021 <- get_nivabase_selection(
 
 # Should be mostly 2021! 
 check_dates <- labware_2021$SAMPLED_DATE
+table(year(check_dates))
+
+```
+
+
+### b2. Get 'import' data    
+```{r}
+
+# o # o # o # o # o # o # o # o # o # o 
+# NOTE: HARD-CODED
+# o # o # o # o # o # o # o # o # o # o 
+
+prosj <- "O 210200.ANAIN"
+cat("Name of project:", prosj, " \n\n")
+
+labware_import_2021 <- get_nivabase_selection(
+  "*",
+  "LABWARE_IMPORT",
+  "PROSJEKT",
+  prosj, values_are_text = TRUE
+  )
+
+# Should be mostly 2021! 
+check_dates <- labware_import_2021$SAMPLED_DATE
 table(year(check_dates))
 
 ```
@@ -386,6 +409,10 @@ if (FALSE){
 
 filename <- paste0("Labware_samples_2021_", file_date, ".rds")
 saveRDS(labware_2021, paste0("Files_to_Jupyterhub_2021/", filename))
+cat("File", sQuote(filename), "saved for 2021 \n")
+
+filename <- paste0("Labware_import_2021_", file_date, ".rds")
+saveRDS(labware_import_2021, paste0("Files_to_Jupyterhub_2021/", filename))
 cat("File", sQuote(filename), "saved for 2021 \n")
 
 
