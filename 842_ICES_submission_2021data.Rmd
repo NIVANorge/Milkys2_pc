@@ -1000,17 +1000,11 @@ if (nrow(check) > 0){
 
 ```
 
-## .
-## .
-## . HERE I AM
-## .
-## .
-
 ### d. Comparison with sample file   
 One example station  
 ```{r}
 
-example_station <- "02B"
+example_station <- "23B"
 
 df_samples %>%
   filter(AQUAMONITOR_CODE %in% example_station & TISSUE == "LI-Lever") %>% 
@@ -1139,8 +1133,8 @@ check <- df1 %>%
 cat(nrow(check), "specimens lack in 'data_04_fish_main'")
 
 if (nrow(check) > 0){
-  
-  stop("You must create 'data_04_fish_extra' for the lacking specimens. See nextchunk. (Error in section 'Table 04 i1')")
+   
+  stop("You must create 'data_04_fish_extra' for the lacking specimens. See next chunk. (Error in section 'Table 04 i1')")
   
 } else {
   
@@ -1161,12 +1155,24 @@ if (nrow(check) > 0){
   # NOTE: this code is not finished - must add new SUBNO numbers (wher it says 'extra_subno_numbers' in the code
   # These SUBNO numbers must continue where the former SUBNO numbers stop for this station
   
+  # NOTE: at least works if check has a single station 
+  max_subno <- data_04_fish_main %>%
+    filter(STATION_CODE %in% unique(check$STATION_CODE)) %>%
+    pull(SUBNO) %>%
+    max()
+  
+  extra_subno_numbers <- max_subno + 1
+    
   data_04_fish_extra <- check %>%
     mutate(LATIN_NAME = "Gadus morhua",
            NOIMP = 1,
-           SAMPLE_NO_Muscle = NA, SAMPLE_NO_Liver = NA,
+           SAMPLE_NO_Muscle = NA, SAMPLE_NO_Liver = 4,
            SUBNO = extra_subno_numbers, BULKID = "",
            SMPNO = 1)
+  
+  data_04_fish_main <- bind_rows(
+    data_04_fish_main, 
+    data_04_fish_extra)
   
 } else {
   
@@ -1180,7 +1186,9 @@ if (nrow(check) > 0){
 ### j1. Fish table, join together  
 ```{r}
 
-no_flatfish <- identical(unique(subset(data_ind2, TISSUE_NAME == "Lever")$LATIN_NAME), "Gadus morhua") 
+no_flatfish <- identical(
+  unique(subset(data_ind2, TISSUE_NAME == "Lever")$LATIN_NAME), 
+  "Gadus morhua") 
 
 if (no_flatfish){
 
@@ -1196,7 +1204,7 @@ if (no_flatfish){
   
 }
 
-cat("'data_04_fish' created - it has", nrow(data_04_fish), "lines")
+cat("'data_04_fish' created - it has", nrow(data_04_fish), "lines \n")
 
 ```
 
@@ -1406,10 +1414,12 @@ df_amlnk <- data_10_2016 %>%
 df_amlnk$n <- NULL
 ```
 
+
 ### Add 'new' parameters  
 - GOSOI (gonadal somatic index = (gonad weight/whole organism weight) x 100), https://vocab.ices.dk/?CodeID=51654     
 - INTF% = intersex, https://vocab.ices.dk/?CodeID=53682       
 - C13D and N15D = isotope ratio δ13C:12C (https://vocab.ices.dk/?CodeID=197194) and isotope ratio δ15N:14N (https://vocab.ices.dk/?CodeID=197195)   
+
 ```{r}
 
 params_new <- c("GOSOI", "INT%", "C13D", "N15D")
@@ -1755,13 +1765,16 @@ df_matrx <- tibble(
 # xtabs(~MUNIT + PARAM, data_10_2016 %>% filter(PARAM %in% c("ALAD", "BAP3OH", "EROD", "PA1OH", "PYR1OH")))
 ```
 
-#### c1a2. Check when SAMPLE_NO_Muscle =/= Fish_no  
+#### c1a2. Check when SAMPLE_NO_Muscle =/= Fish_no   
+
 This could potentially cause trouble, as biological effects follow Fish_no, not SAMPLE_NO_Muscle as assumed in c1a3.   
 But this is no problem: only 2 cases, for 02B and 36B - which don't have biological effects   
 ```{r}
 
-data_04_fish %>%
-  filter(Fish_no != SAMPLE_NO_Muscle)
+check <- data_04_fish %>%
+  filter(Fish_no != SAMPLE_NO_Muscle)  
+check
+
 
 ```
 
@@ -1895,6 +1908,18 @@ if (n1 == n2){
   cat("Creating data_conc_fishbiol - join NOT OK!\n")
 }
 
+check <- data_conc_fishbiol %>%
+  filter(is.na(SUBNO))
+
+if (nrow(check) > 0){
+  check2 <- unique(check$STATION_CODE)
+  check3 <- unique(check$SAMPLE_NO2)
+  message("Lacking SUBNO for the following SAMPLE_NO: ", paste(check3, collapse = ","),
+          "in STATION_CODE: ", paste(check2, collapse = ","),
+       " (go back to Table 04.c to fix 'data_04_fish')")
+  stop("'data_04_fish' must be fixed (error in Table 10 c1a4)\n")
+}
+
 # data_conc_fishbiol %>% filter(STATION_CODE == "24B" & PARAM %in% "HG") %>% as.data.frame()
 # data_conc_fishbiol %>% filter(STATION_CODE == "23B" & PARAM %in% "EROD") %>% as.data.frame()
 
@@ -1965,24 +1990,9 @@ if (FALSE){
 ```
 
 
-#### c1a5. Check 33F
-```{r}
-# Sample file
-df_samples %>%
-  filter(AQUAMONITOR_CODE == "33F") %>% 
-  select(AQUAMONITOR_CODE, TISSUE, DESCRIPTION, BIOTA_SAMPLENO, X_BULK_BIO) %>%
-  arrange(TISSUE, BIOTA_SAMPLENO)
+#### c1a5. Check 33F   
 
-# Table 04  
-data_04_fish_33F %>%
-  mutate(Sort = case_when(
-    BULKID == "" ~ SUBNO,
-    !is.na(BULKID) ~ as.numeric(BULKID))
-  ) %>%
-  arrange(Sort) %>%
-  select(-Sort)
-
-```
+**Not needed **  
 
 
 #### c1b. Liver part (EXCLUDING EROD, which is in liver but is numbered following specimen number)  
@@ -2145,14 +2155,27 @@ xtabs(~PARAM +  is.na(MATRX), data_conc_fish)
 
 ### c4. Set quantification limit = 1 for EROD
 ```{r}
+
 sel <- data_10_fish$PARAM == "EROD"; sum(sel)
 data_10_fish$DETLI[sel] <- 1
+
 ```
 
 ### c5. Checks
 ```{r}
+
 cat("Table 10 - missing values\n")
-apply(is.na(data_10_fish), 2, sum)
+missing <- apply(is.na(data_10_fish), 2, sum)
+missing
+
+critical1 <- c("RECID", "CRUIS", "STNNO", "SMPNO", "SUBNO")
+critical2 <- c("MATRX", "PARAM", "MUNIT", "BASIS", "AMLNK", "VALUE", "UNCRT", "METCU")
+if (sum(missing[critical1]) > 0)
+  stop("Part Table 10.c5. Critical ID columns have missing values. Check 'data_conc_fish'")
+if (sum(missing[critical2]) > 0)
+  warning("Part Table 10.c5. Some important columns have missing values (e.g. AMLNK), but will be fixed later")
+# This includes lacking AMLNK for HCHA, HCHG, HCB (see  Table 21.b3b)
+
 # xtabs(~PARAM, data_10_fish)
 
 cat("\n\nTable 10\n")
@@ -2182,6 +2205,13 @@ if (FALSE){
     filter(is.na(VALUE)) %>%
     View()
   
+  data_conc_fish %>%
+    filter(is.na(SUBNO)) %>%
+    View("SUBNO missing")
+  
+  data_conc_fish %>%
+    filter(is.na(AMLNK)) %>%
+    View("AMLNK missing")
 }
 
 
@@ -2216,9 +2246,9 @@ Add SMPNO, MUNIT, AMLNK
 ```{r}
 data_conc_bluemussel <- data_conc %>%
   filter(LATIN_NAME %in% 'Mytilus edulis') %>%
-  left_join(df_smpno %>% select(LATIN_NAME, SMPNO)) %>%
-  left_join(df_munit) %>%
-  left_join(df_amlnk) %>%
+  left_join(df_smpno %>% select(LATIN_NAME, SMPNO), by = "LATIN_NAME") %>%
+  left_join(df_munit, by = "UNIT") %>%
+  left_join(df_amlnk, by = "PARAM") %>%
   # Fix MUNIT for dry weight and fat weight  
   mutate(
     MUNIT = case_when(
@@ -2240,6 +2270,7 @@ No longer needed
 ### e2. data_10, blue mussel part
 For blue mussel, we set SUBNO = SAMPLE_NO2
 ```{r}
+
 data_10_bluemussel <- data.frame(
   RECID = "10", 
   CRUIS = "AA711", 
@@ -2383,6 +2414,7 @@ xtabs(~addNA(MUNIT), data_10_vdsi)
 - SUBNO 16-30 should have EH - Egg homogenate of yolk and albumin    
 - SUBNO 1-15 should have BL - Blood  
 ```{r}
+
 # Use left join to data_04_eider to add SUBNO 
 # df_eider <- 
 df1 <- data_conc %>% 
@@ -2447,6 +2479,7 @@ data_10_eider <- data.frame(
 
 ### j. Combine fish, blue mussel and fat weight/dryweight
 ```{r}
+
 # Length version 1
 # data_10 <- rbind(data_10_fish, data_10_bluemussel, data_10_fatdry, data_10_length, data_10_vdsi)
 
@@ -2506,6 +2539,7 @@ data_10$BASIS[sel] <- ""
 
 ### k2. Check why we lack SMPNO (if needed)
 ```{r}
+
 if (sum(is.na(data_10$SMPNO)) > 0){
   # Which stations lack SMPNO?
   xtabs(~STNNO + is.na(SMPNO), data_10)
@@ -2634,6 +2668,7 @@ table(is.na(data_conc$DETECTION_LIMIT))
 
 ### k9a. For less-thans (QFLAG = <), set UNCRT = NA
 ```{r}
+
 cat("Before: \n")
 xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
 
@@ -2670,14 +2705,16 @@ xtabs(~addNA(QFLAG) + addNA(METCU), data_10)
 
 ```
 
-### k9c. Clear DETLI for PAH metabolites   
-- We use QFLAG instead  
+### k9c. Set DETLI for PAH metabolites   
+
+- Set to   
+
 ```{r}
 
 sel <- data_10$PARAM %in% c("PA1OH", "PYR1OH", "BAP3OH")  
 sum(sel)
 
-data_10$DETLI[sel] <- NA
+data_10$DETLI[sel] <- 1
 
 ```
 
@@ -3257,7 +3294,35 @@ data_21 <- data_21[vars]
 
 ## Table 20 - sampling methods  
 Just 3 lines - we will just use last year's table  
-NOte that the eider duck sampling (SMTYP) we will denote as 'HAN' = "by hand'
+Note that the eider duck sampling (SMTYP) we will denote as 'HAN' = "by hand'
+
+```{r}
+
+# This is as follows:
+
+# RECID SLABO SMLNK SMTYP NETOP MESHS SAREA LNSMB SPEED PDMET SPLIT Line_no
+# 20;NIVA;11;HAN;;;;;;;
+# 20;NIVA;9;GIL;;;;;;;
+# 20;NIVA;8;BOT;;;;;;;
+
+# Change to (vode below):
+
+# 20;NIVA;11;HAN;;;;;;;
+# 20;NIVA;8;GIL;;;;;;;
+
+data_20 <- structure(
+  list(
+    RECID = c("20", "20", "20"), 
+    SLABO = c("NIVA", "NIVA", "NIVA"), 
+    SMLNK = c("11", "9", "8"), 
+    SMTYP = c("HAN", "GIL", "BOT"), 
+    NETOP = c("", "", ""), MESHS = c("", "", ""), SAREA = c("", "", ""), 
+    LNSMB = c("", "", ""), SPEED = c("", "", ""), PDMET = c("", "", ""), 
+    SPLIT = c("", "", ""), 
+    row.names = c(NA, 
+-3L), class = "data.frame")
+
+```
 
 
 ## Table 91 - stations  
@@ -3327,14 +3392,17 @@ if (sum(check) == 0){
 }
 
 ```
-### c2. Add 71A (Bjørkøya, Grenland)     
+### c2. Add 71A and 20B  
+
+- 71A = Bjørkøya, Grenland   
+- 20B = Longyearbyen  
 ```{r}
 
 # data_2018[["91"]] %>% View()
 
-new_stations <- "71A"
-new_lat <- 59.02333	
-new_lon <- 9.75367
+new_stations <- c("71A", "20B")
+new_lat <- c(59.02333, 78.2760)	
+new_lon <- c(9.75367, 15.4060)
 
 data_91_extra <- tibble(
   RECID = "91",
@@ -3363,6 +3431,16 @@ if (sum(check) == 0){
 }
 
 ```
+### c3. Check if we have all stations  
+```{r}
+
+check <- setdiff(unique(data_10$STNNO), data_91$STNNO)
+
+if (length(check) > 0)
+  stop("Lacking station(s)", paste(check, collapse = ", "))
+
+```
+
 
 ### d. Remove stations not needed  
 ```{r}
