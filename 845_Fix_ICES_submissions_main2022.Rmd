@@ -1,0 +1,424 @@
+---
+title: ""
+author: "DHJ"
+date: "2 1 2022"
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    keep_md: true
+---
+
+Following up data queries from Rob, found here  
+`H:\seksjon 212\MIME 2021\Data_queries`    
+from mails from Rob Fryer 21.11 and 13.12.2021  
+- queries.doc          = Rob's original file - refers to file in 'dodgy_data_biota_211121'  
+- queries_norway.doc   = DHJ's comments to Rob's file  
+
+
+
+## 0. Library + functions  
+Functions are from `"H:\Documents\seksjon 212\Milkys 2017\Analyse\21_read_ices_file.R"`
+```{r}
+
+# library(tidyverse)
+library(dplyr)
+library(purrr)
+library(tidyr)     # pivot_wider
+library(ggplot2)
+source("845_Check_ICES_submission_functions.R")
+
+```
+
+
+## 1. ICES file version 01
+
+```{r}
+
+fn <- "Files_to_ICES/2021/Test/NIVA2021CF_01.NO"
+
+```
+
+
+### Read data
+```{r}
+
+# readLines(fn, 3)
+
+dat_txt <- readLines(fn)
+
+# comma in older files, semicolon in newer - but this is now checked by 'read_ices_file'  
+dat_raw <- read_ices_file(fn)
+
+# debugonce(set_numeric)
+dat <- dat_raw %>%   
+  add_field_codes() %>%
+  set_numeric()
+
+```
+
+### Check all links  
+```{r}
+# We set 'print_values = TRUE' as there were some missing 
+check_all_links(dat, print_values = TRUE)
+
+```
+
+
+### PARAM bile metabolites require reporting of DETLI    
+
+- Found to be 1 - we set it to 1  
+- 135	warning  
+    - Cross field warning check (condition not met)  
+    - Line 747,750,753,756 PARAM bile metabolites require reporting of DETLI (WGBEC2013)  - most common
+    - Line 11569, LIPIDWT% or FATWT% should be >= 1% for fish - 6 cases
+
+#### Check  
+```{r}
+
+# example
+dat_txt[c(747,750,753,756)]
+
+# Check all QFLAG
+# dat[["10"]] %>% xtabs(~addNA(QFLAG) + PARAM, .)
+
+# Check  
+dat[["10"]] %>%
+  filter(PARAM %in% c("BAP3OH", "PYR1OH", "PA1OH")) %>%
+  group_by(PARAM, QFLAG) %>%
+  summarise(
+    Min = min(VALUE),
+    Max = max(VALUE),
+  )
+
+# Plot  
+gg <- dat[["10"]] %>%
+  filter(PARAM %in% c("BAP3OH", "PYR1OH", "PA1OH")) %>% 
+  ggplot(aes(PARAM, VALUE)) + 
+  geom_violin() +
+  facet_grid(vars(QFLAG))
+
+gg
+gg + scale_y_log10()
+
+```
+#### Fix  
+```{r}
+
+sel <- with(dat[["10"]], PARAM %in% c("BAP3OH", "PYR1OH", "PA1OH"))
+sum(sel)
+
+dat[["10"]]$DETLI[sel] <- 1
+
+```
+
+### VALUE of VDSI must be > 0 if METCU is "%"  
+
+- conclusion: this is an erronous check, the percentage is actually zero
+- 8 error
+    - Cross field check (error preventing data import)
+    - Line 11491,11492,11497,11502 etc.: VALUE must be > 0 if METCU is "%"	 
+    - 8 lines  
+
+#### Check        
+```{r}
+
+# example
+dat_txt[c(11491,11492,11497,11502)]
+
+# Check  
+dat[["10"]] %>%
+  filter(PARAM %in% "VDSI" & VALUE == 0)
+
+```
+
+### Sampling coordinates are not in the station dictionary defined area for this station  
+
+#### Check   
+- 
+```{r}
+
+# 71A Bjørkøya (Risøyodden),+78 16.560,+15 24.360  
+
+
+dat[["91"]] %>%
+  filter(grepl("71A", STATN)) %>%
+  select(STNNO, LATIT, LONGI, STATN)
+# 2 lines, one for the actual 71A, the other for STNNO = 20B 
+
+# - latitude/longitude for the last one is ok - checked below
+# +78 16.560	+15 24.360
+lat <- 78 + 16.560/60
+lon <- 15 + 24.360/60
+
+if (FALSE){
+  # interactive map - copy-paste to the R console
+  library(leaflet)
+  leaflet() %>%
+    addTiles() %>%
+    addMarkers(lng = lon, lat = lat)
+}
+
+
+```
+
+#### Fix
+```{r}
+
+sel <- with(dat[["91"]], grepl("71A", STATN) & STNNO == "20B")
+sum(sel)
+
+dat[["91"]]$STATN[sel] <- "20B Longyearbyen"
+
+```
+
+### Table 20 has one row without corresponding SMLNK values in table 3   
+
+- See "Check all links" above   
+- No warning from DATSU, but we fix it anyway  
+
+#### Check  
+```{r}
+
+# From "Check all links" above
+
+# *** 03 (sample occasion per station) and 20 (sampling methods) ***
+# Variables used for join: SMLNK 
+# Table 1 has 52 rows (0 rows with missing values in join variables)
+# Table 2 has 3 rows (0 rows with missing values in join variables)
+# All variable combinations in table 1 exist in table 2
+# 
+# Table 2 has 1 rows (1 variable combinations) without corresponding rows in table 1
+# Line numbers: 12806 
+#   Number of SMLNK values in missing rows: 1
+#     - 9
+  
+xtabs(~SMLNK, dat[["03"]])
+
+# xtabs(~SMLNK + STNNO, dat[["03"]])
+
+```
+
+#### Fix  
+```{r}
+
+# Delete BOT (bottom trawling)  
+# It doesn't matter for the results, and we donæt know which fihsermen have used it anyway  
+sel1 <- dat[["20"]]$SMTYP %in% "BOT"
+dat[["20"]] <- dat[["20"]][!sel1,]
+
+# Change SMLNK (link reference to table 03) to 8  
+sel2 <- dat[["20"]]$SMTYP %in% "GIL"
+dat[["20"]]$SMLNK[sel2] <- "8"
+
+nrow(dat[["20"]])
+
+```
+
+
+### Check all links again  
+
+```{r}
+
+check_all_links(dat, print_values = TRUE)
+
+```
+
+### Write ICES submission file    
+- automatically sets version number (finds the highest existing version number and adds one)  
+- Set up to use UTF-8 when writing, but apparently we need to change the file manually to UTF-8 afterwards anyway (in Notepad++, set encoding to ANSI, then "convert to UTF-8")  
+```{r}
+
+write_ices_file <- FALSE
+ write_ices_file <- TRUE
+
+#
+# Set "scipen" options so we avoid writing scientific notation (almost always)
+# See ?write.table
+#
+cat("Set the way numbers are written as characters: \n")
+cat("Existing setting: \n")
+as.character(0.000004)   # check
+old_options <- options(scipen = 3)
+cat("New setting: \n")
+as.character(0.000004)   # check again
+cat("\n\n")
+
+
+if (write_ices_file){
+
+  if (!dir.exists(save_folder_txt)){
+    message("Creating folder '", save_folder_txt, "'")
+    dir.create(save_folder_txt)
+  }
+  
+  fns <- dir(save_folder_txt, paste0("NIVA", selected_year, "CF*"))
+  existing_versions <- substr(fns, 12, 13) %>% as.numeric()
+  
+  if (length(existing_versions) == 0){
+    version <- 1
+  } else {
+    version <- max(existing_versions) + 1
+  }
+  message("Version number to write: ", version)
+  
+  # Back up
+  dat_with_linenumbers <- dat
+
+  # Remove Line_no
+  for (i in seq_along(dat)){
+    dat[[i]]$Line_no <- NULL
+  }
+  
+  string <- paste0("NIVA", selected_year, "CF_%02i.NO")
+  fn <- sprintf(string, version)
+  icesfile_name <- paste0(save_folder_txt, "/", fn)
+  icesfile <- file(icesfile_name, "w+")
+  write.table(dat[["00"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["03"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["04"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["10"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["20"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["21"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["90"]], icesfile, sep = ";", quote = FALSE, na = "",
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["91"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["92"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  close(icesfile)
+  cat("Version", version, "written as text file at", as.character(Sys.time()))
+
+  } 
+
+# Reset options
+options(old_options)
+
+```
+
+### Read the file we just wrote and check all links yet again  
+
+```{r}
+
+# dat_txt <- readLines(icesfile_name)
+# dat_txt[497]
+
+dat <- read_ices_file(icesfile_name) %>%   
+  add_field_codes() %>%
+  set_numeric()
+
+check_all_links(dat, print_values = TRUE)
+
+```
+
+
+### Save as R data
+```{r}
+
+if (write_ices_file){
+  
+
+  if (!dir.exists(save_folder_rds)){
+    message("Creating folder '", save_folder_rds, "'")
+    dir.create(save_folder_rds)
+  }
+  
+  datalist <- dat
+
+  string <- paste0("842_NIVA", selected_year, "CF_%02i.rds")
+  fn_rds <- sprintf(string, version)
+  
+  saveRDS(datalist, paste0(save_folder_rds, "/", fn_rds))
+
+  cat("Version", version, "written as rds (R data) file at", as.character(Sys.time()), "\n")
+  cat("Filename: ",  paste0(save_folder_rds, "/", fn_rds), "\n")
+  
+}
+
+if (FALSE){
+  
+  # For reading file
+  datalist <- readRDS("Files_to_ICES/2020/Rdata/842_NIVA2020CF_09.rds")
+  
+}
+
+```
+
+
+### Save as Excel file  
+```{r}
+
+if (FALSE){
+  
+  library(writexl)
+  string <- paste0("842_NIVA", selected_year, "CF_%02i.xlsx")
+  fn_xl <- sprintf(string, version)
+  
+  write_xlsx(datalist, paste0(save_folder_excel, "/", fn_xl))
+
+  cat("Version", version, "written as excel file at", as.character(Sys.time()), "\n")
+  cat("Filename: ",  paste0(save_folder_rds, "/", fn_rds), "\n")
+  
+}
+
+```
+
+
+## 2. ICES file version 04
+
+```{r}
+
+fn <- "Files_to_ICES/2021/Submitted/NIVA2021CF_04.NO"
+
+```
+
+### Read data
+```{r}
+
+# readLines(fn, 3)
+
+dat_txt <- readLines(fn)
+# dat_txt[497]
+
+# comma in older files, semicolon in newer - but this is now checked by 'read_ices_file'  
+dat_raw <- read_ices_file(fn)
+
+# debugonce(set_numeric)
+dat <- dat_raw %>%   
+  add_field_codes() %>%
+  set_numeric()
+
+```
+
+### LIPIDWT% or FATWT% should be >= 1% for fish   
+
+- Conclusion: this is not liver/muscle for fish, but blood from bird  
+- 25 errors
+- Line 11569,11645,11711 etc. "LIPDWT% or FATWT% should be >= 1% for fish"  
+
+
+#### Check  
+```{r}
+
+# Example lines - we see that this is blood samples, probably from birds    
+dat_txt[c(11569,11645,11711)]
+
+# Table 10 plus added info including from table 03 
+nrow(dat[["10"]])
+check <- dat[["10"]] %>%
+  left_join(dat[["03"]] %>% select(-RECID, -Line_no))  # important to remove these, so they are not used in the join
+nrow(check)
+
+# Confirm that this is eider duck blood  
+check %>%
+  filter(MATRX %in% "BL" & PARAM %in% "FATWT%") %>% # View("check")
+  xtabs(~SPECI, .)
+
+```
+
