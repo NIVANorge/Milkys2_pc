@@ -3,11 +3,20 @@
 # COPIED FROM Milkys PROJECT, SCRIPT 24_Check_ICES_files_functions.R
 #
 
-######################################################################################################
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 #
-# Functions
+# Functions for reading ICES file ---- 
 #
-######################################################################################################
+# fieldcodes      - definition, not a function - used by 'add_field_codes' and 'write_ices_file'  
+# add_field_codes - used after using 'read_ices_file'
+# strsplit2       - used by 'txt_to_df'
+# txt_to_df       - used by 'read_file_part'
+# read_file_part  - used by 'read_ices_file'
+# read_ices_file  - main function  
+#
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+
 
 fieldcodes <- list(
   c("RECID","RLABO","CNTRY","MYEAR","RFVER"),
@@ -98,7 +107,17 @@ read_file_part <- function(text_vector, recid, table_id, sep = ";"){
 
 
 # Read all parts of the file into a list of data frames
-read_ices_file <- function(fn, sep = ";"){
+read_ices_file <- function(fn, sep = NULL){
+  if (is.null(sep)){
+    check_sep <- readLines(fn, 1)
+    comma <- gregexpr(",", check_sep, fixed = TRUE)[[1]] %>% length()
+    semicolon <- gregexpr(";", check_sep, fixed = TRUE)[[1]] %>% length()
+    if (comma > semicolon){
+      sep <- ","
+    } else {
+      sep <- ";"
+    }
+  }
   txtall <- readLines(fn)
   # Get RECID (first field)
   recid_all <- strsplit(txtall, sep) %>% map_chr(function(x) x[1])
@@ -106,6 +125,10 @@ read_ices_file <- function(fn, sep = ";"){
   df_list <- recids %>% map(function(x) read_file_part(txtall , recid_all, x, sep = sep))
   names(df_list) <- recids
   df_list
+}
+
+if (FALSE){
+  test <- read_ices_file("Files_to_ICES/2021/Test/NIVA2021CF_01.NO")
 }
 
 #
@@ -129,6 +152,13 @@ set_numeric <- function(list_of_data){
 }
 
 
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+# Functions for writing ICES file ---- 
+#
+# write_ices_file  - main function - uses 'fieldcodes'  
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 # Write ICES file (based on output of read_ices_file)
 # I.e. the reverse of read_ices_file()
@@ -140,6 +170,16 @@ write_ices_file <- function(data, fn){
   }
   close(icesfile)
 }
+
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
+#
+# Functions for checking ICES file ---- 
+#
+# var_overlap       - used by 'check_all_links'
+# var_overlap       - used by 'check_all_links'
+# check_all_links   - main function
+#
+#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o#o
 
 #
 # Checking which columns/variables that are present in both tables
