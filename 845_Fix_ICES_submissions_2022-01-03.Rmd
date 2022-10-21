@@ -308,3 +308,290 @@ data_fixed2 <- read_ices_file(fn_new2, sep = ";") %>%   # remember sep value
 check_all_links(data_fixed2, print_values = TRUE)
 
 ```
+
+
+## 3. Queries 2022: 1. 1996 BDE47 and BD153 very high     
+
+The PBDE concentrations from 1996 are dubiously high so delete them. Here is a graph of concentrations by PBDE and year (across all stations) with the 1996 data that are to be deleted plotted in red.
+
+
+### Filename
+```{r}
+
+fn <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8.NO"
+
+```
+
+### Read data
+```{r}
+
+# readLines(fn, 3)
+
+check_sep <- readLines(fn, 1)
+comma <- gregexpr(",", check_sep, fixed = TRUE)[[1]] %>% length()
+semicolon <- gregexpr(";", check_sep, fixed = TRUE)[[1]]
+
+if (comma > semicolon){
+  # debugonce(read_ices_file)
+  dat_raw <- read_ices_file(fn, sep = ",")
+} else {
+  dat_raw <- read_ices_file(fn, sep = ";")
+}
+
+length(dat_raw)
+
+# debugonce(set_numeric)
+dat <- dat_raw %>%   # comma in older files, semicolon in newer
+  add_field_codes() %>%
+  set_numeric()
+
+# We set 'print_values = TRUE' as there were some missing 
+check_all_links(dat, print_values = TRUE)
+
+```
+
+### Check values     
+```{r}
+
+# selected_stations <- c("98B1", "23B", "24B", "53B")
+matrix <- "LI"
+params <- c("BDE47", "BD153")
+
+df_plot <- dat[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) %>%
+  # filter(STNNO %in% stations) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG) # %>%
+  # mutate(
+  #   Selected = STNNO %in% selected_stations
+  # )
+
+gg <- ggplot(df_plot, aes(STNNO, VALUE, color = PARAM)) +
+  geom_jitter(width = 0.2)
+
+gg
+gg + scale_y_log10()
+
+```
+
+### Lines to delete from file   
+- We keep metals and fat, they seem normal
+- note that MT = metallothionein (we keep that one too)     
+```{r}
+
+data_to_exclude <- dat[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) 
+
+data_to_exclude
+
+# Since we delete all these params, we also need to delete some methods
+# params <- c("BDE47", "BD153")
+
+table(data_to_exclude$AMLNK)
+table(dat[["10"]]$AMLNK)
+
+data_to_exclude2 <- dat[["21"]] %>% 
+  filter(AMLNK %in% unique(data_to_exclude$AMLNK))  
+
+```
+
+### Delete lines and write edited version   
+```{r}
+
+fn_orig <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8.NO"
+fn_new <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8_edit_2022-10-20.NO"
+
+# we call it 'temp' because we will delete 3 rows from table 03, see results of 'check_all_links'   
+
+data_raw <- readLines(fn_orig) 
+
+# Check
+# data_raw[11117]
+
+lines_to_remove <- c(
+  pull(data_to_exclude, Line_no),
+  pull(data_to_exclude2, Line_no)
+)
+
+data_raw_fixed <- data_raw[-lines_to_remove]
+
+# Uncomment to write:
+# writeLines(data_raw_fixed, con = fn_new)
+
+```
+
+
+### Check 1 - read and check links   
+
+- Discovered here that we also needed to remove two lines from table 21 (methods)
+
+```{r}
+
+data_fixed <- read_ices_file(fn_new, sep = ",") %>%   # remember sep value
+  add_field_codes() %>%
+  set_numeric()
+
+# debugonce(check_link)
+check_all_links(data_fixed, print_values = TRUE)
+
+```
+
+### Check 2 - check data values    
+```{r}
+
+# Code copied from above, except that dat is replaced by 'data_fixed'
+
+matrix <- "LI"
+params <- c("BDE47", "BD153")
+
+df_plot <- data_fixed[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) %>%
+  # filter(STNNO %in% stations) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG)
+
+nrow(df_plot)
+
+```
+
+
+## 3. Queries 2022: 1. 1996 BDE47 and BD153 very high     
+
+The PBDE concentrations from 1996 are dubiously high so delete them. Here is a graph of concentrations by PBDE and year (across all stations) with the 1996 data that are to be deleted plotted in red.
+
+
+### Filename
+```{r}
+
+fn <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8.NO"
+
+```
+
+### Read data
+```{r}
+
+# readLines(fn, 3)
+
+check_sep <- readLines(fn, 1)
+comma <- gregexpr(",", check_sep, fixed = TRUE)[[1]] %>% length()
+semicolon <- gregexpr(";", check_sep, fixed = TRUE)[[1]]
+
+if (comma > semicolon){
+  # debugonce(read_ices_file)
+  dat_raw <- read_ices_file(fn, sep = ",")
+} else {
+  dat_raw <- read_ices_file(fn, sep = ";")
+}
+
+length(dat_raw)
+
+# debugonce(set_numeric)
+dat <- dat_raw %>%   # comma in older files, semicolon in newer
+  add_field_codes() %>%
+  set_numeric()
+
+# We set 'print_values = TRUE' as there were some missing 
+check_all_links(dat, print_values = TRUE)
+
+```
+
+### Check values     
+```{r}
+
+# selected_stations <- c("98B1", "23B", "24B", "53B")
+matrix <- "LI"
+params <- c("BDE47", "BD153")
+
+df_plot <- dat[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) %>%
+  # filter(STNNO %in% stations) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG) # %>%
+  # mutate(
+  #   Selected = STNNO %in% selected_stations
+  # )
+
+gg <- ggplot(df_plot, aes(STNNO, VALUE, color = PARAM)) +
+  geom_jitter(width = 0.2)
+
+gg
+gg + scale_y_log10()
+
+```
+
+### Lines to delete from file   
+- We keep metals and fat, they seem normal
+- note that MT = metallothionein (we keep that one too)     
+```{r}
+
+data_to_exclude <- dat[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) 
+
+data_to_exclude
+
+# Since we delete all these params, we also need to delete some methods
+# params <- c("BDE47", "BD153")
+
+table(data_to_exclude$AMLNK)
+table(dat[["10"]]$AMLNK)
+
+data_to_exclude2 <- dat[["21"]] %>% 
+  filter(AMLNK %in% unique(data_to_exclude$AMLNK))  
+
+```
+
+### Delete lines and write edited version   
+```{r}
+
+fn_orig <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8.NO"
+fn_new <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8_edit_2022-10-20.NO"
+
+# we call it 'temp' because we will delete 3 rows from table 03, see results of 'check_all_links'   
+
+data_raw <- readLines(fn_orig) 
+
+# Check
+# data_raw[11117]
+
+lines_to_remove <- c(
+  pull(data_to_exclude, Line_no),
+  pull(data_to_exclude2, Line_no)
+)
+
+data_raw_fixed <- data_raw[-lines_to_remove]
+
+# Uncomment to write:
+# writeLines(data_raw_fixed, con = fn_new)
+
+```
+
+
+### Check 1 - read and check links   
+
+- Discovered here that we also needed to remove two lines from table 21 (methods)
+
+```{r}
+
+data_fixed <- read_ices_file(fn_new, sep = ",") %>%   # remember sep value
+  add_field_codes() %>%
+  set_numeric()
+
+# debugonce(check_link)
+check_all_links(data_fixed, print_values = TRUE)
+
+```
+
+### Check 2 - check data values    
+
+```{r}
+
+# Code copied from above, except that dat is replaced by 'data_fixed'
+
+matrix <- "LI"
+params <- c("BDE47", "BD153")
+
+df_plot <- data_fixed[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) %>%
+  # filter(STNNO %in% stations) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG)
+
+nrow(df_plot)
+
+```
