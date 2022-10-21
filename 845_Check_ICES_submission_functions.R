@@ -27,15 +27,25 @@ fieldcodes <- list(
   c("RECID","AMLNK","ALABO","METDC","REFSK","METST","METFP","METPT","METCX","METPS","METOA","AGDET","SREFW","SPECI","RLIST","ORGSP","SIZRF","FORML","ACCRD","ACORG"),
   c("RECID","SHIPC","CRUIS","OWNER","PRDAT"),
   c("RECID","CRUIS","STNNO","LATIT","LONGI","POSYS","SDATE","STIME","ETIME","WADEP","STATN","MPROG","WLTYP","MSTAT","PURPM","EDATE"),
+  c("RECID","CRUIS","STNNO","RSRVD","MATRX","PARAM","MUNIT","VALUE","DCFLG"),
   c("RECID","AMLNK","QALNK","CONCH","CRMCO","CRMMB","CRMMV","MUNIT","CRMSD","CRMNM","CRMPE","DCFLG")
 )
-names(fieldcodes) <- c("00", "03", "04", "10", "20", "21", "90", "91", "93")
+names(fieldcodes) <- c("00", "03", "04", "10", "20", "21", "90", "91", "92", "93")
+
 
 # 00 = Header
 # 03 = Sample record
 # 04 = Biota specimen record
 # 10 = Parameter/contaminant measurement record
 # 20 = Sampling method record
+# 21 = Analytical method record
+# 90 = Sampling platform (e.g., ship name, buouy) record
+# 91 = Station / sampling event record
+# 92 = Station / site description record
+# 93 = Reference material record
+# See
+#   https://www.ices.dk/data/Documents/ENV/Environment_Formats.zip
+# for details
 
 #
 # Add field codes to data
@@ -48,6 +58,9 @@ add_field_codes <- function(dataset){
     nc <- ncol(dataset[[tbl]]) - 1
     new_colnames <- c(fieldcodes[[tbl]][1:nc], "Line_no")
     colnames(dataset[[tbl]]) <- new_colnames
+    if (length(fieldcodes[[tbl]]) != nc){
+      warning("There is defined ", length(fieldcodes[[tbl]]), " column names for table ", tbl, ", but data has ", nc, " columns. \n")
+    }
   }
   dataset
 }
