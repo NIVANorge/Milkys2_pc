@@ -245,8 +245,18 @@ check_link <- function(tab1, tab2, by, print = TRUE, print_values = FALSE, print
   # print(stat)
   if (print){
     cat("Variables used for join:", paste(by, collapse = ", "), "\n")
-    cat("Table 1 has ",  stat["n1"], " rows (", stat["na1"], " rows with missing values in join variables)\n", sep = "")
-    cat("Table 2 has ",  stat["n2"], " rows (", stat["na2"], " rows with missing values in join variables)\n", sep = "")
+    message <- paste0("Table 1 has ",  stat["n1"], " rows (", stat["na1"], " rows with missing values in join variables)\n", sep = "")
+    if (stat["na1"] > 0){
+      warning(message)
+    } else {
+      cat(message)
+    }
+    message <- paste0("Table 2 has ",  stat["n2"], " rows (", stat["na2"], " rows with missing values in join variables)\n", sep = "")
+    if (stat["na2"] > 0){
+      warning(message)
+    } else {
+      cat(message)
+    }
     if (nrow(df1) == 0)
       cat("All variable combinations in table 1 exist in table 2\n")
     if (nrow(df1) > 0){
