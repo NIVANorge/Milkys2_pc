@@ -369,7 +369,7 @@ check_all_links <- function(data, print_values = FALSE, ...){
   check_link(df1, df2, cols, print_values = print_values, ...)
   cat("\n")
   
-  cat("*** 03 (sample occasion per station) and 90 (cruises) ***\n")
+  cat("*** 10 (sample occasion per station) and 90 (cruises) ***\n")
   df1 <- data[["10"]]
   df2 <- data[["90"]]
   cols <- var_overlap(df1, df2, drop = c("RECID", "Line_no"))
