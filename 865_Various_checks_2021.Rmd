@@ -380,10 +380,6 @@ if (FALSE){
 
 ```{r}
 
-```
-
-```{r}
-
 
 
 df_method <- get_nivabase_selection(
@@ -397,4 +393,74 @@ df_method <- get_nivabase_selection(
 
 ```
 
+## 6. Check Elkem Carbon og REC Solar 2022 data 
 
+### Get a list of the stations in the CEMP_Biota project
+
+```{r}
+
+df_stations <- get_stations_from_project("Elkem Carbon", ignore.case = FALSE)
+
+df_stations <- get_stations_from_project(
+  "Tiltaksorientert overvåking for Elkem Carbon og REC Solar i 2022", ignore.case = FALSE)
+
+```
+
+### Get specimens   
+- Includes LATIN_NAME  
+```{r}
+
+sampling_year <- 2022
+
+df_specimens <- get_specimens_from_stationdata(df_stations, years = sampling_year)
+cat("df_specimens:", nrow(df_specimens), "rows\n")
+
+# Checking wrong year
+df_specimens_nextyear <- get_specimens_from_stationdata(df_stations, years = sampling_year + 1)
+
+cat("df_specimens_nextyear:", nrow(df_specimens_nextyear), "rows\n")
+
+```
+
+### Plot biota sample dates 
+
+```{r, fig.height=6, fig.width=7}
+
+df_specimens %>%
+  filter(year(DATE_CAUGHT) >= sampling_year) %>%
+  ggplot(aes(DATE_CAUGHT)) +
+  geom_histogram(binwidth = 3600*24*10) +   # 10 days
+  scale_x_datetime(date_breaks = "1 month", date_labels = "%m %Y") +
+  facet_wrap(vars(LATIN_NAME), ncol = 1, scales = "free_y")
+
+```
+
+
+### Get biota data    
+Get data frame of chemical data for all samples for the measurement year   
+- LATIN_NAME is included  
+```{r, results = FALSE}
+
+# debugonce(get_biota_chemistry)
+# debugonce(get_samples_from_sampleid)
+
+dat_base <- get_biota_chemistry(
+  years = sampling_year,
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+```
+
+### Biota parameters and stations  
+```{r}
+
+xtabs(~NAME + STATION_CODE, dat_base)
+
+```
+### Parameters and stations  
+```{r}
+
+xtabs(~NAME + STATION_CODE, dat_base)
+
+```
