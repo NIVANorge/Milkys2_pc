@@ -66,7 +66,7 @@ df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
 - Includes LATIN_NAME  
 ```{r}
 
-df_specimens <- get_specimens_from_stationdata(df_stations, years = sampling_year)
+df_specimens <- get_specimens_from_stationdata(df_stations, years = sampling_year + 0:1)
 cat("df_specimens:", nrow(df_specimens), "rows\n")
 
 # Checking wrong year
@@ -91,13 +91,14 @@ df_specimens %>%
 
 
 
-## 3. Get the data itself  
+## 3a. Get the data itself  
 Get data frame of chemical data for all samples for the measurement year   
 - LATIN_NAME is included  
 ```{r, results = FALSE}
 
 # debugonce(get_biota_chemistry)
 # debugonce(get_samples_from_sampleid)
+# debugonce(get_chemistry_from_sampledata)
 
 df_data <- get_biota_chemistry(
   years = sampling_year,
@@ -108,7 +109,214 @@ df_data <- get_biota_chemistry(
 ```
 
 
+### Check data 1    
+```{r}
 
+xtabs(~STATION_CODE, df_data)
+
+xtabs(~is.na(VALUE), df_data)
+
+params_this_year <- unique(df_data$NAME) %>% sort()
+
+# PAH-metabolites NOT in
+grep("pyr", params_this_year, ignore.case = T, value = T)
+grep("OH", params_this_year, ignore.case = F, value = T)
+
+# Data from previous year
+df_prev <- readRDS("Files_to_Jupyterhub_2020/01_df_2020_notstandard_2022-01-05.rds")
+params_previous_year <- unique(df_prev$NAME)
+
+# Change some parameter names, so they can be compared
+params_previous_year <- sub("BDE-", "BDE", params_previous_year, fixed = TRUE)
+params_previous_year <- sub("PCB-", "PCB ", params_previous_year, fixed = TRUE)
+
+# Parameters in last year's data set but not this year
+sel1 <- !params_previous_year %in% params_this_year
+params_previous_year[sel1]
+
+# Parameters in last year's data set but not this year
+# ....
+
+```
+
+### Check data 2  
+- Checks specifica parameters in last year's data and the new data
+```{r}
+
+string <- "MCCP"
+string <- "HBCD"
+string <- "H4PFOS"
+string <- "Fluortelomersulfonat"
+string <- "PFHpS"
+string <- "D5"
+string <- "OH"
+string <- "1-OH-fenantren"
+
+df_data %>% filter(grepl(string, NAME)) %>% pull(NAME) %>% unique() %>% paste(collapse = "; ")
+df_prev %>% filter(grepl(string, NAME)) %>% pull(NAME) %>% unique() %>% paste(collapse = "; ")
+full_join(
+  df_data %>% filter(grepl(string, NAME)) %>% count(STATION_CODE, name = as.character(sampling_year)),
+  df_prev %>% filter(grepl(string, NAME)) %>% count(STATION_CODE, name = as.character(sampling_year-1)),
+  by = "STATION_CODE"
+)
+
+
+
+```
+
+## 3b. Fix SCCP and MCCP issue   
+
+For samples with
+```
+MCCP eksl LOQ = NA  
+MCCP inkl LOQ = X      =>  LOQ = X
+```
+
+For samples with
+```
+MCCP eksl LOQ = X1
+MCCP inkl LOQ = X2     =>  LOQ = X2 - X1
+``` 
+
+* FLAG1 is always NA  
+* So the `'MCCP eksl LOQ' data that are under LOQ should be changed to LOQ, plus "<" as FLAG1 value   
+* Moreover: the rows with NA simply doesn't exist in the Nivadabase table (table BIOTA_CHEMISTRY_VALUES in NIvadatabase)   
+* Same for SCCP  
+
+### a. Check 1    
+```{r}
+
+df_data %>% 
+  filter(NAME %in% c("SCCP eksl. LOQ", "SCCP inkl. LOQ")) %>% 
+  xtabs(~NAME + STATION_CODE + addNA(FLAG1), .)
+
+
+df_data %>% 
+  filter(NAME %in% c("MCCP eksl. LOQ", "MCCP inkl. LOQ")) %>%
+  xtabs(~NAME + STATION_CODE + addNA(FLAG1), .)
+
+```
+
+### b. Check 2    
+- Checking SCCP only  
+
+```{r}
+
+# SCCP  
+
+df1  <- df_data %>% 
+  filter(NAME %in% c("SCCP eksl. LOQ", "SCCP inkl. LOQ")) %>%
+  select(STATION_CODE, TISSUE_NAME, SAMPLE_ID, NAME, VALUE) %>%
+  tidyr::pivot_wider(names_from = NAME, values_from = VALUE)
+
+df2 <- df_data %>% 
+  filter(NAME %in% "SCCP inkl. LOQ") %>%
+  select(STATION_CODE, TISSUE_NAME, SAMPLE_ID, NAME, FLAG1)
+
+df_SCCP <- left_join(df1, df2)
+
+
+# MCCP  
+
+df1  <- df_data %>% 
+  filter(NAME %in% c("MCCP eksl. LOQ", "MCCP inkl. LOQ")) %>%
+  select(STATION_CODE, TISSUE_NAME, SAMPLE_ID, NAME, VALUE) %>%
+  tidyr::pivot_wider(names_from = NAME, values_from = VALUE)
+
+df2 <- df_data %>% 
+  filter(NAME %in% "MCCP inkl. LOQ") %>%
+  select(STATION_CODE, TISSUE_NAME, SAMPLE_ID, NAME, FLAG1)
+
+df_MCCP <- left_join(df1, df2)
+
+# Show
+df_SCCP
+
+```
+
+### d. method ID  
+```{r}
+
+id <- df_data %>% 
+  filter(NAME %in% c("SCCP eksl. LOQ", "SCCP inkl. LOQ", "MCCP eksl. LOQ", "MCCP inkl. LOQ")) %>% 
+  pull(METHOD_ID) %>%
+  unique()
+
+df_meth_ccp <- get_nivabase_selection("NAME, METHOD_ID", "METHOD_DEFINITIONS", "METHOD_ID", id)
+
+if (nrow(df_meth_ccp) != 4){
+  stop("Expected one row per CCP, i.e. 4 rows")
+}
+
+```
+
+### e. Make new data rows  
+```{r}
+
+#
+# SCCP 
+#
+
+sample_id_lacking <- df_SCCP %>% 
+  filter(is.na(`SCCP eksl. LOQ`)) %>%
+  pull(SAMPLE_ID)
+
+cat("SCCP:", nrow(df_SCCP), "samples -", length(sample_id_lacking), "samples lacking values for 'SCCP eksl. LOQ' \n")
+
+df_SCCP_data_to_add <- df_data %>%
+  filter(NAME %in% "SCCP inkl. LOQ" & SAMPLE_ID %in% sample_id_lacking)
+  
+cat("-", nrow(df_SCCP_data_to_add), "rows of data to add \n")
+
+id <- df_meth_ccp %>% filter(NAME %in% "SCCP eksl. LOQ") %>% pull(METHOD_ID)
+
+df_SCCP_data_to_add$NAME <- "SCCP eksl. LOQ"
+df_SCCP_data_to_add$METHOD_ID <- id
+df_SCCP_data_to_add$FLAG1 <- "<"
+
+#
+# MCCP 
+#
+
+sample_id_lacking <- df_MCCP %>% 
+  filter(is.na(`MCCP eksl. LOQ`)) %>%
+  pull(SAMPLE_ID)
+
+cat("MCCP:", nrow(df_MCCP), "samples -", length(sample_id_lacking), "samples lacking values for 'MCCP eksl. LOQ' \n")
+
+df_MCCP_data_to_add <- df_data %>%
+  filter(NAME %in% "MCCP inkl. LOQ" & SAMPLE_ID %in% sample_id_lacking)
+  
+cat("-", nrow(df_MCCP_data_to_add), "rows of data to add \n")
+
+id <- df_meth_ccp %>% filter(NAME %in% "MCCP eksl. LOQ") %>% pull(METHOD_ID)
+
+df_MCCP_data_to_add$NAME <- "MCCP eksl. LOQ"
+df_MCCP_data_to_add$METHOD_ID <- id
+df_MCCP_data_to_add$FLAG1 <- "<"
+
+```
+
+### f. Add data  
+```{r}
+
+cat("nrow(df_data):", nrow(df_data), "\n")
+
+check <- df_data %>% filter(NAME %in% "SCCP eksl. LOQ" & FLAG1 %in% "<")
+if (nrow(check) == 0){
+  df_data <- bind_rows(df_data, df_SCCP_data_to_add)
+}
+
+cat("nrow(df_data):", nrow(df_data), "\n")
+
+check <- df_data %>% filter(NAME %in% "MCCP eksl. LOQ" & FLAG1 %in% "<")
+if (nrow(check) == 0){
+  df_data <- bind_rows(df_data, df_MCCP_data_to_add)
+}
+
+cat("nrow(df_data):", nrow(df_data), "\n")
+
+```
 
 
 ## 4. Save data from Nivadatabase  
@@ -158,11 +366,15 @@ df_data <- get_biota_chemistry(
 #   
 # }
 
+df_2021 <- df_data
+
 ```
 
 
 
-## 5. Add data from Labware  
+## 5. Add data from Labware    
+
+- This is used if there are half-finished" samples in Labware that are not approved, but we want to export them to Jupyterhub anyway  
 
 ### Get data  
 ```{r}
@@ -170,8 +382,8 @@ df_data <- get_biota_chemistry(
 # From QC_Chemistry app. Failed with "table or view does not exist"
 # df_labware <- get_nivabase_data("select * from labware.v_app_chemistry_qc_project where PROSJEKT = 'O 210200.ANAIN'")  
 
-test <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where rownum < 5")
-test <- get_nivabase_data("select * from NIVADATABASE.STATIONS where rownum < 5")
+# test <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where rownum < 5")
+# test <- get_nivabase_data("select * from NIVADATABASE.STATIONS where rownum < 5")
 
 df_labware <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN'")
 nrow(df_labware) # 20153
@@ -184,7 +396,10 @@ if (FALSE){
 
   sampling_year <- 2021
   
-    # Make timestamp (date stamp actually)
+  # Folder name
+  name_folder <- paste0("Files_to_Jupyterhub_", sampling_year)
+
+  # Make timestamp (date stamp actually)
   t <- Sys.time()
   timestamp <- substr(t, 1, 10)
   
@@ -201,6 +416,7 @@ if (FALSE){
   
   # Save
   saveRDS(df_labware_meta, name_fullpath)
+  
 }
 
 
@@ -369,10 +585,10 @@ df_2021_both <- bind_rows(
 ### Check some data  
 ```{r}
 
-df_2021 %>% filter(STATION_CODE %in% "53B") %>% View()
+# df_2021 %>% filter(STATION_CODE %in% "53B") %>% View()
 # Muscle (Hg) data only
 
-df_2021_both %>% filter(STATION_CODE %in% "53B") %>% View()
+# df_2021_both %>% filter(STATION_CODE %in% "53B") %>% View()
 
 
 ```
@@ -393,9 +609,10 @@ nrow(check)  # should be zero
 
 ## 6. Save data from Nivadatabase + LIMS   
 
+### a. Save  
 ```{r}
 #
-# Latest data data
+# Latest data
 #
 
 # Folder name
@@ -412,19 +629,29 @@ timestamp <- substr(t, 1, 10)
 
 # File name
 name_file <- paste0("01_df_", sampling_year, "_notstandard_", timestamp, ".rds")
+name_file
 
 name_fullpath <- paste0(name_folder, "/", name_file)
 
 # Set to TRUE/FALSE depending on whether file should be saved or not  
 if (FALSE){
+  
+  # SELECT:
+  # data_final <- df_2021_both   # if using Labware data
+  # data_final <- df_data        # if using only Nivabasen data
 
-  saveRDS(df_2021_both, file = name_fullpath)
+  saveRDS(data_final, file = name_fullpath)
   cat("2021 data saved as rds,", sQuote(name_fullpath), "\n")
   name_fullpath_txt <- sub("rds", "csv", name_fullpath)
-  write.csv(df_2021_both, file = name_fullpath_txt, fileEncoding = "UTF-8")
+  write.csv(data_final, file = name_fullpath_txt, fileEncoding = "UTF-8")
   cat("2021 data saved as csv,", sQuote(name_fullpath_txt), "\n")
 
 }
+
+```
+
+### b. Read saved file  
+```{r}
 
 # Set to TRUE/FALSE depending on whether file should be read or not  
 if (FALSE){
@@ -432,7 +659,9 @@ if (FALSE){
   # Depends only on part 1 above
   name_folder <- paste0("Files_to_Jupyterhub_", sampling_year)
   fn_rds <- dir(name_folder, pattern = paste0("01_df_", sampling_year, "_notstandard.+.rds$"))
-  df_2021 <- readRDS(paste0(name_folder, "/", tail(fn_rds, 1)))
+  # file name
+  fn <- tail(fn_rds, 1)   # picks the last file  
+  df_2021 <- readRDS(paste0(name_folder, "/", fn))    
   
 }
 
@@ -464,3 +693,4 @@ if (FALSE){
 }
 
 ```
+
