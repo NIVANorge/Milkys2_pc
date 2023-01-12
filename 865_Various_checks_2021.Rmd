@@ -464,3 +464,124 @@ xtabs(~NAME + STATION_CODE, dat_base)
 xtabs(~NAME + STATION_CODE, dat_base)
 
 ```
+
+## 6. Check Milfersk   
+
+### Get a list of the stations in the CEMP_Biota project
+
+```{r}
+
+df_projects %>%
+  filter(PROJECT_ID == 12625)
+
+df_stations <- get_stations_from_project("MILFERSK 2021-2025", ignore.case = FALSE)
+
+```
+
+### Get specimens   
+- Includes LATIN_NAME  
+```{r}
+
+sampling_year <- 2021
+
+df_specimens <- get_specimens_from_stationdata(df_stations, years = sampling_year)
+cat("df_specimens:", nrow(df_specimens), "rows\n")
+
+# Checking wrong year
+df_specimens_nextyear <- get_specimens_from_stationdata(df_stations, years = sampling_year + 1)
+
+cat("df_specimens_nextyear:", nrow(df_specimens_nextyear), "rows\n")
+
+```
+
+
+
+
+### Plot biota sample dates 
+
+```{r, fig.height=6, fig.width=7}
+
+df_specimens %>%
+  filter(year(DATE_CAUGHT) >= sampling_year) %>%
+  ggplot(aes(DATE_CAUGHT)) +
+  geom_histogram(binwidth = 3600*24*10) +   # 10 days
+  scale_x_datetime(date_breaks = "1 month", date_labels = "%m %Y") +
+  facet_wrap(vars(LATIN_NAME), ncol = 1, scales = "free_y")
+
+```
+
+
+### Get biota data    
+Get data frame of chemical data for all samples for the measurement year   
+- LATIN_NAME is included  
+```{r, results = FALSE}
+
+# debugonce(get_biota_chemistry)
+# debugonce(get_samples_from_sampleid)
+
+dat_base <- get_biota_chemistry(
+  years = sampling_year,
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  report_samples = TRUE)
+
+```
+
+### Biota parameters and stations  
+```{r}
+
+xtabs(~NAME + STATION_CODE, dat_base)  
+
+```
+
+### Get methods  
+
+```{r}
+
+df_methods <- get_nivabase_selection(
+  "*",
+  "METHOD_DEFINITIONS",
+  "METHOD_ID",
+  unique(dat_base$METHOD_ID)
+) 
+
+```
+
+### All NILU methods  
+```{r}
+
+df_nilu <- get_nivabase_selection(
+  "*",
+  "METHOD_DEFINITIONS",
+  "LABORATORY",
+  "NILU", values_are_text = TRUE
+) 
+
+```
+
+
+### Labware  
+```{r}
+
+# df_labware <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN'")
+# nrow(df_labware) # 20153
+# 
+# df_labware_meta <- get_nivabase_data("select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT = 'O 210200.ANAIN'")
+# nrow(df_labware_meta) # 982
+
+```
+
+
+## 7. Check 
+
+```{r}
+
+test <- get_nivabase_selection("*",
+                       "BIOTA_CHEMISTRY_VALUES",
+                       "SAMPLE_ID",
+                       240810)
+
+
+```
+
+
