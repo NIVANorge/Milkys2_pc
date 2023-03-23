@@ -22,7 +22,8 @@ source("802_Get_NIVAbasen_data_functions.R")
 
 ## Get new(er) data
 
-### Give your username and password to R (only once per R session):
+### Give your username and password to R (only once per R session)  
+* Not necessary if you have set your Nivabasen username/password using the 'keyring' package 
 ```{r}
 # set_credentials()
 ```
@@ -47,7 +48,7 @@ df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
 - Includes LATIN_NAME  
 ```{r}
 
-df_specimens <- get_specimens_from_stationdata(df_stations, years = 2020:2021)
+df_specimens <- get_specimens_from_stationdata(df_stations, years = 2021:2022)
 
 ```
 
