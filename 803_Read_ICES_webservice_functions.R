@@ -219,6 +219,9 @@ get_ices_biotadata <- function(param = "", yearstart = NULL, yearend = yearstart
   } else {
     yearend <- as.character(yearend)
   }
+  if (is.numeric(country)){
+    country <- sprintf("%02.f", country)
+  }
   url_part1 <- "http://dome.ices.dk/Webservices/DOMEWebServices.asmx/selectContaminantsInBiota?"
   url_part2_txt <- "PARAM=%s&RLABO=%s&ALABO=&yearBegining=%s&yearEnd=%s&MATRX=%s&TAXA=%s&PURPM=&MPROG=&Area=&CNTRY=%s&ParamGroup=%s"
   url_part2 <- sprintf(url_part2_txt, 
