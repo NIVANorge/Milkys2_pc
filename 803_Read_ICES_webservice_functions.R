@@ -206,7 +206,7 @@ get_ices_data <- function(param, year, parameter_table = df_par){
 # df1 <- get_ices_biotadata(param = "PYR1OH", country = 58)
 
 
-get_ices_biotadata <- function(param, yearstart = NULL, yearend = yearstart, 
+get_ices_biotadata <- function(param = "", yearstart = NULL, yearend = yearstart, 
                                country = "", matrix = "", lab = "", species = "",
                                paramgroup = ""){
   if (is.null(yearstart)){
