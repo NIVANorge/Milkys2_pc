@@ -20,6 +20,14 @@ source("802_Get_NIVAbasen_data_functions.R")
 ```
 
 
+## Settings  
+```{r}
+
+measurement_year <- 2022
+
+```
+
+
 ## Get new(er) data
 
 ### Give your username and password to R (only once per R session)  
@@ -44,20 +52,28 @@ df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
 
 ```
 
-### Get all specimens collected at these stations (20 seconds or so)
+### Get all specimens collected at these stations (20 seconds or so)  
+
 - Includes LATIN_NAME  
+- Also include the year after, as some daa may be collected in January february next yra
+
 ```{r}
 
-df_specimens <- get_specimens_from_stationdata(df_stations, years = 2021:2022)
+df_specimens <- get_specimens_from_stationdata(df_stations, years = measurement_year + 0:1)
+
+df_specimens_sel <- df_specimens %>%
+  filter(
+    (year(DATE_CAUGHT) %in% measurement_year & month(DATE_CAUGHT) >= 3) |
+      (year(DATE_CAUGHT) %in% (measurement_year+1) & month(DATE_CAUGHT) <= 2)
+    )
 
 ```
 
-### Plot sample dates in 2020 (or later)    
+### Plot sample dates in measurement_year (or the year after)    
+
 ```{r, fig.height=6, fig.width=7}
 
-df_specimens %>%
-  filter(year(DATE_CAUGHT) >= 2021) %>%
-  ggplot(aes(DATE_CAUGHT)) +
+ggplot(df_specimens_sel, aes(DATE_CAUGHT)) +
   geom_histogram(binwidth = 3600*24*10) +   # 10 days
   scale_x_datetime(date_breaks = "1 month", date_labels = "%m %Y") +
   facet_wrap(vars(LATIN_NAME), ncol = 1, scales = "free_y")
@@ -74,10 +90,10 @@ Get data frame of chemical data for all samples from the measurement year 2016 (
 # debugonce(get_biota_chemistry)
 # debugonce(get_samples_from_sampleid)
 
-df_2021 <- get_biota_chemistry(
-  years = 2021:2022,              # in case some specimens wrongly  
-                                  #    have date_caught = 2020
-  specimendata = df_specimens, 
+df_chemdata <- get_biota_chemistry(
+  years = measurement_year + 0:1,              # in case some specimens wrongly  
+                                               #    have date_caught in the year after
+  specimendata = df_specimens_sel,             # specimens are already form the correct time period only
   stationdata = df_stations,
   report_samples = TRUE)
 
@@ -90,31 +106,31 @@ df_2021 <- get_biota_chemistry(
 ### Save 
 ```{r}
 #
-# 2021 data
-#
 # Do this ONCE:
 # dir.create("Files_to_Jupyterhub_2021")
 
 # Make timestamp (date stamp actually)
 t <- Sys.time()
 timestamp <- substr(t, 1, 10)
-filename <- paste0("Files_to_Jupyterhub_2021/01_df_2021_notstandard_", timestamp, ".rds")
+folder <- paste0("Files_to_Jupyterhub_", measurement_year)
+filename_only <- paste0("01_df_", measurement_year, "_notstandard_", timestamp, ".rds")
+filename <- paste0(folder, "/", filename_only)
 
 # Set to TRUE/FALSE depending on whether file should be saved or not  
 if (FALSE){
 
-  saveRDS(df_2021, file = filename)
-  cat("2021 data saved as rds,", sQuote(filename), "\n")
+  saveRDS(df_chemdata, file = filename)
+  cat(measurement_year, "data saved as rds,", sQuote(filename), "\n")
   filename_txt <- sub("rds", "csv", filename)
-  write.csv(df_2021, file = filename_txt, fileEncoding = "UTF-8")
-  cat("2021 data saved as csv,", sQuote(filename_txt), "\n")
+  write.csv(df_chemdata, file = filename_txt, fileEncoding = "UTF-8")
+  cat(measurement_year, "data saved as csv,", sQuote(filename_txt), "\n")
 
 }
 
 # Set to TRUE/FALSE depending on whether file should be read or not  
 if (FALSE){
-  # df_2021 <- readRDS(filename)
-  df_2021 <- readRDS("Files_to_Jupyterhub_2021/01_df_2021_notstandard_2022-05-23.rds")
+  # df_chemdata <- readRDS(filename)
+  df_chemdata <- readRDS("Files_to_Jupyterhub_2021/01_df_2021_notstandard_2022-05-23.rds")
 }
 
 ```
