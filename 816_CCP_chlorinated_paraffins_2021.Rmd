@@ -9,6 +9,14 @@ output:
     toc_float: true
 ---
 
+* Extract SCCP and MCCP data from Labware   
+    - Data given excl. and excl. LOQ  
+    - Data with "T" (mostly for excl. LOQ) has not been transferred to Nivabase, so a lot of zeros missed  
+    - This of course affects the median  
+* Done here:  
+    - Change "T" to zero for all results   
+    - Set FLAG1 to zero, as it doesn't have any meaning for these data    
+    - Make one data set for merging with "database data" on tall format, but also a "for_analysis" data with lower and upper bound
 
 ## 1. Libraries
 ```{r setup, include=FALSE}
@@ -40,6 +48,8 @@ sampling_year <- 2021
 - Project 'O 210200.ANAIN' is hard-coded  
 - NOTE: no selection for year (but see 3)
 
+### One station as example  
+
 ```{r}
 
 df_labware_meta <- get_nivabase_data("select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT = 'O 210200.ANAIN'")
@@ -50,6 +60,14 @@ nrow(df_labware_meta) # 982
 # One station  
 test <- get_nivabase_data(
   "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN' and AQUAMONITOR_CODE = '30B'")
+
+table(substr(test$TEXT_ID, 1, 7))
+
+# Pick 2021 only
+test_2021 <- test %>%
+  filter(substr(TEXT_ID, 4, 7) == "2021")
+test_2022 <- test %>%
+  filter(substr(TEXT_ID, 4, 7) == "2022")
 
 # xtabs(~addNA(PARAM), test)  
 # - MCCP and SCCP - not giving 
@@ -65,7 +83,7 @@ test <- get_nivabase_data(
 
 ```{r}
 
-test %>%
+test_2021 %>%
   filter(REPORTED_NAME %in% c("BDE99", "BDE100", "BDE209")) %>%
   xtabs(~REPORTED_NAME + addNA(ENTRY_QUALIFIER), .)
 
@@ -79,7 +97,7 @@ test %>%
 
 ```{r}
 
-test %>%
+test_2021 %>%
   filter(REPORTED_NAME %in% c("SCCP eksl. LOQ", "SCCP inkl. LOQ", "MCCP eksl. LOQ", "MCCP inkl. LOQ")) %>%
   xtabs(~REPORTED_NAME + (FORMATTED_ENTRY == "ND"), .)
 
@@ -89,7 +107,7 @@ test %>%
 #### SAMPLE_NUMBER    
 ```{r}
 
-test %>%
+test_2021 %>%
   count(SAMPLE_NUMBER) %>%
   arrange(SAMPLE_NUMBER) %>%
   group_by(n) %>%
@@ -102,24 +120,174 @@ test %>%
 ```
 
 
-#### TEXT_ID    
+#### Types of registered samples, 2021   
+
+* One type of sample for muscle (mercury), another for liver   
+
 ```{r}
 
-test %>%
-  count(TEXT_ID) %>%
+test_2021b <- test_2021 %>%
+  group_by(TEXT_ID) %>%
+  arrange(ANALYS) %>%
+  summarize(
+    no_params = n(),
+    ANALYS = substr(paste(ANALYS, collapse = " // "), 1, 50)
+    )
+
+test_2021b %>% filter(no_params == 1) %>% head()
+
+test_2021b %>%
   arrange(TEXT_ID) %>%
   mutate(TEXT_ID_no = as.numeric(substr(TEXT_ID, 9, 13))) %>%
-  group_by(n) %>%
+  group_by(no_params) %>%
   summarize(
-    n = n(),
-    min = min(TEXT_ID_no),
-    max = max(TEXT_ID_no),
-    diff = max-min)
+    no_samples = n(),
+    min_ID = min(TEXT_ID_no),
+    max_ID = max(TEXT_ID_no),
+    diff = max_ID - min_ID,
+    ANALYS_first = first(ANALYS))
 
 ```
 
 
-## 3. Get data from LIMS  
+#### Types of registered samples, 2022  
+
+* More complex than 2021:  
+    - as 2021, one type of sample for muscle (mercury, no_params = 1), another type for liver (no_params = 82)  
+    - no_params = 3: siloxans (15 samples set up as midlertidig, 15 set up with final values  )  
+    - no_params = 5 and 6: isotopes (SIA)    
+    - no_params = 9, 10, 19: gall metabolites  
+
+```{r}
+
+test_2022b <- test_2022 %>%
+  group_by(TEXT_ID) %>%
+  arrange(ANALYS) %>%
+  summarize(
+    no_params = n(),
+    no_val = sum(FORMATTED_ENTRY != "T"),
+    ANALYS = substr(paste(ANALYS, collapse = " // "), 1, 50)
+    )
+  
+test_2022b %>%
+  arrange(TEXT_ID) %>%
+  mutate(TEXT_ID_no = as.numeric(substr(TEXT_ID, 9, 13))) %>%
+  group_by(no_params) %>%
+  summarize(
+    no_samples = n(),
+    min_ID = min(TEXT_ID_no),
+    max_ID = max(TEXT_ID_no),
+    diff = max_ID - min_ID,
+    no_val = round(mean(no_val), 2),
+    ANALYS_first = first(ANALYS))
+
+```
+
+
+#### Checking 
+
+```{r}
+
+i <- 1     # muscle, mercury
+i <- 3     # siloxans
+i <- 5     # isotopes
+#i <- 5:6    # isotopes + SIA
+i <- 6     # isotopes + SIA - lacking numbers  
+i <- 9   # metabolites (no values)
+i <- 10   # metabolites
+i <- 19   # metabolites. includiing absorbanse  
+
+tab1 <- test_2022 %>%
+  group_by(TEXT_ID, STATUSX) %>%
+  mutate(no_params = n()) %>%
+  filter(no_params %in% i) %>%
+  xtabs(~REPORTED_NAME + TEXT_ID + STATUSX, .)
+
+tab2 <- test_2022 %>%
+  filter(STATUSX == "Ferdig") %>%
+  group_by(TEXT_ID) %>%
+  mutate(no_params = n()) %>%
+  filter(no_params %in% i) %>%
+  xtabs(~REPORTED_NAME + TEXT_ID, .)
+
+tab2
+
+# i <- 19
+# test_2022 %>%
+#   group_by(TEXT_ID) %>%
+#   mutate(no_params = n()) %>%
+#   filter(no_params == i) %>%
+#   xtabs(~REPORTED_NAME + TEXT_ID, .)
+
+if (FALSE){
+  test_2022 %>%
+    group_by(TEXT_ID) %>%
+    arrange(TEXT_ID, REPORTED_NAME) %>%
+    mutate(no_params = n()) %>%
+    filter(no_params %in% i) %>%
+    select(TEXT_ID, DESCRIPTION:T_ANALYSIS_METHOD, FORMATTED_ENTRY, UNITS) %>%
+    View(paste("test", i))
+  
+  # Reanalysis? 
+  test_2022 %>%
+    filter(REPORTED_NAME == "1-OH-fenantren" & DESCRIPTION == "30B Inner Oslofjord - Torsk galle 1") %>%
+    select(TEXT_ID, DESCRIPTION:T_ANALYSIS_METHOD, STATUSX, FORMATTED_ENTRY, UNITS)
+  }
+
+    
+```
+
+## 3. Get data from LIMS (all years)  
+
+
+### Find projects  
+
+* By searching for "SCCP eksl. LOQ"   
+
+```{r}
+
+check <- get_nivabase_selection(
+  "PROSJEKT, REPORTED_NAME, SAMPLED_DATE",
+  "LABWARE_IMPORT",
+  "REPORTED_NAME",
+  c("SCCP eksl. LOQ"), values_are_text = TRUE) %>%
+  mutate(
+    Month = month(SAMPLED_DATE),
+    Year = year(SAMPLED_DATE),
+    MYEAR = case_when(
+      Month <= 2 ~ Year-1,
+      Month >= 3 ~ Year))
+
+tab <- xtabs(~PROSJEKT + MYEAR, check)
+tab
+
+# for writing code:
+# rownames(tab) %>% dput()
+
+```
+
+#### Make project string  
+
+```{r}
+
+projects <- c("O 16330 ANA15 MILKYS 2016", 
+              "O 17330;ANA16 MILKYS 2016/17", 
+              "O 18330;ANA17 Milkys 2018, analyser-hoved-2017pr", 
+              "O 19330;ANA18 - MILKYS 2018", 
+              "O 19330;ANA19 - MILKYS2019", 
+              "O 210330;ANA21 - MILKYS 2021; Hovedanalyser 2021",
+              "O 210200.ANAIN")
+
+# Make project string
+old.o <- options(useFancyQuotes = FALSE)
+
+project_string_0 <- paste(sQuote(projects), collapse = ", ")
+project_string <- paste("and PROSJEKT in (", project_string_0, ")")
+project_string
+
+options(old.o)
+
+```
 
 ### Select by project and parameters   
 
@@ -134,7 +302,7 @@ df_ccp_all <- get_nivabase_selection(
   "LABWARE_IMPORT",
   "REPORTED_NAME",
   c("SCCP eksl. LOQ", "SCCP inkl. LOQ", "MCCP eksl. LOQ", "MCCP inkl. LOQ"), values_are_text = TRUE, 
-  extra_sql = "and PROSJEKT = 'O 210200.ANAIN'") %>%
+  extra_sql = project_string) %>%
   mutate(
     Month = month(SAMPLED_DATE),
     Year = year(SAMPLED_DATE),
@@ -142,14 +310,20 @@ df_ccp_all <- get_nivabase_selection(
       Month <= 2 ~ Year-1,
       Month >= 3 ~ Year))
 
-xtabs(~MYEAR, df_ccp_all)
-xtabs(~STATUS + STATUSX + MYEAR, df_ccp_all)
+xtabs(~STATUSX + MYEAR, df_ccp_all)
+xtabs(~STATUS + MYEAR, df_ccp_all)
 
-# View(df_ccp_all %>% filter(MYEAR == 2022))
+# xtabs(~STATUS + STATUSX + MYEAR, df_ccp_all)
+
+# View(df_ccp_all %>% filter(MYEAR == 2022))  
 
 ```
 
-### Select by status (A = accepted) and year  
+
+
+## 4. One year only  
+
+* Select by status (A = accepted) and (last) year  
 
 ```{r}
 
@@ -189,7 +363,9 @@ xtabs(~AQUAMONITOR_CODE + Type, check1 %>% filter(REPORTED_NAME %in% "SCCP inkl.
 
 ```
 
-## 4. Get adapted SCCP data  
+### SCCP  
+
+* Get adapted SCCP data  
 
 #### Viewing (for understanding)        
 ```{r}
@@ -210,9 +386,8 @@ check <- df_ccp %>%
 
 #### Make data for export      
 
-- Basis is "eksl." data  
-- When "eksl." data is numeric, use this (over LOQ) value   
-- When "eksl." = "ND", set FLAG1 = < and use the "inkl. LOQ" value as the LOQ value     
+- Change "T" to zero for all results   
+- Set FLAG1 to zero, it doesn't have any meaning for these data       
 
 ```{r}
 
@@ -220,36 +395,49 @@ params <- c("SCCP eksl. LOQ", "SCCP inkl. LOQ")
 
 df_selected <- df_ccp %>%
   filter(REPORTED_NAME %in% params & !FORMATTED_ENTRY %in% "T") %>%
-  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME, FORMATTED_ENTRY) %>%
+  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, MYEAR, TEXT_ID, REPORTED_NAME, FORMATTED_ENTRY) %>%
   mutate(Value_temp = as.numeric(sub(',', '.', FORMATTED_ENTRY)))
 
 check <- xtabs(~FORMATTED_ENTRY, df_selected %>% filter(is.na(Value_temp)))
+
+cat("\n")
+
 if (identical(names(check), "ND")){
   message("All FORMATTED_ENTRY are either numeric or 'ND', as expected")
 } else {
   stop("Some not-numeric data are something else than 'ND'! Check table called 'check'.")
 }
 
-df_SCCP <- df_selected %>%
-  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME, Value_temp) %>%
-  tidyr::pivot_wider(names_from = REPORTED_NAME, values_from = Value_temp) %>%
-  arrange(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID) %>%
+
+df_SCCP_for_database <- df_selected %>%
   mutate(
     VALUE = case_when(
-      !is.na(`SCCP eksl. LOQ`) ~ `SCCP eksl. LOQ`,
-      is.na(`SCCP eksl. LOQ`) ~ `SCCP inkl. LOQ`,
-    ),
-    FLAG1 = case_when(
-      !is.na(`SCCP eksl. LOQ`) ~ as.character(NA),
-      is.na(`SCCP eksl. LOQ`) ~ "<",
-    )
+      FORMATTED_ENTRY == "ND" ~ 0,
+      TRUE ~ Value_temp),
+    # Just set FLAG1 to be NA, whatever
+    FLAG1 = as.character(NA)
   )
 
+# Alternative for FLAG1?
+    # FLAG1 = case_when(
+    #   FORMATTED_ENTRY == "ND" ~ "<",
+    #   TRUE ~ as.character(NA))
+
+df_SCCP_for_analysis <- df_SCCP_for_database %>%
+  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, MYEAR, TEXT_ID, REPORTED_NAME, VALUE) %>%
+  tidyr::pivot_wider(names_from = REPORTED_NAME, values_from = VALUE) %>%
+  arrange(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID) %>%
+  rename(
+    Value_lo = `SCCP eksl. LOQ`,
+    Value_up = `SCCP inkl. LOQ`,
+  )
 
 ```
 
 
-## 5, Get adapted MCCP data  
+### MCCP  
+
+* Get adapted MCCP data  
 
 #### Viewing (for understanding)        
 ```{r}
@@ -270,9 +458,7 @@ check <- df_ccp %>%
 
 #### Make data for export  
 
-- Basis is "eksl." data  
-- When "eksl." data is numeric, use this (over LOQ) value   
-- When "eksl." = "ND", set FLAG1 = < and use the "inkl. LOQ" value as the LOQ value     
+- As above (for SCCP)
 
 ```{r}
 
@@ -280,104 +466,437 @@ params <- c("MCCP eksl. LOQ", "MCCP inkl. LOQ")
 
 df_selected <- df_ccp %>%
   filter(REPORTED_NAME %in% params & !FORMATTED_ENTRY %in% "T") %>%
-  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME, FORMATTED_ENTRY) %>%
+  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, MYEAR, TEXT_ID, REPORTED_NAME, FORMATTED_ENTRY) %>%
   mutate(Value_temp = as.numeric(sub(',', '.', FORMATTED_ENTRY)))
 
 check <- xtabs(~FORMATTED_ENTRY, df_selected %>% filter(is.na(Value_temp)))
+
+cat("\n")
+
 if (identical(names(check), "ND")){
   message("All FORMATTED_ENTRY are either numeric or 'ND', as expected")
 } else {
   stop("Some not-numeric data are something else than 'ND'! Check table called 'check'.")
 }
 
-df_MCCP <- df_selected %>%
-  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME, Value_temp) %>%
-  tidyr::pivot_wider(names_from = REPORTED_NAME, values_from = Value_temp) %>%
-  arrange(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID) %>%
+df_MCCP_for_database <- df_selected %>%
   mutate(
     VALUE = case_when(
-      !is.na(`MCCP eksl. LOQ`) ~ `MCCP eksl. LOQ`,
-      is.na(`MCCP eksl. LOQ`) ~ `MCCP inkl. LOQ`,
-    ),
-    FLAG1 = case_when(
-      !is.na(`MCCP eksl. LOQ`) ~ as.character(NA),
-      is.na(`MCCP eksl. LOQ`) ~ "<",
-    )
+      FORMATTED_ENTRY == "ND" ~ 0,
+      TRUE ~ Value_temp),
+    # Just set FLAG1 to be NA, whatever
+    FLAG1 = as.character(NA)
+  )
+
+# Alternative for FLAG1?
+    # FLAG1 = case_when(
+    #   FORMATTED_ENTRY == "ND" ~ "<",
+    #   TRUE ~ as.character(NA))
+
+df_MCCP_for_analysis <- df_MCCP_for_database %>%
+  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, MYEAR, TEXT_ID, REPORTED_NAME, VALUE) %>%
+  tidyr::pivot_wider(names_from = REPORTED_NAME, values_from = VALUE) %>%
+  arrange(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID) %>%
+  rename(
+    Value_lo = `MCCP eksl. LOQ`,
+    Value_up = `MCCP inkl. LOQ`,
+  )
+
+```
+
+## 5. All years    
+
+
+* Make data for export      
+
+    - Basis is "eksl." data  
+    - When "eksl." data is numeric, use this (over LOQ) value   
+    - When "eksl." = "ND", set FLAG1 = < and use the "inkl. LOQ" value as the LOQ value     
+
+### SCCP     
+
+#### Prepare, check for duplicates 
+
+```{r}
+
+params <- c("SCCP eksl. LOQ", "SCCP inkl. LOQ")
+
+df_selected <- df_ccp_all %>%
+  filter(REPORTED_NAME %in% params & !FORMATTED_ENTRY %in% "T") %>%
+  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, MYEAR, SAMPLED_DATE, REPORTED_NAME, FORMATTED_ENTRY, STATUS, STATUSX) %>%
+  mutate(Value_temp = as.numeric(sub(',', '.', FORMATTED_ENTRY)))
+
+check <- xtabs(~FORMATTED_ENTRY, df_selected %>% filter(is.na(Value_temp)))
+
+cat("\n")
+
+check2 <- names(check) %in% c("n.r.", "nd", "ND")
+
+if (sum(!check2) == 0){
+  message("All FORMATTED_ENTRY are either numeric or some sort of 'ND', as expected")
+} else {
+  stop("Some not-numeric data are something else than 'ND'! Check table called 'check'.")
+}
+
+#
+# Remove duplicates - VERY MUCH SPECIALIZED CODE
+#
+
+# 09543: keep the lowest value for 'incl.'
+#
+sel <- with(df_selected, TEXT_ID == "NR-2018-09543" & REPORTED_NAME == "SCCP inkl. LOQ" & FORMATTED_ENTRY == "40,7"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+#
+# 09544: keep the numeric value for 'incl.', keep the ND for 'eksl.'  
+#
+sel <- with(df_selected, TEXT_ID == "NR-2018-09544" & REPORTED_NAME == "SCCP eksl. LOQ" & FORMATTED_ENTRY != "ND"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+sel <- with(df_selected, TEXT_ID == "NR-2018-09544" & REPORTED_NAME == "SCCP inkl. LOQ" & FORMATTED_ENTRY == "ND"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+#
+# 09544: keep the numeric value for 'incl.', keep the ND for 'eksl.'  
+#
+sel <- with(df_selected, TEXT_ID == "NR-2018-09545" & REPORTED_NAME == "SCCP eksl. LOQ" & FORMATTED_ENTRY != "ND"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+sel <- with(df_selected, TEXT_ID == "NR-2018-09545" & REPORTED_NAME == "SCCP inkl. LOQ" & FORMATTED_ENTRY == "ND"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+
+#
+# Check
+#
+
+check_duplicates <- df_selected %>%
+  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME, FORMATTED_ENTRY, Value_temp) %>%
+  dplyr::group_by(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME) %>%
+  dplyr::mutate(n = dplyr::n(), 
+                Value_min = min(Value_temp), Value_max = max(Value_temp),
+                N_na = sum(is.na(Value_temp)),
+                Value_diff = Value_max - Value_min,
+                OK = case_when(
+                  N_na > 0 & N_na < n ~ FALSE,  # if one, but not both values are NA 
+                  Value_diff > 0 ~ FALSE,       # if values are different
+                  TRUE ~ TRUE)) %>%
+  dplyr::filter(n > 1 & !OK) %>%    #  & !(Value_diff == 0)
+  ungroup() %>%
+  arrange(AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME,Value_temp)
+
+
+```
+
+
+#### Run if duplicates  
+
+```{r}
+
+if (FALSE){
+  
+  xtabs(~TEXT_ID + REPORTED_NAME, check_duplicates) 
+  
+  # Check one sample   
+  # Conclusion: 
+  # test <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where TEXT_ID = 'NR-2018-09545'")
+  # tab <- table(test$REPORTED_NAME)
+  # tab[tab > 1]
+  
+  # View duplicates (i = duplicate number)  
+  check_duplicates %>%
+    select(TEXT_ID, REPORTED_NAME, FORMATTED_ENTRY) %>%  
+    group_by(TEXT_ID, REPORTED_NAME) %>%
+    mutate(i = seq_along(TEXT_ID)) %>%
+    arrange(TEXT_ID, REPORTED_NAME, i) %>%
+    tidyr::pivot_wider(id_cols = c(TEXT_ID, i), names_from = REPORTED_NAME, values_from = FORMATTED_ENTRY)
+  
+  # Plot all data except duplicates  
+  gg <- df_selected %>%
+    filter(AQUAMONITOR_CODE %in% c("36A", "36A1") & !TEXT_ID %in% unique(check_duplicates$TEXT_ID) ) %>%
+    ggplot(aes(MYEAR)) +
+    geom_point(aes(y = Value_temp, color = REPORTED_NAME))
+  gg
+  gg + facet_wrap(vars(REPORTED_NAME))
+  
+}
+
+
+if (nrow(check_duplicates) == 0){
+  message("No duplicates in the data")
+} else {
+  stop("Duplicates in the data - check 'check_duplicates'")
+}
+
+```
+
+#### Make datasets  
+```{r}
+
+df_SCCP_for_database <- df_selected %>%
+  mutate(
+    VALUE = case_when(
+      FORMATTED_ENTRY == "ND" ~ 0,
+      TRUE ~ Value_temp),
+    # Just set FLAG1 to be NA, whatever
+    FLAG1 = as.character(NA)
+  )
+
+# Alternative for FLAG1?
+    # FLAG1 = case_when(
+    #   FORMATTED_ENTRY == "ND" ~ "<",
+    #   TRUE ~ as.character(NA))
+
+df_SCCP_for_analysis <- df_SCCP_for_database %>%
+  distinct(AQUAMONITOR_ID, AQUAMONITOR_CODE, MYEAR, TEXT_ID, REPORTED_NAME, VALUE) %>%
+  tidyr::pivot_wider(names_from = REPORTED_NAME, values_from = VALUE) %>%
+  arrange(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID) %>%
+  rename(
+    Value_lo = `SCCP eksl. LOQ`,
+    Value_up = `SCCP inkl. LOQ`,
+  )
+
+```
+
+
+### MCCP     
+
+#### Prepare, check for duplicates 
+
+```{r}
+
+params <- c("MCCP eksl. LOQ", "MCCP inkl. LOQ")
+
+df_selected <- df_ccp_all %>%
+  filter(REPORTED_NAME %in% params & !FORMATTED_ENTRY %in% "T") %>%
+  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, MYEAR, SAMPLED_DATE, REPORTED_NAME, FORMATTED_ENTRY, STATUS, STATUSX) %>%
+  mutate(Value_temp = as.numeric(sub(',', '.', FORMATTED_ENTRY)))
+
+check <- xtabs(~FORMATTED_ENTRY, df_selected %>% filter(is.na(Value_temp)))
+
+cat("\n")
+
+check2 <- names(check) %in% c("n.r.", "nd", "ND")
+
+if (sum(!check2) == 0){
+  message("All FORMATTED_ENTRY are either numeric or some sort of 'ND', as expected")
+} else {
+  stop("Some not-numeric data are something else than 'ND'! Check table called 'check'.")
+}
+
+
+#
+# Remove duplicates - VERY MUCH SPECIALIZED CODE
+#
+
+# 09543: keep the numeric value for 'incl.'
+#
+sel <- with(df_selected, TEXT_ID == "NR-2018-09543" & REPORTED_NAME == "MCCP inkl. LOQ" & FORMATTED_ENTRY == "ND"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+#
+# 09544: keep the numeric value for 'incl.', keep the ND for 'eksl.'  
+#
+sel <- with(df_selected, TEXT_ID == "NR-2018-09544" & REPORTED_NAME == "MCCP eksl. LOQ" & FORMATTED_ENTRY != "ND"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+sel <- with(df_selected, TEXT_ID == "NR-2018-09544" & REPORTED_NAME == "MCCP inkl. LOQ" & FORMATTED_ENTRY == "ND"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+#
+# 09544: keep the numeric value for 'incl.', keep the ND for 'eksl.'  
+#
+sel <- with(df_selected, TEXT_ID == "NR-2018-09545" & REPORTED_NAME == "MCCP eksl. LOQ" & FORMATTED_ENTRY != "ND"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+sel <- with(df_selected, TEXT_ID == "NR-2018-09545" & REPORTED_NAME == "MCCP inkl. LOQ" & FORMATTED_ENTRY == "ND"); sum(sel)
+if (sum(sel) == 1)
+  df_selected <- df_selected[!sel,]
+
+#
+# Check
+#
+check_duplicates <- df_selected %>%
+  select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME, FORMATTED_ENTRY, Value_temp) %>%
+  dplyr::group_by(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME) %>%
+  dplyr::mutate(n = dplyr::n(), 
+                Value_min = min(Value_temp), Value_max = max(Value_temp),
+                N_na = sum(is.na(Value_temp)),
+                Value_diff = Value_max - Value_min,
+                OK = case_when(
+                  N_na > 0 & N_na < n ~ FALSE,  # if one, but not both values are NA 
+                  Value_diff > 0 ~ FALSE,       # if values are different
+                  TRUE ~ TRUE)) %>%
+  dplyr::filter(n > 1 & !OK) %>%    #  & !(Value_diff == 0)
+  ungroup() %>%
+  arrange(AQUAMONITOR_CODE, TEXT_ID, REPORTED_NAME,Value_temp)
+
+
+if (nrow(check_duplicates) == 0){
+  message("No duplicates in the data")
+} else {
+  stop("Duplicates in the data - check 'check_duplicates'")
+}
+
+```
+
+
+#### Run if duplicates  
+
+```{r}
+
+
+if (T){
+  
+  xtabs(~TEXT_ID + REPORTED_NAME, check_duplicates) 
+  
+  # Check one sample   
+  # Conclusion: 
+  # test <- get_nivabase_data("select * from NIVADATABASE.LABWARE_IMPORT where TEXT_ID = 'NR-2018-09545'")
+  # tab <- table(test$REPORTED_NAME)
+  # tab[tab > 1]
+  
+  # View duplicates (i = duplicate number)  
+  check_duplicates %>%
+    select(TEXT_ID, REPORTED_NAME, FORMATTED_ENTRY) %>%  
+    group_by(TEXT_ID, REPORTED_NAME) %>%
+    mutate(i = seq_along(TEXT_ID)) %>%
+    arrange(TEXT_ID, REPORTED_NAME, i) %>%
+    tidyr::pivot_wider(id_cols = c(TEXT_ID, i), names_from = REPORTED_NAME, values_from = FORMATTED_ENTRY)
+  
+  # Plot all data except duplicates  
+  gg <- df_selected %>%
+    filter(AQUAMONITOR_CODE %in% c("36A", "36A1") & !TEXT_ID %in% unique(check_duplicates$TEXT_ID) ) %>%
+    ggplot(aes(MYEAR)) +
+    geom_point(aes(y = Value_temp, color = REPORTED_NAME))
+  gg
+  gg + facet_wrap(vars(REPORTED_NAME))
+  
+}
+
+
+```
+
+### Make datasets  
+
+```{r}
+
+
+df_MCCP_for_database <- df_selected %>%
+  mutate(
+    VALUE = case_when(
+      FORMATTED_ENTRY == "ND" ~ 0,
+      TRUE ~ Value_temp),
+    # Just set FLAG1 to be NA, whatever
+    FLAG1 = as.character(NA)
+  )
+
+# Alternative for FLAG1?
+    # FLAG1 = case_when(
+    #   FORMATTED_ENTRY == "ND" ~ "<",
+    #   TRUE ~ as.character(NA))
+
+df_MCCP_for_analysis <- df_MCCP_for_database %>%
+  distinct(AQUAMONITOR_ID, AQUAMONITOR_CODE, MYEAR, TEXT_ID, REPORTED_NAME, VALUE) %>%
+  tidyr::pivot_wider(names_from = REPORTED_NAME, values_from = VALUE) %>%
+  arrange(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID) %>%
+  rename(
+    Value_lo = `MCCP eksl. LOQ`,
+    Value_up = `MCCP inkl. LOQ`,
   )
 
 
 ```
 
 
-## 6. Combine  
+
+## 6. Combined data    
+
+### Combine  
 
 ```{r}
 
-df_ccp_ready1 <- bind_rows(
-  df_SCCP %>% select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, VALUE, FLAG1) %>% mutate(NAME = "SCCP"),
-  df_MCCP %>% select(AQUAMONITOR_ID, AQUAMONITOR_CODE, TEXT_ID, VALUE, FLAG1) %>% mutate(NAME = "MCCP")
-)
+df_CCP_for_database <- bind_rows(df_SCCP_for_database, df_MCCP_for_database)
+
+df_CCP_for_analysis <- bind_rows(
+  df_SCCP_for_analysis %>% mutate(PARAM = "SCCP"), 
+  df_MCCP_for_analysis %>% mutate(PARAM = "MCCP") 
+  )
 
 ```
 
+### Plot  1
 
-#### Plot  
+```{r}
+
+df_CCP_for_database %>%
+  filter(grepl("SCCP", REPORTED_NAME)) %>%
+  ggplot(aes(AQUAMONITOR_CODE, VALUE, color = REPORTED_NAME)) +
+  geom_jitter(width = 0.15) +
+  ggeasy::easy_rotate_labels(which = "x", angle = -45)
+
+df_CCP_for_database %>%
+  filter(grepl("SCCP", REPORTED_NAME) & AQUAMONITOR_CODE %in% c("23B", "53B","30B", "24B")) %>%
+  ggplot(aes(MYEAR, VALUE, color = REPORTED_NAME)) +
+  geom_jitter(width = 0.15) +
+  facet_wrap(vars(AQUAMONITOR_CODE)) +
+  scale_y_log10()
+
+
+```
+
+### Plot 2  
 
 ```{r, fig.width=9, fig.height=7}
 
-df_ccp_ready1 %>% 
-  mutate(LOQ = case_when(
-    is.na(FLAG1) ~ "Over LOQ",
-    !is.na(FLAG1) ~ "Under LOQ")
-    ) %>% 
-  ggplot(aes(AQUAMONITOR_CODE, VALUE, color = LOQ)) +
-  geom_jitter(width = 0.15) +
-  facet_grid(vars(NAME))
+df_CCP_for_analysis %>%
+  filter(AQUAMONITOR_CODE %in% c("23B", "53B","30B", "24B")) %>%
+  group_by(AQUAMONITOR_CODE, PARAM, MYEAR) %>%
+  summarize(
+    Value_lo = mean(Value_lo),
+    Value_up = mean(Value_up)
+  ) %>%
+  ggplot(aes(MYEAR, ymin = Value_lo, ymax = Value_up)) +
+  geom_errorbar(width = 0.2) +
+  facet_grid(vars(PARAM), vars(AQUAMONITOR_CODE))
+
 
 ```
 
 
 
 
-### Add Vannmiljø stations   
 
-- Checking that Kilde_id = AQUAMONITOR_ID with 'NIVA@' in front of it  
-- As expected, 20B is not found  
-- But can easily be created by adding 'NIVA@' in front of AQUAMONITOR_ID  
-
-```{r}
-
-df_vm <- readxl::read_excel("Files_to_Vannmiljo/2020/ooa63pi kvalsjekk 18.01.2022.xlsm", sheet = "LOK")
-
-df_vm_stations <- df_vm %>%
-  select(Kilde_id, Navn) %>%
-  mutate(AQUAMONITOR_ID = sub('NIVA@', '', Kilde_id, fixed = TRUE) %>% as.numeric())
-
-check1 <- df_ccp_ready1 %>%
-  left_join(df_vm_stations, by = "AQUAMONITOR_ID")
-
-check2 <- check1 %>%
-  filter(is.na(Kilde_id)) %>%
-  count(AQUAMONITOR_ID, AQUAMONITOR_CODE)
-
-check2
-
-```
 
 ## 7. Final data  
 
+### Metadata  
 ```{r}
+
+df_labware_meta <- get_nivabase_selection(
+  "*", "LABWARE_CHECK_SAMPLE", "PROSJEKT", projects, values_are_text = TRUE)
+
+df_labware_meta  <- df_labware_meta %>%
+  filter(TEXT_ID %in% unique(df_MCCP_for_database$TEXT_ID))
+
+nrow(df_labware_meta) # 5862
 
 df_meta <- df_labware_meta %>%
   distinct(TEXT_ID, SAMPLED_DATE, SPECIES, TISSUE, BIOTA_SAMPLENO)
 
-df_ccp_ready2 <- df_ccp_ready1 %>%
-  mutate(
-    Kilde_id = paste0('NIVA@', AQUAMONITOR_ID)
-  ) %>%
-  left_join(
-    df_meta, by = "TEXT_ID"
-  ) 
+check <- df_meta %>%
+  add_count(TEXT_ID) %>%
+  filter(n > 1)
+
+if (nrow(check) > 0){
+  stop("TEXT_ID in metadata niot unique")
+} else {
+  # Add metadata to data
+  df_CCP_for_database <- df_CCP_for_database %>%
+    left_join(
+      df_meta, by = "TEXT_ID"
+    ) 
+}
 
 
 ```
@@ -385,9 +904,11 @@ df_ccp_ready2 <- df_ccp_ready1 %>%
 ### Check  
 ```{r}
 
-xtabs(~SPECIES + TISSUE, df_ccp_ready2)
+xtabs(~SPECIES + TISSUE, df_CCP_for_database)
 
-xtabs(~addNA(BIOTA_SAMPLENO), df_ccp_ready2)
+xtabs(~MYEAR, df_CCP_for_database)
+
+xtabs(~addNA(BIOTA_SAMPLENO), df_CCP_for_database)
 
 ```
 
@@ -398,16 +919,17 @@ xtabs(~addNA(BIOTA_SAMPLENO), df_ccp_ready2)
 
 folder_save <- "Files_to_Jupyterhub_2021/Chlor_paraffins/"
 
-saveRDS(df_ccp_ready2, "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021.rda")
-saveRDS(df_labware_meta, "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021_meta.rda")
-saveRDS(df_ccp, "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021_labware.rda")
+saveRDS(df_CCP_for_database, "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_for_database_2015-2022.rds")
+saveRDS(df_CCP_for_analysis, "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_for_analysis_2015-2022.rds")
+saveRDS(df_labware_meta, "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2015-2021_meta.rds")
 
-writexl::write_xlsx(df_ccp_ready2,
-                    "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021.xlsx")
-writexl::write_xlsx(df_labware_meta,
-                    "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021_meta.xlsx")
-writexl::write_xlsx(df_ccp,
-                    "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021_labware.xlsx")
+
+# writexl::write_xlsx(df_ccp_ready2,
+#                     "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021.xlsx")
+# writexl::write_xlsx(df_labware_meta,
+#                     "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021_meta.xlsx")
+# writexl::write_xlsx(df_ccp,
+#                     "Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021_labware.xlsx")
 
 ```
 
@@ -417,8 +939,8 @@ writexl::write_xlsx(df_ccp,
 
 if (FALSE){
   
-  df_ccp_ready2 <- readRDS("Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021.rda")
-  df_ccp_meta <- readRDS("Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_2021_meta.rda")
+  df_CCP_for_database <- readRDS("Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_for_database_2015-2022.rds")
+  df_CCP_for_analysis <- readRDS("Files_to_Jupyterhub_2021/Chlor_paraffins/816_CCP_for_analysis_2015-2022.rds")
 
 }
 
@@ -496,5 +1018,28 @@ for (i in 2:nrow(df_vm_mussel_source)){
 
 ```
 
+## APPENDIX: Check Vannmiljø export file     
 
+- Checking that Kilde_id = AQUAMONITOR_ID with 'NIVA@' in front of it  
+- As expected, 20B is not found  
+- But can easily be created by adding 'NIVA@' in front of AQUAMONITOR_ID  
+
+```{r}
+
+df_vm <- readxl::read_excel("Files_to_Vannmiljo/2020/ooa63pi kvalsjekk 18.01.2022.xlsm", sheet = "LOK")
+
+df_vm_stations <- df_vm %>%
+  select(Kilde_id, Navn) %>%
+  mutate(AQUAMONITOR_ID = sub('NIVA@', '', Kilde_id, fixed = TRUE) %>% as.numeric())
+
+check1 <- df_ccp_ready1 %>%
+  left_join(df_vm_stations, by = "AQUAMONITOR_ID")
+
+check2 <- check1 %>%
+  filter(is.na(Kilde_id)) %>%
+  count(AQUAMONITOR_ID, AQUAMONITOR_CODE)
+
+check2
+
+```
 
