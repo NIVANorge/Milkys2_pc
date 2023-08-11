@@ -7,7 +7,7 @@ output:
     keep_md: true
 ---
 
-# Import cod biological effect data (EROD, ALA-D) from excel tables to Nivabasen
+# Import cod biological effect data (EROD, ALA-D, ) from excel tables to Nivabasen  
 
 - Making tables for inserting into NIVAbase     
 - Script builds on script 814 (2020 version)    
@@ -16,7 +16,13 @@ output:
     - new samples  
     - new specimen-samples records   
     - and of course, measurements  
-- *Cod bile metabolites*: here 2020 data differs from older data: until 2019, I also added these manually (through an R script like this), in 2020, they were entered through Labware (but with different names, see below)      
+- *Cod bile metabolites*
+    - until 2019, I also added these manually (through an R script like this)   
+    - from 2020 onwards: non-normalized versions were entered through Labware (but with different names, see below)  
+    - normalized versions and absorption are *not* entered through Labware 
+- 2022 data:  
+    - Run script in two bouts: first, for ALAD and EROD (adding samples), then for normalized PAH met and absorption (using existing samples added by the Labware to Nivabase import routine). **See 2a.4!**  
+
 - cod bile metabolite names until 2019, and in 2020:   
 ```
    2019     ~ 2020
@@ -28,7 +34,7 @@ output:
 Note that   
 - non-normalised PAH metabolites = PYR1OH, PA1OH, BAP3OH
 - absorption-normalised ones = PYR1O, PA1O, BAP3O  
-- absorption itself = ABS380 or AY (the two are the same)    
+- absorption itself = AY380, ABS380 or AY (the two are the same)    
   
 **Addition 3.1.2022**
 - Changing the absorption-normalised metabolites to PYR1O, PA1O, BAP3O
@@ -82,9 +88,11 @@ selected_year <- 2022
 ### b. Get most recent data produced in Jupyterhub  
 We only keep the data for the curret year
 ```{r}
-# dir("Data")
+
+dir("Files_to_Jupyterhub_2022", pattern = "01")
+
 # Data at sample level (chemical data, biological efect parameters and VDSI)
-data_all <- readRDS(file = "Files_to_Jupyterhub_2022/01_df_2022_notstandard_2023-06-22.rds")
+data_all <- readRDS(file = "Files_to_Jupyterhub_2022/01_df_2022_notstandard_2023-08-09.rds")
 
 ```
 
@@ -117,6 +125,8 @@ df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
          TISSUE_NAME = stringr::str_sub(TISSUE, start = 4))
 
 ```
+
+
 
 
 ### d. Get some generic lookup tables  
@@ -187,6 +197,80 @@ data_all %>%
 
 ```
 
+### a1 extra: Check gall metabolites of PAH    
+
+```{r}
+
+# No gall registered
+cat("All existing tissues: \n")
+table(addNA(df_samples$TISSUE))
+cat("\n\n")
+
+# Check all gall samples - SAMPLED_DATE is the only column missing 
+sql <- paste(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
+  "where DESCRIPTION like '%galle%' AND",
+  "TEXT_ID like '%2022%';")
+# sql
+df_labware_galle <- get_nivabase_data(sql)  
+
+# Only 2021 dates found (!)  
+cat("Dates for gall samples with 2022 in TEXT_ID: \n")
+table(addNA(df_labware_galle$SAMPLED_DATE))
+cat("\n")
+
+# The dates that should be there  
+station_date <- df_samples %>%
+  filter(AQUAMONITOR_CODE %in% c("15B", "23B", "30B", "53B")) %>%
+  distinct(AQUAMONITOR_CODE, SAMPLED_DATE)
+
+writexl::write_xlsx(
+  list(
+    labware_galle = df_labware_galle,
+    station_date = station_date
+  ), 
+  path = "Data/815_LIMS_PAH_metabolites_2022.xlsx")
+
+
+if (FALSE){
+  
+  # Get data from Labware
+  # Both 2021 and 2022
+  labware_import_project <- get_nivabase_selection(
+    "*",
+    "LABWARE_IMPORT",
+    "PROSJEKT",
+    "O 210200.ANAIN", values_are_text = TRUE, extra_sql = " and AQUAMONITOR_CODE in ('15B', '23B', '30B', '53B')"
+  )
+
+  table(addNA(year(labware_import_project$SAMPLED_DATE)))
+  
+  # PAH metabolites in gall are there, but lack date
+  # Therefore not being imported automatatically to Nivabase   
+  labware_import_project %>%
+    filter(grepl("OH", REPORTED_NAME)) %>%
+    xtabs(~addNA(year(SAMPLED_DATE)) + REPORTED_NAME, .)  
+
+  # COMPARE WITH EXCEL (sheet 'galle-omregning' to check that these are the un-normalised values   
+  # (they are)
+   #   2019     ~ 2020
+   # "PA1OH"  ~ "1-OH-fenantren", 
+   # "PYR1OH" ~ "1-OH-pyren", 
+   # "BAP3OH" ~ "3-OH-benzo[a]pyren"
+  no <- paste0("NR-2022-0", 9333:9347)
+  labware_import_project %>%
+    filter(TEXT_ID %in% no & REPORTED_NAME == "1-OH-pyren") %>%
+    arrange(TEXT_ID) %>%
+    select(TEXT_ID, DESCRIPTION, FORMATTED_ENTRY)
+
+}
+
+
+
+
+
+```
+
 ### a2. Data from excel    
 - Starting 'data_for_input' already here  
 - PARAM and METHOD_ID set by checking df_methods (manually)
@@ -195,27 +279,34 @@ data_all %>%
 
 dat_cod <- readxl::read_excel("Input_files_2022/BEM-JAMP_2022_ARU.xls", sheet = "Til Basen")
 
+# We could have used the first sheet if we only needed ALA-D and EROD  
+# But we also need PROTV and ABS380
 data_for_input_1a <- dat_cod %>%
   mutate(STATION_CODE = paste0(stasjon, "B")) %>%
-  rename(Sample_no = nummer) %>%
+  rename(Sample_no = nummer) %>% #    names()
   select(STATION_CODE, Sample_no, 
+         `abs 380 nm`,
          `ala-d (ng PBG/min/mg prot)`, `EROD (pmol/min mg protein)`, `blod protein (mg/mL)`) %>%
   tidyr::pivot_longer(c(-STATION_CODE, -Sample_no), 
-                      names_to = "Param", values_to = "Value") %>%  # note: no less-thans, so thos works  
+                      names_to = "Param", values_to = "Value") %>%  # note: no less-thans, so this works  
   mutate(
     PARAM = case_when(
       grepl("EROD", Param, fixed = TRUE) ~ "EROD",
       grepl("blod protein", Param, fixed = TRUE) ~ "PROTV",
-      grepl("ala-d", Param, fixed = TRUE) ~ "ALAD"),
+      grepl("ala-d", Param, fixed = TRUE) ~ "ALAD",
+      grepl("abs 380", Param, fixed = TRUE) ~ "AY380"
+      ),
     METHOD_ID = case_when(
       grepl("EROD", Param, fixed = TRUE) ~ 28580,
       grepl("blod protein", Param, fixed = TRUE) ~ 28575,
-      grepl("ala-d", Param, fixed = TRUE) ~ 28579
+      grepl("ala-d", Param, fixed = TRUE) ~ 28579,
+      grepl("abs 380", Param, fixed = TRUE) ~ 28574
       ),
     TISSUE_NAME = case_when(
       grepl("EROD", Param, fixed = TRUE) ~ "Liver - microsome",
       grepl("blod protein", Param, fixed = TRUE) ~ "Liver - microsome",
       grepl("ala-d", Param, fixed = TRUE) ~ "Blod",
+      grepl("abs 380", Param, fixed = TRUE) ~ "Galle"
       ),
     LATIN_NAME = "Gadus morhua",
     Flag1 = as.character(NA),     # HARD_CODED - for these parameters, all values are above LOQ
@@ -241,6 +332,22 @@ if (nrow(data_for_input_1) < nrow(data_for_input_1b)){
 
 ### a3. Check existing tissues in Nivabase    
 - NOT NEEDED (this is just "guidance" for a2)    
+
+### a4. DELETE DATA NOT TO ADD NOW   
+
+* In 2022, we want to add ALA-D, EROD, PROTV and AY380  
+* Per 10.8.2023, we are still waiting for PAH metabolites to be transfered from LIMS (labware) til Nivadatabase  
+* Therefore  
+    - we will first add ALA-D, EROD, PROTV, as the samples needs to be added manually (blood and liver microsome)  
+    - we will later (after PAH metabolites have been transfered, which also creates samples) add AY380  
+     
+```{r}
+
+data_for_input_1 <- data_for_input_1 %>%
+  filter(PARAM %in% c("ALAD", "EROD", "PROTV"))
+
+```
+
 
 ### b. Add station code    
 - NOT NEEDED HERE  
@@ -340,7 +447,7 @@ data_for_input_2 <- data_for_input_1 %>%
   )
 
 if (nrow(data_for_input_2) > nrow(data_for_input_1)){
-  stop("There must be more than one sampling date per station!")
+  stop("There must be more than one sampling date per station! Check 'df_samples'.")
 } else {
   message("Date added")
 }
@@ -354,6 +461,11 @@ if (nrow(data_for_input_2) > nrow(data_for_input_1)){
 - Bottom part: use if you must add UNIT and *check* METHOD_ID   
 ```{r}
 
+table(
+  addNA(data_for_input_2$PARAM),
+  addNA(data_for_input_2$METHOD_ID)
+)
+
 # IF Method_id has not yet been added - add it here
 if (FALSE){
   
@@ -362,6 +474,13 @@ if (FALSE){
     "METHOD_DEFINITIONS", 
     "NAME", 
     c("D4","D5","D6"), values_are_text = TRUE)
+
+    df_absorp <- get_nivabase_selection(
+    "*", 
+    "METHOD_DEFINITIONS", 
+    "NAME", 
+    c("ABS380", "AY380", "AY"), values_are_text = TRUE)
+  
   
   df_lookup_methods_2 <- df_lookup_methods_1 %>%
     filter(LABORATORY == "NILU" & grepl("w.w.", UNIT))
@@ -396,29 +515,34 @@ if (FALSE){
   
 } 
 
+# df4 <- get_nivabase_selection("*", "BIOTA_SAMPLES_SPECIMENS", "SPECIMEN_ID", df3$SAMPLE_ID)
+
+
+```
+
+```{r}
+
 # IF Method_id HAS been added
-if (TRUE){
+if ("METHOD_ID" %in% names(data_for_input_2)){
   
   df_lookup_methods <- get_nivabase_selection(
     "NAME, METHOD_ID, UNIT", 
     "METHOD_DEFINITIONS", 
     "METHOD_ID", 
-    c(28580, 28575, 28579)     # see 2.a2 
+    c(28580, 28575, 28579, 28574)     # ALAD, EROD, PROTV, AY380 
     )  
   data_for_input <- data_for_input_2 %>%
     left_join(df_lookup_methods, by = "METHOD_ID")  
   
   check <- data_for_input %>%
-    filter(is.na(METHOD_ID)) %>%
+    filter(is.na(NAME)) %>%
     count(NAME, UNIT)
   
   if (nrow(check) > 0)
-    stop("Some methods (METHOD_ID) are lacking")
+    stop("Some methods (METHOD_ID) are lacking or wrong")
   
 }
 
-
-# df4 <- get_nivabase_selection("*", "BIOTA_SAMPLES_SPECIMENS", "SPECIMEN_ID", df3$SAMPLE_ID)
 
 
 ```
@@ -468,7 +592,9 @@ for (station in stations){
 ### a. Existing BIOTA_SAMPLES    
 
 - And in particular existing SAMPLE_NO  
-- This is not very important in our case since we add new tissues (blood and liver microsome)  
+- In our case:  
+    - important for AY380 (absorption in the measuremnent of gall metabolites), 
+    - not important where we add new tissues (blood and liver microsome)  
 - NOTE for 2022 (27.6.2023): Lacking station 53B  
 
 ```{r}
@@ -523,20 +649,23 @@ if (nrow(check) == 0){
 
 #### a2. Extra for 2022     
 
-- Lacking station 53B in Nivabasen  
-
 ```{r}
 
-# Get Sørfjorden (53B) 2022 data  
-test <- get_nivabase_data(
-  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN' and DESCRIPTION like '53B%' and extract (YEAR from SAMPLED_DATE) = 2022")
+# In case some station (here, Sørfjorden 53B) is lacking  
 
-xtabs(~DESCRIPTION + STATUSX, test)  
-
-description_examples <- paste("53B Inner Sørfjord - Torsk galle", 1:2)
-xtabs(~DESCRIPTION + STATUSX, test %>% filter(DESCRIPTION %in% description_examples))  
-
-test %>% filter(DESCRIPTION %in% description_examples) %>% View()
+if (FALSE){
+  
+  test <- get_nivabase_data(
+    "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN' and DESCRIPTION like '53B%' and extract (YEAR from SAMPLED_DATE) = 2022")
+  
+  xtabs(~DESCRIPTION + STATUSX, test)  
+  
+  description_examples <- paste("53B Inner Sørfjord - Torsk galle", 1:2)
+  xtabs(~DESCRIPTION + STATUSX, test %>% filter(DESCRIPTION %in% description_examples))  
+  
+  test %>% filter(DESCRIPTION %in% description_examples) %>% View()
+  
+}
 
 ```
 
@@ -560,7 +689,8 @@ existing_samples_spec <- get_nivabase_selection(
 ```{r}
 
 existing_specimens <- get_nivabase_selection(
-  "SPECIMEN_ID, DATE_CAUGHT, SAMPLE_POINT_ID, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+  "SPECIMEN_ID, DATE_CAUGHT, SAMPLE_POINT_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+  # "*",
   "BIOTA_SINGLE_SPECIMENS",
   "SPECIMEN_ID",
   unique(existing_samples_spec$SPECIMEN_ID)
@@ -574,10 +704,12 @@ message("existing_specimens: n = ", nrow(existing_specimens))
 # check SAMPLE_NO
 #
 cat("\n")
-message("Tables:")
+message("Tables: \n")
 
 xtabs(~STATION_CODE, existing_specimens)
+cat("\n")
 xtabs(~SPECIMEN_NO, existing_specimens)
+cat("\n")
 
 # Full table
 if (FALSE)
@@ -616,8 +748,8 @@ not TISSUE_ID = 3 (TISSUE_NAME = 'Lever')
 biota_samples <- data_for_input %>%
   # in the case of siloxans, one SPECIMEN_NO = one sample:
   distinct(STATION_ID, LATIN_NAME, TISSUE_NAME, SAMPLED_DATE, SPECIMEN_NO) %>%  
-  safe_left_join(df_tissue,                                                      # adds TISSUE_ID
-                 na_matches = "never", by = "TISSUE_NAME", check = "BV")  %>%
+  left_join(df_tissue,                                                      # adds TISSUE_ID
+            na_matches = "never", by = "TISSUE_NAME")  %>%
   mutate(
     SAMPLE_NO = as.numeric(SPECIMEN_NO),    
     REPNO = SAMPLE_NO,
@@ -699,10 +831,12 @@ biota_samples %>%
 
 
 ### e. Make SQLs
+
 PASTE INTO SQL DEVELOPER TO ADD THE RECORDS   
 Note to DHJ: use "SQL developer (latest version)" from desktop. Don't use the start menu.  
 - remember `commit;` after running the insert sentences   
 - See `milkys_2020_erod-alad_biota_samples.sql` in `C:\Users\DHJ\AppData\Roaming\SQL Developer`  
+
 ```{r}
 
 # Test functions
@@ -735,8 +869,8 @@ biota_samples_fromdatabase <- niRvana::get_nivabase_selection(
   "BIOTA_SAMPLES",
   "STATION_ID",
   biota_samples$STATION_ID, 
-  extra_where = paste(
-    "and TRUNC(ENTERED_DATE) = TO_DATE('2021-08-18', 'yyyy-mm-dd')", 
+  extra_sql = paste(
+    "and TRUNC(ENTERED_DATE) = TO_DATE('2023-08-10', 'yyyy-mm-dd')",    # HARD-CODED
     "and ENTERED_BY = 'DHJ'")
 )
 
@@ -762,19 +896,32 @@ get_nivabase_data("select count(*) from NIVADATABASE.BIOTA_SAMPLES")  #  60112
 ### g. Add SAMPLE_ID from 'biota_samples_fromdatabase' 
 ```{r}
 
-biota_samples <- biota_samples %>%
-  safe_left_join(biota_samples_fromdatabase %>% select(STATION_ID, TISSUE_ID, TAXONOMY_CODE_ID, SAMPLE_NO, SAMPLE_ID), 
+# biota_samples <- biota_samples %>%
+#   safe_left_join(biota_samples_fromdatabase %>% select(STATION_ID, TISSUE_ID, TAXONOMY_CODE_ID, SAMPLE_NO, SAMPLE_ID), 
+#                  by = c("STATION_ID", "TISSUE_ID", "TAXONOMY_CODE_ID", "SAMPLE_NO"),
+#                  na_matches = "never",
+#                  check = "BCV") %>%
+#   safe_left_join(df_stations %>% select(STATION_ID, STATION_CODE),   # add STATION_CODE as well  
+#                  by = "STATION_ID",
+#                  na_matches = "never",
+#                  check = "BCV")
+
+biota_samples_temp <- biota_samples %>%
+  left_join(biota_samples_fromdatabase %>% select(STATION_ID, TISSUE_ID, TAXONOMY_CODE_ID, SAMPLE_NO, SAMPLE_ID), 
                  by = c("STATION_ID", "TISSUE_ID", "TAXONOMY_CODE_ID", "SAMPLE_NO"),
-                 na_matches = "never",
-                 check = "BCV") %>%
-  safe_left_join(df_stations %>% select(STATION_ID, STATION_CODE),   # add STATION_CODE as well  
+                 na_matches = "never") %>%
+  left_join(df_stations %>% select(STATION_ID, STATION_CODE),   # add STATION_CODE as well  
                  by = "STATION_ID",
-                 na_matches = "never",
-                 check = "BCV")
-  
+                 na_matches = "never")
+
+if (nrow(biota_samples_temp) != nrow(biota_samples)){
+  stop("Check joins! Number of rows changed")
+}  else  {
+  biota_samples <- biota_samples_temp
+}
 
 cat("Number of records: ")
-length(unique(biota_samples$SAMPLE_ID)) %>% cat()
+length(unique(biota_samples_temp$SAMPLE_ID)) %>% cat()
 cat("\nShould be the same as above! \n")
 cat("\n")
 
@@ -817,11 +964,11 @@ ggplot(biota_samples, aes(TISSUE_NAME, SAMPLE_NO)) +
 ```{r}
 
 existing_singlespec_1 <- get_nivabase_selection(
-  "SPECIMEN_ID, DATE_CAUGHT, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+  "SPECIMEN_ID, DATE_CAUGHT,STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
   "BIOTA_SINGLE_SPECIMENS",
   "STATION_ID",
   unique(data_for_input$STATION_ID),
-  extra_where = " and extract(YEAR from DATE_CAUGHT) = 2020"
+  extra_sql = " and extract(YEAR from DATE_CAUGHT) = 2020"
 )
 # Check
 
@@ -851,7 +998,7 @@ sql <- paste(
   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
   "where extract(YEAR from SAMPLED_DATE) =", selected_year, 
   "and extract(MONTH from SAMPLED_DATE) >= 3", 
-  "and UPPER(PROSJEKT) like '%MILKYS%'")       # 'MILKYS' is HARD-CODED
+  "and PROSJEKT like '%O 210200.ANAIN%'")       # HARD-CODED
 df_labware_01 <- get_nivabase_data(sql)   
 
 # January-February next year data
@@ -859,7 +1006,7 @@ sql <- paste(
   "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE", 
   "where extract(YEAR from SAMPLED_DATE) =", selected_year + 1, 
   "and extract(MONTH from SAMPLED_DATE) <= 2", 
-  "and UPPER(PROSJEKT) like '%MILKYS%'")       # 'MILKYS' is HARD-CODED
+  "and PROSJEKT like '%O 210200.ANAIN%'")       # HARD-CODED
 df_labware_02 <- get_nivabase_data(sql)   
 
 df_samples <- bind_rows(df_labware_01, df_labware_02) %>%
@@ -874,7 +1021,8 @@ Check whether there are other tissues than liver (not liver-microsome) and muscl
 
 df_samples %>%
   filter(AQUAMONITOR_CODE %in% data_for_input$STATION_CODE) %>%
-  ggplot(aes(AQUAMONITOR_CODE, BIOTA_SAMPLENO, color = is.na(X_BULK_BIO))) +   # changed from Specimen_no
+  mutate(Pooled_sample = !is.na(X_BULK_BIO)) %>%
+  ggplot(aes(AQUAMONITOR_CODE, BIOTA_SAMPLENO, color = Pooled_sample)) +   # changed from Specimen_no
   geom_point() +
   facet_grid(vars(TISSUE))
 
@@ -921,7 +1069,7 @@ cat(" specimen records will be added to BIOTA_SINGLE_SPECIMENS")
 
 ### c. Add date and species code   
 to `existing_singlespec_date` 
-- NOT NEEDED in this case  
+- NOT NEEDED zero specimen records will be added!    
 ```{r}
 
 existing_singlespec_date <- existing_singlespec_1 %>%
@@ -941,7 +1089,7 @@ biota_specimens_to_add <- biota_specimens_to_add %>%
 PASTE INTO SQL DEVELOPER TO ADD THE RECORDS   
 Note to DHJ: use "SQL developer (latest version)" from desktop. Don't use the start menu.  
 - remember `commit;` after running the insert sentences  
-- NOT NEEDED in this case  
+- NOT NEEDED if zero specimen records will be added!    
 ```{r}
 # Test functions
 # make_sql_single_specimen(1, biota_single_specimens_eider)
@@ -969,8 +1117,10 @@ sql_list[1:3]
 Directly from R, instead of pasting into SQL Developer for getting data  
 - in contrast to the original of this code (for 2018 data)   
 Remember to **commit** in SQL developer first   
-- NOT NEEDED in this case - as this gets all specimens just added, and we didn't need to add any 
+
+- NOT NEEDED if zero specimen records will be added - as this gets all specimens just added, and we didn't need to add any 
 (we only need to add new links to the new samples, by adding records to BIOTA_SAMPLES_SPECIMENS, see below)
+
 ```{r}
 
 #
@@ -983,7 +1133,7 @@ if (FALSE){
     "BIOTA_SINGLE_SPECIMENS",
     "STATION_ID",
     biota_specimens_to_add$STATION_ID, 
-    extra_where = paste(
+    extra_sql = paste(
       " and extract(YEAR from DATE_CAUGHT) =",
       selected_year, 
       "and ENTERED_BY = 'DHJ'")
@@ -1001,11 +1151,11 @@ if (FALSE){
 if (TRUE){
   
   biota_specimens_fromdatabase <- get_nivabase_selection(
-    "SPECIMEN_ID, DATE_CAUGHT, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
+    "SPECIMEN_ID, DATE_CAUGHT,STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO",
     "BIOTA_SINGLE_SPECIMENS",
     "STATION_ID",
     unique(data_for_input$STATION_ID),
-    extra_where = paste(" and extract(YEAR from DATE_CAUGHT) =", selected_year)
+    extra_sql = paste(" and extract(YEAR from DATE_CAUGHT) =", selected_year)
     )
   
 }
@@ -1034,7 +1184,7 @@ biota_specimens_complete <- niRvana::get_nivabase_selection(
   "BIOTA_SINGLE_SPECIMENS",
   "STATION_ID",
   unique(biota_samples$STATION_ID), 
-  extra_where = paste(
+  extra_sql = paste(
     " and extract(YEAR from DATE_CAUGHT) =",
     selected_year)
     )
@@ -1155,6 +1305,7 @@ biota_chemistry_values %>%
   xtabs(~n, .)  # should be only 1's!
 
 ```
+
 ### a2. Check that SAMPLE_NO is given for all   
 ```{r}
 
@@ -1163,6 +1314,7 @@ biota_chemistry_values %>%
   nrow()
 
 ```
+
 ### a2. Check that SAMPLE_ID is given for all   
 ```{r}
 
@@ -1229,17 +1381,17 @@ NOT USED (but works)
 
 get_specimens_from_stationdata <- function (station_data, years = NULL) {
   if (!is.null(years)){
-    extra_where <- paste0(" and extract (YEAR from DATE_CAUGHT) in (", 
+    extra_sql <- paste0(" and extract (YEAR from DATE_CAUGHT) in (", 
                           paste(years, collapse = ","), 
                           ")")
   } else {
-    extra_where <- ""
+    extra_sql <- ""
   }
   get_nivabase_selection("*", 
                          "BIOTA_SINGLE_SPECIMENS", 
                          "STATION_ID", 
                          station_data$STATION_ID,
-                         extra_where = extra_where)
+                         extra_sql = extra_sql)
 }
 
 # Test
@@ -1256,16 +1408,16 @@ if (FALSE){
 ```{r}
 
 df_specimens_allyrs <- get_nivabase_selection(
-  "SPECIMEN_ID, DATE_CAUGHT, SPECIES_ID, STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO", 
+  "SPECIMEN_ID, DATE_CAUGHT,STATION_ID, TAXONOMY_CODE_ID, SPECIMEN_NO", 
   "BIOTA_SINGLE_SPECIMENS", 
   "STATION_ID", 
   unique(data_for_input$STATION_ID),
-  extra_where = " and extract (YEAR from DATE_CAUGHT) > 2014")
+  extra_sql = " and extract (YEAR from DATE_CAUGHT) > 2014")
 
 xtabs(~year(DATE_CAUGHT), df_specimens_allyrs)
 
 # Didn't work
-#  extra_where = " and (extract YEAR from DATE_CAUGHT) = 2020")
+#  extra_sql = " and (extract YEAR from DATE_CAUGHT) = 2020")
 
 # Get data frame of chemical results (30 seconds or so)
 message("\nGet data frame of chemical results")
@@ -1565,7 +1717,7 @@ df1 <- get_nivabase_selection(
   "BIOTA_SINGLE_SPECIMENS",
   "STATION_ID",
   69750,
-  extra_where = " and extract(YEAR from DATE_CAUGHT) = 2020")
+  extra_sql = " and extract(YEAR from DATE_CAUGHT) = 2020")
 
 df2 <- get_nivabase_selection(
   "*",
@@ -1596,7 +1748,7 @@ df3b <- get_nivabase_selection(
   "BIOTA_SAMPLES",
   "STATION_ID",
   69750,
-  extra_where = " and extract(YEAR from SAMPLE_DATE) = 2020")
+  extra_sql = " and extract(YEAR from SAMPLE_DATE) = 2020")
 
 
 ```
@@ -1643,5 +1795,37 @@ df_meth <- get_nivabase_selection(
 # METHOD_ID: 28575
 
     
+```
+
+### More checking  
+```{r}
+
+# Get data up until 2021  
+dat_compl <- readRDS("Files_from_Jupyterhub_2021/Raw_data/101_data_updated_2022-09-01.rds")
+
+# All gall parameters  
+xtabs(~PARAM + MYEAR, dat_compl %>% filter(TISSUE_NAME == "Galle"))
+
+# Absorpion
+xtabs(~PARAM + MYEAR, dat_compl %>% filter(PARAM %in% c("ABS380","AY","AY380")))
+
+
+
+
+```
+
+```{r}
+
+gg <- dat_compl %>% 
+  filter(PARAM %in% c("PYR1O", "PYR1OH")) %>%
+  ggplot() +
+  geom_point(aes(x = MYEAR, y = VALUE_WW, shape = is.na(FLAG1), color = PARAM)) +
+  facet_wrap(vars(STATION_CODE))
+
+gg
+gg + ylim(0, 100)
+gg + scale_y_log10()
+
+
 ```
 
