@@ -11,9 +11,16 @@ library(dplyr)
 library(ggplot2)
 library(lubridate)
 
-# And then the niRvana package. If you need to install it, then run thee next line also:
+# And then the niRvana package. 
+
+# Install directly - need to add password etc, so this dosn't work:
 # devtools::install_github("NIVANorge/niRvana")
-library(niRvana)
+
+# For now:
+# 1) Go to https://github.com/NIVANorge/niRvana
+# 2) "Code" button -> download zip -> save file to own PC - > unzip it    
+# 3) use devtools::install("path to package folder") to install the package  s
+library(niRvana)  
 
 source("802_Get_NIVAbasen_data_functions.R")
 
@@ -99,8 +106,28 @@ df_chemdata <- get_biota_chemistry(
 
 ```
 
+#### Plot (for example parameters)  
+
+```{r, fig.height=8, fig.width=5}  
+
+# table(df_chemdata$NAME)
+# table(df_chemdata$NAME) %>% names() %>% dput()  
+
+pars <- c("ALAD", "Aldrin", "BDE49", "Benzo[a]pyren", "EROD", "Fettinnhold", 
+  "Kadmium", "p,p'-DDE", "PCB 118", "Perfluoroktansulfonamid (PFOSA)", 
+  "SCCP eksl. LOQ", "Toksafen Parlar 26", "Tørrstoff %", "Tributyltinn (TBT)")
+
+df_chemdata %>%
+  filter(NAME %in% pars) %>%
+  count(STATION_CODE, NAME) %>%
+  # ggplot(aes(STATION_CODE, NAME)) +
+  ggplot(aes(NAME, STATION_CODE)) +
+  geom_tile(aes(fill = n)) +
+  scale_fill_viridis_c() +
+  ggeasy::easy_rotate_x_labels(-45)
 
 
+```
 
 
 ### Save 
@@ -115,6 +142,7 @@ timestamp <- substr(t, 1, 10)
 folder <- paste0("Files_to_Jupyterhub_", measurement_year)
 filename_only <- paste0("01_df_", measurement_year, "_notstandard_", timestamp, ".rds")
 filename <- paste0(folder, "/", filename_only)
+filename
 
 # Set to TRUE/FALSE depending on whether file should be saved or not  
 if (FALSE){
@@ -130,10 +158,17 @@ if (FALSE){
 # Set to TRUE/FALSE depending on whether file should be read or not  
 if (FALSE){
   # df_chemdata <- readRDS(filename)
-  df_chemdata <- readRDS("Files_to_Jupyterhub_2021/01_df_2021_notstandard_2022-05-23.rds")
+  files <- dir(folder) %>% rev()
+  files
+  filename_only <- files[1]    # 1 = latest data   
+  filename <- paste0(folder, "/", filename_only)
+  df_chemdata <- readRDS(filename)
 }
 
 ```
+
+
+## APPENDIX 1
 
 ```{r}
 
@@ -160,5 +195,66 @@ if (FALSE){
 }
 
 ```
+
+
+## APPENDIX 2 - get Labware data for gall metabolites       
+
+### Check 1
+
+```{r}
+
+# One project, one sample   
+test <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN' and DESCRIPTION = '30B Inner Oslofjord - Torsk galle 1'")
+test <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN' and DESCRIPTION like '53B%'")
+
+```
+
+### Check 2  
+
+```{r}
+
+# All Sørfjorden samples  
+test1 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_CHECK_SAMPLE where PROSJEKT = 'O 210200.ANAIN' and DESCRIPTION like '%53B%'")  
+xtabs(~addNA(SAMPLED_DATE) + TISSUE, test1)
+
+# All Sørfjorden measurements    
+test2 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN' and DESCRIPTION like '%53B%'")  
+# xtabs(~DESCRIPTION, test2)
+xtabs(~DESCRIPTION + addNA(year(SAMPLED_DATE)), test2 %>% filter(grepl("galle", DESCRIPTION, ignore.case = TRUE)))
+xtabs(~is.na(NUMERIC_ENTRY) + addNA(year(SAMPLED_DATE)), test2 %>% filter(grepl("galle", DESCRIPTION, ignore.case = TRUE)))
+
+write.csv(test2, "clipboard-4096")
+writexl::write_xlsx(test2, "C:/Data/Temp/Milkys_2021-22_Labware_53B.xlsx")
+
+if (FALSE){
+  test2 %>% 
+    filter(grepl("galle", DESCRIPTION, ignore.case = TRUE),
+           is.na(SAMPLED_DATE)) %>% View()
+}
+
+
+
+```
+
+### Also check Bømlo and Indre Oslofjord   
+
+```{r}
+
+test2 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN' and DESCRIPTION like '%23B%'")  
+xtabs(~is.na(NUMERIC_ENTRY) + addNA(year(SAMPLED_DATE)), test2 %>% filter(grepl("galle", DESCRIPTION, ignore.case = TRUE)))
+
+test2 <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN' and DESCRIPTION like '%30B%'")  
+xtabs(~is.na(NUMERIC_ENTRY) + addNA(year(SAMPLED_DATE)), test2 %>% filter(grepl("galle", DESCRIPTION, ignore.case = TRUE)))
+
+
+```
+
+
 
 
