@@ -286,25 +286,28 @@ data_for_input_1a <- dat_cod %>%
   rename(Sample_no = nummer) %>% #    names()
   select(STATION_CODE, Sample_no, 
          `abs 380 nm`,
-         `ala-d (ng PBG/min/mg prot)`, `EROD (pmol/min mg protein)`, `blod protein (mg/mL)`) %>%
+         `ala-d (ng PBG/min/mg prot)`, `EROD (pmol/min mg protein)`, `mikrosomalt protein (mg/mL)`, `blod protein (mg/mL)`) %>%
   tidyr::pivot_longer(c(-STATION_CODE, -Sample_no), 
                       names_to = "Param", values_to = "Value") %>%  # note: no less-thans, so this works  
   mutate(
     PARAM = case_when(
       grepl("EROD", Param, fixed = TRUE) ~ "EROD",
+      grepl("mikrosomalt protein", Param, fixed = TRUE) ~ "PROTV",
       grepl("blod protein", Param, fixed = TRUE) ~ "PROTV",
       grepl("ala-d", Param, fixed = TRUE) ~ "ALAD",
       grepl("abs 380", Param, fixed = TRUE) ~ "AY380"
       ),
     METHOD_ID = case_when(
       grepl("EROD", Param, fixed = TRUE) ~ 28580,
+      grepl("mikrosomalt protein", Param, fixed = TRUE) ~ 28575,
       grepl("blod protein", Param, fixed = TRUE) ~ 28575,
       grepl("ala-d", Param, fixed = TRUE) ~ 28579,
       grepl("abs 380", Param, fixed = TRUE) ~ 28574
       ),
     TISSUE_NAME = case_when(
       grepl("EROD", Param, fixed = TRUE) ~ "Liver - microsome",
-      grepl("blod protein", Param, fixed = TRUE) ~ "Liver - microsome",
+      grepl("mikrosomalt protein", Param, fixed = TRUE) ~ "Liver - microsome",
+      grepl("blod protein", Param, fixed = TRUE) ~ "Blod",
       grepl("ala-d", Param, fixed = TRUE) ~ "Blod",
       grepl("abs 380", Param, fixed = TRUE) ~ "Galle"
       ),
@@ -343,8 +346,25 @@ if (nrow(data_for_input_1) < nrow(data_for_input_1b)){
      
 ```{r}
 
-data_for_input_1 <- data_for_input_1 %>%
-  filter(PARAM %in% c("ALAD", "EROD", "PROTV"))
+cat("Before: \n")
+xtabs(~PARAM + TISSUE_NAME, data_for_input_1)
+
+#
+# For including only ALAD, EROD and PROTV  
+# - must add records to BIOTA SAMPLES and BIOTA_SAMPLES_SPECIMENS further down
+#
+# data_for_input_1 <- data_for_input_1 %>%
+#   filter(PARAM %in% c("ALAD", "EROD", "PROTV"))
+
+#
+# For including only AY380 (absorbance)    
+# - do this after thre automatic Labware -> Nivabasen import has added records to BIOTA SAMPLES and BIOTA_SAMPLES_SPECIMENS
+#
+# data_for_input_1 <- data_for_input_1 %>%
+#   filter(PARAM %in% c("AY380"))
+
+cat("\n\nAfter: \n")
+xtabs(~PARAM + TISSUE_NAME, data_for_input_1)
 
 ```
 
@@ -474,13 +494,19 @@ if (FALSE){
     "METHOD_DEFINITIONS", 
     "NAME", 
     c("D4","D5","D6"), values_are_text = TRUE)
-
-    df_absorp <- get_nivabase_selection(
+  
+  df_absorp <- get_nivabase_selection(
     "*", 
     "METHOD_DEFINITIONS", 
     "NAME", 
     c("ABS380", "AY380", "AY"), values_are_text = TRUE)
   
+  df_protv <- get_nivabase_selection(
+    "*", 
+    "METHOD_DEFINITIONS", 
+    "NAME", 
+    c("PROTV"), values_are_text = TRUE)
+      
   
   df_lookup_methods_2 <- df_lookup_methods_1 %>%
     filter(LABORATORY == "NILU" & grepl("w.w.", UNIT))
@@ -1078,10 +1104,9 @@ existing_singlespec_date
 # should be only one line per station_id! (I.e. 4 lines)
 
 biota_specimens_to_add <- biota_specimens_to_add %>%
-  safe_left_join(existing_singlespec_date %>% select(-n), 
+  left_join(existing_singlespec_date %>% select(-n), 
                  na_matches = "never",
-                 by = "STATION_ID",
-                 check = "BCV")
+                 by = "STATION_ID")
 
 ```
 
@@ -1301,7 +1326,7 @@ xtabs(~addNA(STATION_ID) + addNA(TISSUE_NAME), data_for_input)
 ```{r}
 
 biota_chemistry_values %>%
-  count(STATION_ID, SAMPLE_NO, METHOD_ID) %>%
+  count(STATION_ID, SAMPLE_NO, METHOD_ID, TISSUE_ID) %>%
   xtabs(~n, .)  # should be only 1's!
 
 ```
@@ -1329,6 +1354,9 @@ Compare with plot in 1c
 ```{r}
 
 biota_chemistry_values %>%
+  xtabs(~SAMPLE_ID + paste(METHOD_ID, TISSUE_ID), .)
+
+biota_chemistry_values %>%
   # left_join(biota_samples_fromdatabase %>% select(SAMPLE_ID, TISSUE_ID),
   #           by = c("SAMPLE_ID")) %>%
   left_join(df_tissue %>% select(TISSUE_ID, TISSUE_NAME),
@@ -1338,11 +1366,10 @@ biota_chemistry_values %>%
   facet_grid(cols = vars(STATION_ID), rows = vars(METHOD_ID)) +
   theme(axis.text.x = element_text(hjust = 0, angle = -30))
 
-
 ```
 
 
-### c. Make SQLs  
+### d. Make SQLs  
 PASTE INTO SQL DEVELOPER TO ADD THE RECORDS   
 - See `milkys_2020_erod-alad_biota_chemistryvalues.sql` in `C:\Users\DHJ\AppData\Roaming\SQL Developer`  
 - Remember to `commit;` afterwards  
@@ -1369,6 +1396,29 @@ sql_list[1:3]
 ```
 
 
+### e. EXTRA - Delete PROTV for 'Liver microsome'  
+
+```{r}
+
+# AFTER running code of 802
+
+df_error <- df_chemdata %>%
+  filter(NAME == "PROTV")
+# View(df_error)
+nrow(df_error)  # 46
+
+xtabs(~STATION_CODE + year(SAMPLE_DATE), df_error)
+xtabs(~METHOD_ID, df_error)   # 28575 
+
+# SELECT COUNT(*) from NIVADATABASE.BIOTA_CHEMISTRY_VALUES where TRUNC(ENTERED_DATE) = TO_DATE('2023-08-10', 'yyyy-mm-dd') and ENTERED_BY = 'DHJ' and METHOD_ID = 28575;
+
+# DELETE from NIVADATABASE.BIOTA_CHEMISTRY_VALUES where TRUNC(ENTERED_DATE) = TO_DATE('2023-08-10', 'yyyy-mm-dd') and ENTERED_BY = 'DHJ' and METHOD_ID = 28575;
+# commit;
+
+```
+
+
+```
 
 
 
