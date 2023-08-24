@@ -76,7 +76,7 @@ dat_sampleinfo <- get_sample_info(dat)
 
 ```{r}
 
-# Example: HBCD at 13B  
+# Example: HBCDB at 13B  
 
 # Extra rule 1: 
 # Time series should be truncated from the left until Nplus >= N  
@@ -91,7 +91,7 @@ cat("Rule 1 ok:", rule1_ok, "\n")
 rule2_ok <- pull(dat_sampleinfo, N_over)[1] > 0
 cat("Rule 2 ok:", rule2_ok, "\n")
 
-# Extra rule 3, 
+# Extra rule 3
 # If a linear/smooth trend is fitted, final years with only censored data should be set equal to the last 
 #   year with some equal data  
 rule3_ok <- tail(pull(dat_sampleinfo, N_over),1) > 0

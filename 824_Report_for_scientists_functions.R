@@ -264,6 +264,8 @@ get_trendobj_parameter_species <- function(param, species, data){
 
 
 
+
+
 #
 # Create function which creates relative class, based on two thresholds  
 # - by default, works on log scale  

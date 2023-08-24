@@ -26,6 +26,8 @@ library(dplyr)
 library(purrr)
 library(tidyr)     # pivot_wider
 library(ggplot2)
+library(ggeasy)
+
 source("845_Check_ICES_submission_functions.R")
 
 ```
@@ -310,7 +312,7 @@ check_all_links(data_fixed2, print_values = TRUE)
 ```
 
 
-## 3. Queries 2022: 1. 1996 BDE47 and BD153 very high     
+## 3. Queries 2022-1: 1996 BDE47 and BD153 very high     
 
 The PBDE concentrations from 1996 are dubiously high so delete them. Here is a graph of concentrations by PBDE and year (across all stations) with the 1996 data that are to be deleted plotted in red.
 
@@ -426,6 +428,8 @@ data_raw_fixed <- data_raw[-lines_to_remove]
 
 ```{r}
 
+# fn_new <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8_edit_2022-10-20.NO"
+
 data_fixed <- read_ices_file(fn_new, sep = ",") %>%   # remember sep value
   add_field_codes() %>%
   set_numeric()
@@ -453,15 +457,196 @@ nrow(df_plot)
 ```
 
 
-## 3. Queries 2022: 1. 1996 BDE47 and BD153 very high     
+## 4. Queries 2022-2: 2001 - PCBs very high at 4 mussel stations  
 
-The PBDE concentrations from 1996 are dubiously high so delete them. Here is a graph of concentrations by PBDE and year (across all stations) with the 1996 data that are to be deleted plotted in red.
+- These data are correct, but are ‘unusual’ in the context of the whole time series. Their presence causes convegence issues in some time series.   
+- Accounting for them properly in the time series models would require greater intervention than is currently possible, so the expedient thing to do is delete all PCB data for 2001 from these stations  
+- Stations are: 51A Byrkjenes, 52A Eitrheimsneset, 56A Kvalnes, 57A Krossanes
 
 
 ### Filename
 ```{r}
 
-fn <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8.NO"
+fn <- "Files_to_ICES/Submission files 1981-2014/NIVA2001CF_utf8.NO"
+
+```
+
+### Read data
+```{r}
+
+# readLines(fn, 3)
+dat_raw <- read_ices_file(fn)
+length(dat_raw)
+
+# debugonce(set_numeric)
+dat <- dat_raw %>%   # comma in older files, semicolon in newer
+  add_field_codes() %>%
+  set_numeric()
+
+# We set 'print_values = TRUE' as there were some missing 
+check_all_links(dat, print_values = TRUE)
+
+```
+
+### Fix table 10   
+- lacking name for one column, we just delete that column  
+```{r}
+
+# check
+names(dat[["10"]])    # last column before line number has no name
+
+# fix
+dat[["10"]] <- dat[["10"]][!is.na(names(dat[["10"]]))]
+
+
+```
+
+### Check values     
+```{r}
+
+# selected_stations <- c("98B1", "23B", "24B", "53B")
+
+table(dat[["10"]]$MATRX)
+matrix <- "SB"   # blue mussel = soft body 
+
+table(dat[["10"]]$PARAM)
+
+params_all <- table(dat[["10"]]$PARAM) %>% names()
+grep("CB", params_all, value = TRUE) %>% dput()     # also contains HCB and QCB
+params <- c("CB101", "CB105", "CB118", "CB138", "CB153", "CB156", "CB180", "CB209", "CB28", "CB52")
+
+df_plot <- dat[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) %>%
+  # filter(STNNO %in% stations) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG) # %>%
+  # mutate(
+  #   Selected = STNNO %in% selected_stations
+  # )
+
+gg <- ggplot(df_plot, aes(STNNO, VALUE, color = PARAM)) +
+  geom_jitter(width = 0.2) +
+  easy_rotate_x_labels(-45)
+
+gg
+gg + scale_y_log10()
+
+```
+
+
+### Lines to delete from file   
+- We keep metals and fat, they seem normal
+- note that MT = metallothionein (we keep that one too)     
+```{r}
+
+data_to_exclude1 <- dat[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params & STNNO %in% c("51A","52A","56A","57A")) 
+
+data_to_exclude1
+
+# Test plot
+gg <- ggplot(data_to_exclude1, aes(STNNO, VALUE, color = PARAM)) +
+  geom_jitter(width = 0.2) +
+  easy_rotate_x_labels(-45)
+
+gg
+
+# Since we don't delete all these params, just data from some stations, there is no need to delete some methods
+
+
+```
+
+
+
+### Delete lines and write edited version   
+```{r}
+
+fn_orig <- "Files_to_ICES/Submission files 1981-2014/NIVA2001CF_utf8.NO"
+fn_new <- "Files_to_ICES/Submission files 1981-2014/NIVA2001CF_utf8_edit_2022-10-24.NO.NO"
+
+# we call it 'temp' because we will delete 3 rows from table 03, see results of 'check_all_links'   
+
+data_raw <- readLines(fn_orig) 
+
+# Check
+# data_raw[11117]
+
+lines_to_remove <- c(
+  pull(data_to_exclude1, Line_no)
+)
+
+data_raw_fixed <- data_raw[-lines_to_remove]
+
+# Uncomment to (over)write:  (DO THIS ONLY ONCE)
+# writeLines(data_raw_fixed, con = fn_new)
+
+```
+
+
+
+### Check 1 - read and check links   
+
+- Discovered here that we also needed to remove two lines from table 21 (methods)
+
+```{r}
+
+# fn_new <- "Files_to_ICES/Submission files 1981-2014/NIVA2001CF_utf8_edit_2022-10-24.NO.NO"
+
+data_fixed <- read_ices_file(fn_new) %>%   # sep value = automatic  
+  add_field_codes() %>%
+  set_numeric()
+
+# debugonce(check_link)
+check_all_links(data_fixed, print_values = TRUE)
+
+```
+
+### Check 2 - check data values    
+
+```{r}
+
+# Code copied from above, except that dat is replaced by 'data_fixed'
+
+# fix table 10
+data_fixed[["10"]] <- data_fixed[["10"]][!is.na(names(data_fixed[["10"]]))]
+
+# selected_stations <- c("98B1", "23B", "24B", "53B")
+
+matrix <- "SB"   # blue mussel = soft body 
+params <- c("CB101", "CB105", "CB118", "CB138", "CB153", "CB156", "CB180", "CB209", "CB28", "CB52")
+
+df_plot <- data_fixed[["10"]] %>% 
+  filter(MATRX %in% matrix & PARAM %in% params) %>%
+  # filter(STNNO %in% stations) %>%
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG) # %>%
+  # mutate(
+  #   Selected = STNNO %in% selected_stations
+  # )
+
+gg <- ggplot(df_plot, aes(STNNO, VALUE, color = PARAM, shape = QFLAG)) +
+  geom_jitter(width = 0.2) +
+  easy_rotate_x_labels(-45)
+
+gg
+gg + scale_y_log10()
+
+
+```
+
+
+
+## 5. Queries 2022-3: 2016 - Chromium very high at 4 cod stations  
+
+- Looks like lab/reporting errors  
+- Stations are: 53B, 98B1, 23B, 24B   
+- NOTE: this should have been corrected befor
+
+
+### Filename
+```{r}
+
+# The last one seems to be correct, see section   
+fn <- "Files_to_ICES/Submission files 2015-2019/NIVA2016CF_edit_2022-01-03.NO"
+fn <- "Files_to_ICES/Submission files 2015-2019/NIVA2016CF_edit_2022-01-03_temp.NO"
 
 ```
 
@@ -470,16 +655,7 @@ fn <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8.NO"
 
 # readLines(fn, 3)
 
-check_sep <- readLines(fn, 1)
-comma <- gregexpr(",", check_sep, fixed = TRUE)[[1]] %>% length()
-semicolon <- gregexpr(";", check_sep, fixed = TRUE)[[1]]
-
-if (comma > semicolon){
-  # debugonce(read_ices_file)
-  dat_raw <- read_ices_file(fn, sep = ",")
-} else {
-  dat_raw <- read_ices_file(fn, sep = ";")
-}
+dat_raw <- read_ices_file(fn)
 
 length(dat_raw)
 
@@ -493,12 +669,30 @@ check_all_links(dat, print_values = TRUE)
 
 ```
 
+### Fix table 10   
+- in this case, nothing to fix ('fix' part doesn't change anything)    
+```{r}
+
+# check
+names(dat[["10"]])    # last column before line number has no name
+
+# fix
+dat[["10"]] <- dat[["10"]][!is.na(names(dat[["10"]]))]
+
+
+```
+
 ### Check values     
 ```{r}
 
 # selected_stations <- c("98B1", "23B", "24B", "53B")
-matrix <- "LI"
-params <- c("BDE47", "BD153")
+
+table(dat[["10"]]$MATRX)
+matrix <- "LI"   # cod = liver 
+
+table(dat[["10"]]$PARAM)
+
+params <- c("CR")
 
 df_plot <- dat[["10"]] %>% 
   filter(MATRX %in% matrix & PARAM %in% params) %>%
@@ -509,39 +703,47 @@ df_plot <- dat[["10"]] %>%
   # )
 
 gg <- ggplot(df_plot, aes(STNNO, VALUE, color = PARAM)) +
-  geom_jitter(width = 0.2)
+  geom_jitter(width = 0.2) +
+  easy_rotate_x_labels(-45)
 
 gg
 gg + scale_y_log10()
 
 ```
 
+
 ### Lines to delete from file   
-- We keep metals and fat, they seem normal
-- note that MT = metallothionein (we keep that one too)     
+- Nothing to delete - CR at these stations have already been fixed        
+- But we can fix extra lines in table 03   
+    - includes cod (SMPNO = 1) - shoudl be deleted  
 ```{r}
 
-data_to_exclude <- dat[["10"]] %>% 
-  filter(MATRX %in% matrix & PARAM %in% params) 
+View(dat[["03"]])
+View(dat[["04"]])
 
-data_to_exclude
+dat[["03"]] %>%
+  filter(STNNO %in% c("33F", "36F", "53F")) %>%
+  xtabs(~SPECI + SMPNO + STNNO, .)
 
-# Since we delete all these params, we also need to delete some methods
-# params <- c("BDE47", "BD153")
+dat[["04"]] %>%
+  filter(STNNO %in% c("33F", "36F", "53F")) %>%
+  xtabs(~SMPNO + STNNO, .)
 
-table(data_to_exclude$AMLNK)
-table(dat[["10"]]$AMLNK)
+data_to_exclude1 <- dat[["03"]] %>% 
+  filter(STNNO %in% c("33F", "36F", "53F") & SMPNO == 1) 
 
-data_to_exclude2 <- dat[["21"]] %>% 
-  filter(AMLNK %in% unique(data_to_exclude$AMLNK))  
+data_to_exclude1
+
 
 ```
+
+
 
 ### Delete lines and write edited version   
 ```{r}
 
-fn_orig <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8.NO"
-fn_new <- "Files_to_ICES/Submission files 1981-2014/NIVA1996CF_utf8_edit_2022-10-20.NO"
+fn_orig <- "Files_to_ICES/Submission files 2015-2019/NIVA2016CF_edit_2022-01-03_temp.NO"
+fn_new <- "Files_to_ICES/Submission files 2015-2019/NIVA2016CF_edit_2022-10-24.NO"
 
 # we call it 'temp' because we will delete 3 rows from table 03, see results of 'check_all_links'   
 
@@ -551,16 +753,16 @@ data_raw <- readLines(fn_orig)
 # data_raw[11117]
 
 lines_to_remove <- c(
-  pull(data_to_exclude, Line_no),
-  pull(data_to_exclude2, Line_no)
+  pull(data_to_exclude1, Line_no)
 )
 
 data_raw_fixed <- data_raw[-lines_to_remove]
 
-# Uncomment to write:
+# Uncomment to (over)write:  (DO THIS ONLY ONCE)
 # writeLines(data_raw_fixed, con = fn_new)
 
 ```
+
 
 
 ### Check 1 - read and check links   
@@ -569,7 +771,9 @@ data_raw_fixed <- data_raw[-lines_to_remove]
 
 ```{r}
 
-data_fixed <- read_ices_file(fn_new, sep = ",") %>%   # remember sep value
+# fn_new <- "Files_to_ICES/Submission files 2015-2019/NIVA2016CF_edit_2022-10-24.NO"
+
+data_fixed <- read_ices_file(fn_new) %>%   # sep value = automatic  
   add_field_codes() %>%
   set_numeric()
 
@@ -584,14 +788,28 @@ check_all_links(data_fixed, print_values = TRUE)
 
 # Code copied from above, except that dat is replaced by 'data_fixed'
 
-matrix <- "LI"
-params <- c("BDE47", "BD153")
+# fix table 10
+data_fixed[["10"]] <- data_fixed[["10"]][!is.na(names(data_fixed[["10"]]))]
+
+# selected_stations <- c("98B1", "23B", "24B", "53B")
+
+matrix <- "SB"   # blue mussel = soft body 
+params <- c("CB101", "CB105", "CB118", "CB138", "CB153", "CB156", "CB180", "CB209", "CB28", "CB52")
 
 df_plot <- data_fixed[["10"]] %>% 
   filter(MATRX %in% matrix & PARAM %in% params) %>%
   # filter(STNNO %in% stations) %>%
-  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG)
+  select(STNNO, SMPNO, SUBNO, PARAM, VALUE, QFLAG) # %>%
+  # mutate(
+  #   Selected = STNNO %in% selected_stations
+  # )
 
-nrow(df_plot)
+gg <- ggplot(df_plot, aes(STNNO, VALUE, color = PARAM, shape = QFLAG)) +
+  geom_jitter(width = 0.2) +
+  easy_rotate_x_labels(-45)
+
+gg
+gg + scale_y_log10()
+
 
 ```

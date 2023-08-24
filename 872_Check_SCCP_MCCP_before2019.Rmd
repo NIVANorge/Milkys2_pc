@@ -1,0 +1,463 @@
+---
+title: "872 Check MCCP and SCCP before 2019"
+output: html_document
+---
+
+
+
+## 1. Libraries
+```{r setup, include=FALSE}
+# install.packages("niRvana")
+
+library(dplyr)
+library(ggplot2)
+library(lubridate)
+library(stringr)
+library(tidyr)
+
+# And then the niRvana package. If you need to install it, then run thee next line also:
+# devtools::install_github("NIVANorge/niRvana")
+library(niRvana)
+
+source("802_Get_NIVAbasen_data_functions.R")
+
+```
+
+### Settings  
+```{r}
+
+sampling_years <- 2016:2018
+
+```
+
+
+## 2. Get specimens  
+
+### Give your username and password to R (only once per R session):
+```{r}
+# set_credentials()
+```
+
+### Get the list of projects
+
+```{r}
+
+df_projects <- get_projects()   # we call it 'df_projects' (the default name used by 'get_stations_from_project')
+
+```
+
+### Get a list of the stations in the CEMP_Biota project
+
+```{r}
+
+df_stations <- get_stations_from_project("CEMP_Biota", ignore.case = FALSE)
+
+```
+
+### Get all specimens collected at these stations (20 seconds or so)
+- Includes LATIN_NAME  
+```{r}
+
+df_specimens <- get_specimens_from_stationdata(df_stations, years = sampling_years)
+cat("df_specimens:", nrow(df_specimens), "rows\n")
+
+df_specimens <- df_specimens %>%
+  mutate(
+    MYEAR = case_when(
+      Month >= 3 ~ Year,
+      Month <= 2 ~ Year - 1
+    )
+  )
+
+cat("df_specimens_nextyear:", nrow(df_specimens_nextyear), "rows\n")
+
+```
+
+
+
+### Plot sample months  
+
+```{r, fig.height=6, fig.width=7}
+
+df_specimens %>%
+  mutate(DATE_CAUGHT_m = floor_date(DATE_CAUGHT, "month")) %>%
+  ggplot(aes(DATE_CAUGHT_m)) +
+  geom_histogram()
+
+```
+
+
+### Set sample year  
+
+```{r, fig.height=6, fig.width=7}
+
+df_specimens <- df_specimens %>%
+  mutate(
+    MYEAR = case_when(
+      month(DATE_CAUGHT) >= 3 ~ year(DATE_CAUGHT),
+      month(DATE_CAUGHT) <= 2 ~ year(DATE_CAUGHT)-1)
+      )
+
+table(df_specimens$MYEAR)
+    
+
+```
+
+## Get SCCP and MCCP   
+
+### Get method ID   
+
+Not the ones we need
+```{r}
+
+# df_data <- readRDS("Files_to_Jupyterhub_2021/01_df_2021_notstandard_2022-09-23.rds")
+# 
+# id <- df_data %>% 
+#   filter(NAME %in% c("SCCP eksl. LOQ", "SCCP inkl. LOQ", "MCCP eksl. LOQ", "MCCP inkl. LOQ")) %>% 
+#   pull(METHOD_ID) %>%
+#   unique()
+# 
+# df_meth_ccp <- get_nivabase_selection("NAME, METHOD_ID", "METHOD_DEFINITIONS", "METHOD_ID", id)
+# 
+# if (nrow(df_meth_ccp) != 4){
+#   stop("Expected one row per CCP, i.e. 4 rows")
+# }
+# 
+# id
+
+```
+
+
+### Modify functions   
+
+- so they accept method_ids
+```{r}
+
+get_biota_chemistry <- function (years, specimendata, stationdata, months_second_year = 1:2, 
+    report_samples = FALSE,
+    method_ids = NULL
+    ) {
+    mo <- lubridate::month(specimendata$DATE_CAUGHT)
+    yr <- lubridate::year(specimendata$DATE_CAUGHT)
+    specimendata$MYEAR <- ifelse(mo %in% months_second_year, 
+        yr - 1, yr)
+    specimendata <- specimendata[specimendata[, "MYEAR"] %in% 
+        years, ]
+    if (nrow(specimendata) == 0) {
+        result = NULL
+    }
+    else {
+        sample_id <- unique(get_sampleid_from_specimendata(specimendata))
+        df_samples <- get_samples_from_sampleid(sample_id, report = report_samples)
+        df_values <- get_chemistry_from_sampledata(df_samples, method_ids = method_ids)
+        dat <- merge(dplyr::select(df_values, -dplyr::contains("ENTERED")), 
+            dplyr::select(df_samples, -dplyr::contains("ENTERED")), 
+            by = "SAMPLE_ID", all.x = TRUE, all.y = FALSE)
+        dat <- merge(dat, stationdata[, c("STATION_ID", "STATION_CODE", 
+            "STATION_NAME")], by = "STATION_ID", all.x = TRUE, 
+            all.y = FALSE)
+        col_sequence <- c("STATION_CODE", "STATION_NAME", "LATIN_NAME", 
+            "SAMPLE_DATE", "TISSUE_NAME", "SAMPLE_NO", "REPNO", 
+            "NAME", "VALUE", "FLAG1", "FLAG2", "UNIT", "DETECTION_LIMIT", 
+            "UNCERTAINTY", "QUANTIFICATION_LIMIT", "APPROVED", 
+            "REMARK_sample", "REMARK_chem", "STATION_ID", "SAMPLE_ID", 
+            "METHOD_ID", "VALUE_ID", "TISSUE_ID", "TAXONOMY_CODE_ID")
+        result <- dat[, col_sequence]
+        result <- fact2char_df(result)
+    }
+    result
+}
+
+get_chemistry_from_sampledata <- function(sampledata, method_ids = NULL){
+  if (is.null(method_ids)){
+    df <- get_nivabase_selection("*", "BIOTA_CHEMISTRY_VALUES", 
+        "SAMPLE_ID", unique(sampledata$SAMPLE_ID))
+  } else {
+    method_sql <- paste("and METHOD_ID in (", paste(method_ids, collapse = ","), ")") 
+    df <- get_nivabase_selection("*", "BIOTA_CHEMISTRY_VALUES", 
+        "SAMPLE_ID", unique(sampledata$SAMPLE_ID), extra_sql = method_sql)
+  }
+    methoddata <- get_chemistry_methods(unique(df$METHOD_ID))
+    df <- merge(df, methoddata, all.x = TRUE, all.y = FALSE)
+    for (col in c("VALUE", "DETECTION_LIMIT", "UNCERTAINTY", 
+        "QUANTIFICATION_LIMIT")) df[[col]] <- as.numeric(sub(",", 
+        ".", df[[col]], fixed = TRUE))
+    df <- dplyr::rename(df, REMARK_chem = REMARK)
+}
+
+```
+
+
+### Get the data itself  
+
+Get data frame of chemical data for all samples for the measurement year   
+- LATIN_NAME is included  
+
+
+### 2016, get method IDs   
+```{r, results = FALSE}
+
+# Check a single station  
+df_stations_s <- df_stations %>% filter(STATION_CODE == "I023")
+df_specimens_s <- df_specimens %>% filter(STATION_ID %in% unique(df_stations_s$STATION_ID))
+
+check <- get_biota_chemistry(
+  years = 2016,
+  specimendata = df_specimens_s, 
+  stationdata = df_stations_s,
+  report_samples = TRUE)
+
+# check %>% count(METHOD_ID, NAME) %>% View()
+# 35581-35584
+
+```
+
+### 2016, get data  
+```{r, results = FALSE}
+
+# debugonce(get_biota_chemistry)
+# debugonce(get_samples_from_sampleid)
+# debugonce(get_chemistry_from_sampledata)
+
+df_data_2016 <- get_biota_chemistry(
+  years = 2016,
+  specimendata = df_specimens, 
+  stationdata = df_stations,
+  method_ids = 35581:35584,
+  report_samples = TRUE)
+
+```
+
+
+
+### 2017, get IDs   
+```{r, results = FALSE}
+
+# Check a single station  
+df_stations_s <- df_stations %>% filter(STATION_CODE == "I023")
+df_specimens_s <- df_specimens %>% filter(STATION_ID %in% unique(df_stations_s$STATION_ID))
+
+check <- get_biota_chemistry(
+  years = 2017,
+  specimendata = df_specimens_s, 
+  stationdata = df_stations_s,
+  report_samples = TRUE)
+
+# check %>% count(METHOD_ID, NAME) %>% View()
+# 35581-35584
+
+```
+
+### 2017, get data  
+```{r, results = FALSE}
+
+# debugonce(get_biota_chemistry)
+# debugonce(get_samples_from_sampleid)
+# debugonce(get_chemistry_from_sampledata)
+
+df_data_2017 <- get_biota_chemistry(
+  years = 2017,
+  specimendata = df_specimens %>% filter(MYEAR == 2017), 
+  stationdata = df_stations,
+  method_ids = 35581:35584,
+  report_samples = TRUE)
+
+```
+
+
+
+
+### 2018, get IDs   
+```{r, results = FALSE}
+
+# Check a single station  
+df_stations_s <- df_stations %>% filter(STATION_CODE == "I023")
+df_specimens_s <- df_specimens %>% filter(STATION_ID %in% unique(df_stations_s$STATION_ID))
+
+check <- get_biota_chemistry(
+  years = 2018,
+  specimendata = df_specimens_s, 
+  stationdata = df_stations_s,
+  report_samples = TRUE)
+
+# check %>% count(METHOD_ID, NAME) %>% View()
+# 35581-35584
+
+```
+
+### 2018, get data  
+```{r, results = FALSE}
+
+# debugonce(get_biota_chemistry)
+# debugonce(get_samples_from_sampleid)
+# debugonce(get_chemistry_from_sampledata)
+
+df_data_2018 <- get_biota_chemistry(
+  years = 2018,
+  specimendata = df_specimens %>% filter(MYEAR == 2018), 
+  stationdata = df_stations,
+  method_ids = 35581:35584,
+  report_samples = TRUE)
+
+```
+
+
+
+### 2021, get data  
+
+* Note: these were 
+```{r, results = FALSE}
+
+# debugonce(get_biota_chemistry)
+# debugonce(get_samples_from_sampleid)
+# debugonce(get_chemistry_from_sampledata)
+
+df_data_2021 <- readRDS("Files_to_Jupyterhub_2021/01_df_2021_notstandard_2022-09-23.rds")
+
+```
+
+
+
+## Compare with figures/tables  
+
+
+### MCCP 2021   
+
+* Conclusion: eksl. LOQ used in the data  
+
+```{r}
+
+df_MCCP <- df_data_2021 %>%
+  filter(grepl("MCCP", NAME)) %>%
+  select(STATION_CODE, TISSUE_NAME, SAMPLE_NO, NAME, VALUE) %>%
+  pivot_wider(names_from = NAME, values_from = VALUE) %>%
+  mutate(
+    `MCCP eksl. LOQ` = ifelse(is.na(`MCCP eksl. LOQ`), 0,  `MCCP eksl. LOQ`),
+    `MCCP inkl. LOQ` = ifelse(is.na(`MCCP inkl. LOQ`), 0,  `MCCP inkl. LOQ`)
+  ) 
+
+df_MCCP_med <- df_MCCP %>%
+  group_by(STATION_CODE, TISSUE_NAME) %>%
+  summarise(across(c(`MCCP eksl. LOQ`, `MCCP inkl. LOQ`), .fns = median),
+            .groups = "drop")
+  
+df_MCCP_med
+
+```
+
+
+### MCCP 2016   
+
+* Conclusion: eksl. LOQ used in the data  
+
+```{r}
+
+df_MCCP <- df_data_2016 %>%
+  filter(grepl("MCCP", NAME)) %>%
+  select(STATION_CODE, TISSUE_NAME, SAMPLE_NO, NAME, VALUE) %>%
+  pivot_wider(names_from = NAME, values_from = VALUE) %>%
+  mutate(
+    `MCCP eksl. LOQ` = ifelse(is.na(`MCCP eksl. LOQ`), 0,  `MCCP eksl. LOQ`),
+    `MCCP inkl. LOQ` = ifelse(is.na(`MCCP inkl. LOQ`), 0,  `MCCP inkl. LOQ`)
+  ) 
+
+df_MCCP_med <- df_MCCP %>%
+  group_by(STATION_CODE, TISSUE_NAME) %>%
+  summarise(across(c(`MCCP eksl. LOQ`, `MCCP inkl. LOQ`), .fns = median),
+            .groups = "drop")
+  
+df_MCCP_med
+
+```
+
+
+
+
+
+### MCCP 2017  
+
+* Conclusion: eksl. LOQ used in the data  
+
+```{r}
+
+df_MCCP <- df_data_2017 %>%
+  filter(grepl("MCCP", NAME)) %>%
+  select(STATION_CODE, TISSUE_NAME, SAMPLE_NO, NAME, VALUE) %>%
+  pivot_wider(names_from = NAME, values_from = VALUE) %>%
+  mutate(
+    `MCCP eksl. LOQ` = ifelse(is.na(`MCCP eksl. LOQ`), 0,  `MCCP eksl. LOQ`),
+    `MCCP inkl. LOQ` = ifelse(is.na(`MCCP inkl. LOQ`), 0,  `MCCP inkl. LOQ`)
+  ) 
+
+df_MCCP_med <- df_MCCP %>%
+  group_by(STATION_CODE, TISSUE_NAME) %>%
+  summarise(across(c(`MCCP eksl. LOQ`, `MCCP inkl. LOQ`), .fns = median),
+            .groups = "drop")
+  
+df_MCCP_med
+
+```
+
+
+
+### MCCP 2018  
+
+* Conclusion: inkl. LOQ used in the data  
+
+```{r}
+
+check_unit <- df_data_2018 %>%
+  filter(grepl("MCCP", NAME)) %>%
+  xtabs(~UNIT, .)
+
+if (length(check_unit) > 1)
+  stop("check unit!")
+
+df_MCCP <- df_data_2018 %>%
+  filter(grepl("MCCP", NAME)) %>%
+  select(STATION_CODE, LATIN_NAME, TISSUE_NAME, SAMPLE_NO, NAME, VALUE) %>%
+  pivot_wider(names_from = NAME, values_from = VALUE) %>%
+  mutate(
+    `MCCP eksl. LOQ` = ifelse(is.na(`MCCP eksl. LOQ`), 0,  `MCCP eksl. LOQ`),
+    `MCCP inkl. LOQ` = ifelse(is.na(`MCCP inkl. LOQ`), 0,  `MCCP inkl. LOQ`)
+  ) 
+
+# For saving below 
+df_SCCP <- df_data_2018 %>%
+  filter(grepl("SCCP", NAME)) %>%
+  select(STATION_CODE, LATIN_NAME, TISSUE_NAME, SAMPLE_NO, NAME, VALUE) %>%
+  pivot_wider(names_from = NAME, values_from = VALUE) %>%
+  mutate(
+    `SCCP eksl. LOQ` = ifelse(is.na(`SCCP eksl. LOQ`), 0,  `SCCP eksl. LOQ`),
+    `SCCP inkl. LOQ` = ifelse(is.na(`SCCP inkl. LOQ`), 0,  `SCCP inkl. LOQ`)
+  ) 
+# Need to go back via pivot_longer to introduce the lacking rows with zero
+df_data_2018_corrected <- bind_rows(
+  df_MCCP %>%
+    pivot_longer(cols = c(`MCCP eksl. LOQ`, `MCCP inkl. LOQ`), names_to = "NAME", values_to = "VALUE") %>%
+    mutate(UNIT = names(check_unit)),
+  df_SCCP %>%
+    pivot_longer(cols = c(`SCCP eksl. LOQ`, `SCCP inkl. LOQ`), names_to = "NAME", values_to = "VALUE") %>%
+    mutate(UNIT = names(check_unit))
+)
+  
+
+
+df_MCCP_med <- df_MCCP %>%
+  group_by(STATION_CODE, TISSUE_NAME) %>%
+  summarise(across(c(`MCCP eksl. LOQ`, `MCCP inkl. LOQ`), .fns = median),
+            .groups = "drop")
+  
+df_MCCP_med
+
+```
+
+### Save 2018 data for export to Jupyterhub   
+```{r}
+
+# dir.create("Files_to_Jupyterhub_2018")
+
+saveRDS(df_data_2018_corrected, "Files_to_Jupyterhub_2018/01_df_2018_notstandard_2022-11-25_CCP.rds")
+
+```
+

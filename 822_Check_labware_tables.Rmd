@@ -12,6 +12,7 @@ output: html_document
 library(dplyr)
 library(ggplot2)
 library(lubridate)
+library(tidyr)
 
 # And then the niRvana package. If you need to install it, then run thee next line also:
 # devtools::install_github("NIVANorge/niRvana")

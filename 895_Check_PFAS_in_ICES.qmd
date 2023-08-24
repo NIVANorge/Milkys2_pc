@@ -1,0 +1,526 @@
+---
+title: "PFAS data in the ICES database"
+author: "Dag Hjermann/MIME"
+format: 
+  html:
+    code-fold: true
+    toc: true
+editor: visual
+---
+
+## Parameters, all matrices (2020)
+
+-   Extraction by Rob Fryer 10 October 2020
+
+```{=html}
+<!-- -->
+```
+       determinand n_biota n_sediment n_water assess_b assess_s assess_w
+    1      BR-PFDS      46          0       0                           
+    2     BR-PFHXS      46          0       0                           
+    3      BR-PFOS      46          0       0                           
+    4     BR-PFOSD      46          0       0                           
+    5       N-PFDS      46          0       0                           
+    6      N-PFHXS      46          0       0                           
+    7       N-PFOS      46          0       0                           
+    8      N-PFOSD      46          0       0                           
+    9         PFBA     192          0       0                           
+    10        PFBS     643          3       0                           
+    11       PFBSA     235          0       0                           
+    12        PFDA    1129          3       0                           
+    13       PFDOA     501          0       0                           
+    14        PFDS     396          3       0                           
+    15       PFHPA    1217          3       0                           
+    16       PFHPS     290          0       0                           
+    17       PFHXA    1260          3       0                           
+    18      PFHXDA       7          0       0                           
+    19       PFHXS     546          3       0                           
+    20        PFNA    1158          3       0                           
+    21       PFNOA     105          0       0                           
+    22        PFOA    1234          3       0                           
+    23        PFOS    1262          3       5        y                 y
+    24       PFOSA     530          0       0                           
+    25       PFOSD     453          3       0                           
+    26       PFPEA     217          0       0                           
+    27      PFPEDA      46          0       0                           
+    28       PFTDA     437          0       0                           
+    29      PFTRDA     479          0       0                           
+    30      PFUNDA    1147          3       0   
+
+```{r}
+#| message: false
+#| warning: false
+#| results: hide
+
+# Packages  
+
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+library(knitr)
+library(kableExtra)
+
+library(maps)
+country_borders <- map_data("world")
+
+
+# library(lubridate)
+# library(safejoin) # https://github.com/moodymudskipper/safejoin
+
+
+#
+# Get data  
+#
+
+# All countries    
+if (FALSE){
+  
+  # Functions 
+  
+  source("803_Read_ICES_webservice_functions.R")
+  source("../../R_packages/Utility_functions.R")
+  
+  
+  # Downloaded from https://vocab.ices.dk/?ref=22
+  df_countries <- read.csv(
+    '../Milkys/00_read_ICES_webservice_functions_countries.csv', encoding = 'UTF-8')
+  
+  df_countries <- df_countries %>%
+    filter(Description %in% c("Iceland", "Norway", "Denmark", "Sweden", "Germany", 
+                              "The Netherlands", "Belgium",
+                              "United Kingdom", "Ireland", "France", "Spain", "Portugal")
+           
+    )
+  
+  df_stations <- readr::read_delim(
+    "../MIME-dhj/OSPAR_MIME_2019/StationDictionary_20191104/StationDictionary_20191104_utf8.txt")
+  # readLines(
+  #   "../MIME-dhj/OSPAR_MIME_2019/StationDictionary_20191104/StationDictionary_20191104_utf8.txt", n = 5)
+  
+  #
+  # Sample parameters
+  #
+  
+  df_PFOS <- purrr::map_dfr(as.numeric(df_countries$Code), 
+                            ~get_ices_biotadata(param = "PFOS", country = .x))
+  df_PFOA <- purrr::map_dfr(as.numeric(df_countries$Code), 
+                            ~get_ices_biotadata(param = "PFOA", country = .x))
+  df_PFHXS <- purrr::map_dfr(as.numeric(df_countries$Code), 
+                             ~get_ices_biotadata(param = "PFHXS", country = .x))
+  df_PFBS <- purrr::map_dfr(as.numeric(df_countries$Code), 
+                            ~get_ices_biotadata(param = "PFBS", country = .x))
+  
+  dat <- bind_rows(df_PFOS, df_PFOA, df_PFHXS, df_PFBS)
+  
+  saveRDS(dat, "Data/895_pfas_data_ices_selected_params.rds")
+  
+  #
+  # All parameters  
+  #
+
+  dat_all2 <- purrr::map_dfr(as.numeric(df_countries$Code), 
+                            ~get_ices_biotadata(paramgroup = "O-FL", country = .x))
+  
+  saveRDS(dat_all2, "Data/895_pfas_data_ices_all_params.rds")
+  
+}
+
+dat <- readRDS("Data/895_pfas_data_ices_selected_params.rds") %>%
+  filter(
+    MPROG != 'NATL~COMB', 
+    !(MPROG == 'COMB' & Country == "SE") 
+  ) %>%
+  mutate(PARAM = factor(PARAM, levels = c("PFOS","PFOA","PFHXS","PFBS")))
+
+dat_all1 <- readRDS("Data/895_pfas_data_ices_all_params.rds") %>%
+  filter(!PARAM %in% c("AGMAX", "AGMEA", "AGMIN", 
+                      "BREADTH", "DRYWT%", "EXLIP%", "FATWT%", "GOSOI", 
+                      "LIPIDWT%", "LISOI", "LNMAX", "LNMEA", "LNMIN", 
+                      "PROTV", "THICKN", "WTMAX", "WTMEA", "WTMIN"))
+
+
+```
+
+```{r}
+
+if (FALSE){
+  
+  # Check TBT in Germany
+  args(get_ices_biotadata)
+  
+  # Check TBT in Norway
+  df <- get_ices_biotadata(param = "TBTIN", country = 58)
+  df <- get_ices_biotadata(param = "TBSN%2b", country = 58)
+  
+  # Check TBT + intersex in Germany
+  df <- get_ices_biotadata(param = "TBTIN", country = "06")  # no results
+  df3 <- get_ices_biotadata(param = "TBSN+", country = "06")    # no results
+  df <- get_ices_biotadata(param = "INTS", country = "06")
+  df1 <- get_ices_biotadata(param = "INTSI", country = "06")
+  df2 <- get_ices_biotadata(param = "INTF%", country = "06")
+  df3 <- get_ices_biotadata(param = "TBSN%2b", country = "06")
+  df4 <- get_ices_biotadata(param = "TBTIN", country = "06")
+  
+  cat("***  INTSI *** \n")
+  xtabs(~MYEAR + STATN, df1)
+  cat("\n\n")
+  cat("***  INTF% *** \n")
+  xtabs(~MYEAR + STATN, df2)
+  stations <- unique(df2$STATN)
+  cat("\n\n")
+  cat("***  TBSN+ (TBT, ion weight) *** \n")
+  xtabs(~MYEAR + STATN, df3)
+  xtabs(~MYEAR + STATN, df3 %>% filter(STATN %in% stations))
+  xtabs(~MYEAR + STATN, df3 %>% filter(MYEAR >= 2019))
+  
+  # Check that the code works
+  df <- get_ices_biotadata(param = "CB118", country = "06")
+  
+  httr::build_url()
+  
+  library(httr)
+  url <- parse_url("http://dome.ices.dk/Webservices/DOMEWebServices.asmx/selectContaminantsInBiota")
+  url$scheme <- "https"
+  url$query <- list(PARAM = "TBSN+", CNTRY = "58",
+                    RLABO="", ALABO="", yearBegining="", yearEnd="", MATRX="", TAXA="",
+                    PURPM="", MPROG="", Area="", ParamGroup="")
+  xml_url <- build_url(url)
+  df <- xml_to_dataframe(xml_url)
+
+  
+}
+
+
+```
+
+## Biota, all parameters and regional conventions
+
+### Map by program
+
+```{r}
+#| fig-width: 9
+#| fig-height: 12
+
+df_stn <- dat_all1 %>%
+  distinct(MPROG, Country, STATN, Longitude, Latitude)
+
+ggplot(df_stn, aes(Longitude, Latitude, fill = Country)) +
+  annotation_map(country_borders, fill = "lightblue") +
+  geom_point(shape = 21, size = rel(2)) +
+  scale_fill_brewer(palette = "Dark2") +
+  coord_map("conic", lat0 = 60, ylim = c(40,78), xlim = c(-30,40)) +
+  facet_wrap(vars(MPROG)) +
+  theme_bw() +
+  labs(title = "All time series") 
+
+ggplot(df_stn %>% filter(grepl("COMB", MPROG)), aes(Longitude, Latitude, fill = Country)) +
+  annotation_map(country_borders, fill = "lightblue") +
+  geom_point(shape = 21, size = rel(2)) +
+  scale_fill_brewer(palette = "Dark2") +
+  coord_map("conic", lat0 = 60) +
+  facet_wrap(vars(MPROG)) +
+  theme_bw() +
+  labs(title = "Time series incl. 'COMB' in 'MPROG'") 
+
+
+```
+
+### Select using MPROG
+
+```{r}
+
+cat("Number of rows, all parameters and regional conventions:", nrow(dat_all1), "\n")
+
+dat_all2 <- dat_all1 %>%
+  filter(
+    MPROG != 'NATL~COMB', 
+    !(MPROG == 'COMB' & Country == "SE") 
+  )
+
+cat("Number of rows, OSPAR area:", nrow(dat_all2), "\n")
+
+
+```
+
+## Biota in OSPAR + AMAP, all parameters
+
+### Number of biota measurements
+
+```{r}
+
+xtabs(~PARAM + Country, dat_all2) # %>% rownames() %>% dput()
+
+```
+
+### Percentage of data \>LOQ
+
+```{r}
+
+# QFLAG
+# https://vocab.ices.dk/?ref=180
+
+dat_all2 %>%
+  group_by(PARAM, Country) %>%
+  summarise(
+    Under_LOQ = 100*mean(QFLAG %in% c("<","D","Q")),
+    .groups = "drop") %>% # View()
+  mutate(
+    Over_LOQ = round(100-Under_LOQ, 0)) %>%
+  mutate(Over_LOQ = as.character(Over_LOQ)) %>%
+  select(PARAM, Country, Over_LOQ) %>%
+  tidyr::pivot_wider(names_from = Country, values_from = Over_LOQ, values_fill = "") %>%
+  kable(align = "r") %>%
+  kable_paper("striped", full_width = TRUE)
+
+```
+
+### Median LOQ-value
+
+```{r}
+
+# QFLAG
+# https://vocab.ices.dk/?ref=180
+
+dat_all2 %>%
+  mutate(
+    Under_LOQ = QFLAG %in% c("<","D","Q")) %>% 
+  filter(Under_LOQ) %>%
+  group_by(PARAM, Country) %>%
+  summarize(Median_LOQ = median(Value, na.rm = TRUE),
+            .groups = "drop") %>%
+  select(PARAM, Country, Median_LOQ) %>%
+  tidyr::pivot_wider(names_from = Country, values_from = Median_LOQ) %>%
+  kable(align = "r") %>%
+  kable_paper("striped", full_width = TRUE)
+
+```
+
+### Max over-LOQ value
+
+```{r}
+
+# QFLAG
+# https://vocab.ices.dk/?ref=180
+
+dat_all2 %>%
+  mutate(
+    Under_LOQ = QFLAG %in% c("<","D","Q")) %>% 
+  filter(!Under_LOQ) %>%
+  group_by(PARAM, Country) %>%
+  summarize(Max_value = max(Value, na.rm = TRUE),
+            .groups = "drop") %>%
+  select(PARAM, Country, Max_value) %>%
+  tidyr::pivot_wider(names_from = Country, values_from = Max_value) %>%
+  kable(align = "r") %>%
+  kable_paper("striped", full_width = TRUE)
+
+```
+
+## Biota, example parameters
+
+### Number of measurements by year
+
+```{r}
+
+dat %>%
+  count(PARAM, Country, MYEAR) %>%
+  ggplot(aes(MYEAR, n, color = Country)) +
+  geom_line() +
+  facet_wrap(vars(PARAM)) +
+  theme_bw() +
+  labs(y = "Number of biota measurements")
+
+
+```
+
+### Number of measurements by program
+
+```{r}
+#| warning: false
+
+dat %>%
+  count(MPROG, Country, MYEAR) %>%
+  ggplot(aes(MYEAR, n, color = Country)) +
+  geom_line() +
+  facet_wrap(vars(MPROG)) +
+  theme_bw() +
+  labs(y = "Number of biota measurements")
+
+
+```
+
+### Number of measurements by species
+
+-   Data since 2015 only
+
+```{r}
+
+df_spec  <- dat %>%
+  filter(MYEAR >= 2015) %>%
+  count(Species, Country)
+
+# xtabs(n~Species + Country, df_spec)
+
+df_spec %>%
+  mutate(n = as.character(n)) %>%
+  pivot_wider(names_from = Country, values_from = n, values_fill = "") %>%
+  kable(align = "r") %>%
+  kable_paper("striped", full_width = TRUE)
+
+if (FALSE){  
+ggplot(df_spec, aes(MYEAR, n, color = Country)) +
+  geom_line() +
+  facet_wrap(vars(Species)) +
+  theme_bw() +
+  labs(y = "Number of biota measurements")
+}
+
+```
+
+### Number of stations with 'x' number of years
+
+-   Only data series lasting until 2015
+
+```{r}
+
+df_yrs_per_stn <- dat %>%
+  distinct(PARAM, Country, STATN, MYEAR) %>%
+  group_by(PARAM, Country, STATN) %>%
+  summarise(
+    yrs_per_station = n(),
+    last_year = max(MYEAR), .groups = "drop")
+
+df_yrs_per_stn2 <- df_yrs_per_stn %>%
+  filter(last_year >= 2015) %>%
+  count(PARAM, Country, yrs_per_station, name = "number_of_stations")
+
+ggplot(df_yrs_per_stn2, aes(yrs_per_station, number_of_stations, fill = Country)) +
+  geom_col() +
+  facet_wrap(vars(PARAM)) +
+  theme_bw() +
+  labs(title = "Length of time series",
+       subtitle = "All time series lasting at least until 2015",
+       x = "Length of time series (years)",
+       y = "Number of stations") 
+
+ggplot(df_yrs_per_stn2 %>% filter(yrs_per_station >= 2), 
+       aes(yrs_per_station, number_of_stations, fill = Country)) +
+  geom_col() +
+  facet_wrap(vars(PARAM)) +
+  theme_bw() +
+  labs(title = "Length of time series",
+       subtitle = "Not including one year long time series",
+       x = "Length of time series (years)",
+       y = "Number of stations")
+
+```
+
+### Number of time series
+
+```{r}
+
+df_type <- df_yrs_per_stn %>%
+  mutate(
+    Type = case_when(
+      last_year < 2015 ~ "Ending < 2015",
+      yrs_per_station <= 2 ~ "1-2 years",
+      yrs_per_station <= 4 ~ "3-4 years",
+      yrs_per_station <= 9 ~ "5-9 years",
+      yrs_per_station >= 10 ~ "10+ years"),
+    Type = factor(Type, levels = c("1-2 years", "3-4 years", "5-9 years", 
+                                   "10+ years", "Ending < 2015"))) %>%
+  count(PARAM, Country, Type) 
+
+df_type %>%
+  pivot_wider(names_from = Type, values_from = n) %>%
+  kable(align = "r", label = "") %>%
+  kable_paper("striped", full_width = TRUE)
+  
+
+```
+
+### Map of stations with \>=3 years of data
+
+-   Only data series lasting until 2015
+
+```{r}
+#| fig-width: 9
+#| fig-height: 12
+
+df_stn <- dat %>%
+  distinct(PARAM, Country, STATN, Longitude, Latitude, MYEAR) %>%
+  group_by(PARAM, Country, STATN, Longitude, Latitude) %>%
+  summarise(
+    yrs_per_station = n(),
+    last_year = max(MYEAR), .groups = "drop") %>%
+  filter(last_year >= 2015 & yrs_per_station >= 3 & Longitude > -30) %>%
+  arrange(yrs_per_station)
+
+ggplot(df_stn, aes(Longitude, Latitude, fill = yrs_per_station)) +
+  annotation_map(country_borders, fill = "lightblue") +
+  geom_point(shape = 21, size = rel(2)) +
+  scale_fill_viridis_b() +
+  coord_map("conic", lat0 = 55) +
+  facet_wrap(vars(PARAM)) +
+  theme_bw() +
+  labs(title = "Length of time series",
+       subtitle = "All time series lasting at least until 2015") 
+
+```
+
+## Biota concentrations relative to EQS
+
+-   The EQS for fish is 9.1 ug/kg\
+-   Norway has developed EQS for mussel at 0.36 ug/kg
+    -   assuming 2 trophic levels difference and a BMF of 5 per level\
+-   Here, we also use EQS = 45.5 ug/kg (9.1 \* 5) for seabirds and mammals
+
+```{r}
+
+param <- "PFOS"
+
+dat_summ <- dat_all1 %>%
+  filter(PARAM %in% param & MYEAR >= 2019) %>%
+  filter(Latitude > 35) %>%
+  group_by(PARAM, Country, STATN, Species, Longitude, Latitude) %>%
+  summarize(Conc_median = median(Value, na.rm = TRUE), .groups = "drop")
+
+# table(dat_summ$Species)
+# table(dat_summ$Species) %>% names() %>% dput()
+
+sp_birdsmammals <- c("Cepphus grylle", "Fulmarus glacialis", 
+"Globicephala melas", "Somateria mollissima", "Ursus maritimus")
+sp_fish <- c("Gadus morhua", "Neogobius melanostomus",  "Platichthys flesus", 
+  "Pleuronectes platessa", "Zoarces viviparus" )
+sp_bivalves <- c("Crassostrea gigas", "Mytilus edulis")
+
+# range(dat_summ$Conc_ratio)
+dat_summ <- dat_summ %>%
+  mutate(
+    Species_group = case_when(
+      Species %in% sp_birdsmammals ~ "Birds/mammals",
+      Species %in% sp_fish ~ "Fish",
+      Species %in% sp_bivalves ~ "Bivalves"),
+    Threshold = case_when(
+      Species %in% sp_birdsmammals ~ 9.1*5,
+      Species %in% sp_fish ~ 9.1,
+      Species %in% sp_bivalves ~ 0.36),
+    Conc_ratio = Conc_median/Threshold,
+    Conc_ratio_f = cut(Conc_ratio, 
+                       breaks = c(0,0.1,0.25,0.5,0.75,1,3,10,100,1000,10000))
+    )
+
+
+ggplot(dat_summ, aes(Longitude, Latitude, fill = Conc_ratio_f)) +
+  annotation_map(country_borders, fill = "lightblue") +
+  geom_point(shape = 21, size = rel(2)) +
+  scale_fill_brewer(palette = "RdBu", direction = -1) +
+  coord_map("conic", lat0 = 55) +
+  theme_bw() +
+  facet_wrap(vars(Species_group)) +
+  labs(title = "Concentration/EQS",
+       subtitle = "EQS = 9.1 for fish,  45.5 for mammals+seabirds, and 0.19 for bivalves") 
+  
+  
+
+```

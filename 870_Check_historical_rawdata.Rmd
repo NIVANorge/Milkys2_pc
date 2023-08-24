@@ -1,0 +1,107 @@
+---
+title: "870_Check_historical_rawdata"
+author: "DHJ"
+date: '2022-09-25'
+output: html_document
+---
+
+* Checking where SCCP and MCCP values come from  
+
+## Packages  
+```{r}
+
+library(dplyr)
+library(ggplot2)
+
+```
+
+## SCCP and MCCP  
+
+### Data  
+```{r}
+
+df_nivabase <- readRDS("../Milkys_2018//05_Data_NIVAbase/05_Data2015-17_2018-08-23.RData")
+
+xtabs(~MYEAR, df_nivabase)
+
+```
+
+
+### Function  
+```{r}
+
+plot_hist <- function(station, data){
+  data %>%
+    filter(STATION_CODE %in% station & MYEAR %in% 2015:2017) %>%
+    ggplot(aes(VALUE)) +
+    geom_histogram() +
+    facet_grid(rows = vars(MYEAR), cols = vars(NAME)) +
+    labs(title = station)
+}
+
+
+```
+
+
+### SCCP 2015-2017    
+
+```{r}
+
+# from script '05_Read_and_save_NIVAbase_data.R'
+
+# fn <- sprintf("05_Data_NIVAbase/05_Data2015-17_%s.RData", date)
+
+df_SCCP <- df_nivabase %>%
+  filter(grepl("SCCP", NAME))
+
+cat("Amount of both parameters:\n\n")
+xtabs(~NAME + STATION_CODE, df_SCCP)
+
+cat("\nZeros:\n\n")
+xtabs(~(VALUE==0) + NAME, df_SCCP)
+
+plot_hist("30B", df_SCCP)
+plot_hist("23B", df_SCCP)
+plot_hist("53B", df_SCCP)
+
+```
+
+### MCCP 2015-2017    
+
+```{r}
+
+# from script '05_Read_and_save_NIVAbase_data.R'
+
+# fn <- sprintf("05_Data_NIVAbase/05_Data2015-17_%s.RData", date)
+
+df_nivabase <- readRDS("../Milkys_2018//05_Data_NIVAbase/05_Data2015-17_2018-08-23.RData")
+
+df_MCCP <- df_nivabase %>%
+  filter(grepl("MCCP", NAME))
+
+cat("Amount of both parameters:\n\n")
+xtabs(~NAME + STATION_CODE, df_MCCP)
+
+cat("\n----------------------------\nZeros:\n\n")
+xtabs(~(VALUE==0) + NAME, df_MCCP)
+
+plot_hist("30B", df_MCCP)
+plot_hist("23B", df_MCCP)
+plot_hist("53B", df_MCCP)
+
+```
+
+```{r}
+
+
+
+df_SCCP %>%
+  mutate(`SCCP eksl. LOQ` = ifelse(is.na(`SCCP eksl. LOQ`), 0, `SCCP eksl. LOQ`)) %>%
+  filter(STATION_CODE %in% "53B" & MYEAR %in% 2015:2020) %>%
+  tidyr::pivot_longer(cols = c(SCCP, `SCCP eksl. LOQ`)) %>% # str()
+  ggplot(aes(value)) +
+    geom_histogram() +
+    facet_grid(rows = vars(MYEAR), cols = vars(name))
+
+```
+

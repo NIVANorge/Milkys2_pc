@@ -1,9 +1,9 @@
 
 
-get_concentration_data <- function(result_one_series){
+get_concentration_data <- function(result_one_series, data = dat_all){
   
   # Point data  
-  dat_all %>%
+  data %>%
     filter(PARAM %in% result_one_series$PARAM, 
            STATION_CODE %in% result_one_series$STATION_CODE) %>%
     mutate(

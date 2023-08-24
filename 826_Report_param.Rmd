@@ -25,7 +25,7 @@ output:
 
 * eget "kart" over deteksjonsfrekvens - akser = stasjoner + stoffer (for siste år)   
 
-* følg grense på 5 år for trender   
+* følg grense på 5 år for trender       
 *  
 * For siste år: boksplott (med Proref lagt på som linjer) med stasjoner som punkt   
 * For siste år: boksplott (med EQS lagt på som linjer) med stasjoner som punkt   
@@ -63,11 +63,6 @@ Notes from meeting w/ Merete G +
 - Kanskje ikke Times font i interaktive figurer
 - Tidsserier 10 år i faktaark, + alle år i elektronisk vedlegg 
 - Sende fargekoder for Proref til Merete G (DONE)
-
-
-
-
-
 
 
 
@@ -118,71 +113,63 @@ This report is based on Milkys data through **`r selected_year`**.
 #
 # Raw data
 #
-fn <- "Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds"                         # data FROM Milkys2 on PC 
-fn <- "Files_from_Jupyterhub_2021/109_adjusted_data_2022-06-04.rds"          
-dat_all <- readRDS(fn)
+# fn <- "Files_from_Jupyterhub_2020/Raw_data/109_adjusted_data_2021-09-15.rds"                         # data FROM Milkys2 on PC 
+fn <- "Files_from_Jupyterhub_2021/Raw_data/109_adjusted_data_2022-09-01.rds"          
+dat_all_orig <- readRDS(fn)
 
-#
-# Parameter groups
-#
-lookup_paramgroup <- read_excel("Input_files_2020/Lookup table - substance groups.xlsx")
-lookup_stations <- read_excel("Files_from_Jupyterhub_2020/Lookup for big excel - stations.xlsx") %>% # View()
-  bind_rows(data.frame(STATION_CODE = "19B", Station.Name = "Isfjorden", County = "Svalbard")) %>%
-  bind_rows(data.frame(STATION_CODE = "20B", Station.Name = "Longyearbyen", County = "Svalbard")) %>%
-  bind_rows(data.frame(STATION_CODE = "97A3", Station.Name = "Mjelle, Bodø area", County = "Nordland"))
+
+fn <- "Files_from_Jupyterhub_2021/Raw_data/999_stations.xlsx"
+readxl::excel_sheets(fn)
+lookup_stations_cod <- read_excel(fn, "Torsk")
+lookup_stations_bluemussel <- read_excel(fn, 2)
+
+lookup_stations <- bind_rows(lookup_stations_cod, lookup_stations_bluemussel)
 
 dat_1 <- dat_all %>%
-  left_join(lookup_paramgroup %>% select(PARAM, Substance.Group)) %>%
-  filter(Substance.Group %in% params$paramgroup) %>%
   add_count(PARAM) %>%
   filter(n >= 100) %>%
   # Add 'Station.Name'  
-  left_join(lookup_stations %>% select(STATION_CODE, Station.Name)) %>%
-  # Add 'Station.Name'  
-  mutate(Station = paste(STATION_CODE, Station.Name))
+  left_join(lookup_stations %>% select(STATION_CODE, Station_name)) %>%
+  # Add 'Station'  
+  mutate(Station = paste(STATION_CODE, Station_name))
 
 if (F)
   xtabs(~Station, dat_1 %>% filter(MYEAR == 2021))
 
 param_values <- unique(dat_1$PARAM)
-  
-#
-# Big excel file
-#
-# datxl <- readr::read_csv("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-10-08_ver04.csv")
-datxl <- readRDS("Files_from_Jupyterhub_2020/Big_excel_table/Data_xl_2021-09-15_ver03.rds") %>%
-  filter(PARAM %in% param_values)
-  
-# table(dat_1$PARAM)
-# table(datxl$PARAM)  
 
 ```
+
 ### EQS and Proref (Q95)  
 ```{r lookup_eqs_ww}
 
-lookup_eqs_ww <- datxl %>%
-  rename(Proref = Q95) %>%
-  filter(
-    Basis %in% "WW"
-    ) %>%
-  distinct(PARAM, LATIN_NAME, TISSUE_NAME, EQS, Proref) %>%
-  mutate(TISSUE_NAME = case_when(
-    TISSUE_NAME == "Muscle" ~ "Muskel",
-    TISSUE_NAME == "Liver" ~ "Lever",
-    TRUE ~ TISSUE_NAME)
-    ) %>%
-  rename(EQS_WW = EQS)
+lookup_eqs <- read.csv("Files_from_Jupyterhub_2021/Raw_data/EQS_limits.csv") %>%
+  select(-Long_name, -Kommentar)
 
-check <- lookup_eqs_ww %>% 
-  add_count(PARAM, LATIN_NAME, TISSUE_NAME) %>%
-  filter(n > 1)
+lookup_proref <- read.csv("Files_from_Jupyterhub_2021/Raw_data/Proref_used.csv")
 
-if (nrow(check) > 0){
-  stop("More than one EQS per parameter!")
-}
+# For now, WW only
+dat_2 <- dat_1 %>%
+  left_join(
+    lookup_eqs %>% filter(is.na(LATIN_NAME) & Basis == "WW") %>% select(-LATIN_NAME) %>% rename(EQS_WW = Limit), 
+    by = c("PARAM")
+    ) %>%
+  left_join(
+    lookup_proref %>% filter(Basis == "WW") %>% select(PARAM, LATIN_NAME, TISSUE_NAME, Q95) %>% rename(Proref = Q95), 
+    by = c("PARAM", "LATIN_NAME", "TISSUE_NAME")
+    )
+
+
+
+if (FALSE){
 
 dat_2 <- dat_1 %>%
-  left_join(lookup_eqs_ww, by = c("PARAM", "LATIN_NAME", "TISSUE_NAME")) %>%
+  left_join(
+    lookup_eqs %>% filter(is.na(LATIN_NAME)) %>% select(-LATIN_NAME) %>% rename(Limit1 = Limit), 
+    by = c("PARAM", "TISSUE_NAME")) %>%
+  left_join(
+    lookup_eqs %>% filter(!is.na(LATIN_NAME)) %>% rename(Limit2 = Limit), 
+    by = c("PARAM", "LATIN_NAME", "TISSUE_NAME")) %>%
   mutate(
     Above_EQS = case_when(
       VALUE_WW > EQS_WW ~ "Over",
@@ -191,53 +178,35 @@ dat_2 <- dat_1 %>%
   ) 
 
 
+}
+
 ```
 
 ## Data for cod and mussel separately  
 
 ### Station names and order   
 
-* The standard is now found in JupyterHub shared/DHJ/Milkys2/Input_data/Lookup_tables  
-
+* 
 ```{r}
 
-station_order_fish <- c(
-  "19B Isfjorden", "20B Longyearbyen", "10B Varangerfjord", "45B2 Hammerfest (havn)", "43B2 Tromsø harbour",
-  "98B1 Lofoten, Skrova", "96B Helgelandskysten area by Sandnessjøen", 
-   "80B Munkholmen", "13B Kristiansand harbour", "28B Ålesund area by Hundsvær",
-  "24B Bergen havn", "23B Bømlo north", "53B Inner Sørfjord", 
-  "15B Farsund area", "71B Grenlandsfjorden Breviks area", 
-  "36B Færder area", "30B Inner Oslofjord", "02B Kirkøy (north)")
-
-# MUST CHECK/FIX:
-station_order_mussel <- c(
-  "11X Brashavn", "10A2 Skallneset", "98A2 Lofoten, Svolvær", 
-  "56A Kvalnes", 
-  "97A3 Mjele, Bodø area", "97A2 Bodø harbour", 
-  "22A Espevær",
-  "91A2 Outer Trondheimsfjord", "26A2 Måløy", "I241 Nordnes", "64A Utne", 
-  "76A2 NA", "28A2 NA",
-  "65A Vikingneset", 
-  "I131A Lastad", "71A Bjørkøya", "I304 Gåsøya", "15A Gåsøy", 
-  "36A1 Tjøme", "I024 Kirkøy", "I023 Singlekalven", "31A Solbergstrand", 
-  "I301 Akershuskaia", "30A Gressholmen" 
-)
-
-
+station_order_fish <- with(lookup_stations_cod, paste(STATION_CODE, Station_name))
+station_order_mussel <- with(lookup_stations_bluemussel, paste(STATION_CODE, Station_name))
 
 dat_3_fish <- dat_2 %>%
   filter(LATIN_NAME == c("Gadus morhua", "Platichthys flesus")) %>%
   mutate(
     Station = factor(Station, levels = rev(station_order_fish)),
     Station2 = substr(Station, 1, 15),
-    Station2 = factor(Station2, levels = rev(substr(station_order_fish, 1, 15))))
+    Station2 = factor(Station2, levels = rev(substr(station_order_fish, 1, 15)))) %>%
+  filter(!is.na(Station))
 
 dat_3_mussel <- dat_2 %>%
   filter(LATIN_NAME == c("Mytilus edulis")) %>%
   mutate(
     Station = factor(Station, levels = rev(station_order_mussel)),
     Station2 = substr(Station, 1, 15),
-    Station2 = factor(Station2, levels = rev(substr(station_order_mussel, 1, 15))))
+    Station2 = factor(Station2, levels = rev(substr(station_order_mussel, 1, 15))))%>%
+  filter(!is.na(Station))
 
 if (FALSE){
   table(addNA(dat_3_fish$Station))
@@ -246,16 +215,9 @@ if (FALSE){
     filter(LATIN_NAME == c("Mytilus edulis") & MYEAR == 2021) %>%
     pull(Station) %>% unique() %>%
     dput()
-}
 
-# dat_3_fish %>% filter(is.na(Station)) %>% xtabs(~MYEAR + STATION_CODE, .)
-# dat_3_fish %>% filter(is.na(Station)) %>% View()
-
-if (FALSE){
-  
-  dat_3_fish %>%
+    dat_3_fish %>%
     writexl::write_xlsx("Data/Rawdata_w_eqs_proref.xlsx")
-  
 }
 
 ```
@@ -299,7 +261,6 @@ if (sum(check > 1) > 0){
 }
 
 
-
 dat_median_fish <- dat_median %>%
   filter(LATIN_NAME %in% c("Gadus morhua", "Platichthys flesus"))
 dat_median_mussel <- dat_median %>%
@@ -310,6 +271,7 @@ dat_median_mussel <- dat_median %>%
 saveRDS(dat_median, "Data/824_dat_median.rds")
 
 ```
+
 
 ## Overview medians + EQS      
 
@@ -324,32 +286,34 @@ if (FALSE){
   xtabs(~PARAM + LOQ_label, dat_median_fish)
 }
 
-param <- "SN"
+param <- "HG"
 species_category <- "Blue mussel"
 
-if (species_category == "Blue mussel"){
-  species <- "Mytilus edulis"  
+# DROP this for now
+# if (species_category == "Blue mussel"){
+#   species <- "Mytilus edulis"  
+#   tissue <- "Whole soft body"
+#   dat_median_group <- dat_median_mussel
+# } else if (species_category == "Fish"){
+#   species <- c("Gadus morhua", "Platichthys flesus") 
+#   dat_median_group <- dat_median_fish
+#   if (param == "HG"){
+#     tissue <- "Muskel" 
+#   } else {
+#     tissue <- "Lever" 
+#   }
+# }
+  species <- "Mytilus edulis"
   tissue <- "Whole soft body"
-  dat_median_group <- dat_median_mussel
-} else if (species_category == "Fish"){
-  species <- c("Gadus morhua", "Platichthys flesus") 
-  dat_median_group <- dat_median_fish
-  if (param == "HG"){
-    tissue <- "Muskel" 
-  } else {
-    tissue <- "Lever" 
-  }
-}
 
-yrs <- 2005:2021
+yrs <- 2011:2021
 
 dat_plot <- dat_median_group %>%
   filter(
     PARAM %in% param, 
     LATIN_NAME %in% species,
-    TISSUE_NAME %in% get_tissue(param, species)) %>% 
+    TISSUE_NAME %in% tissue) %>% 
   filter(MYEAR %in% yrs)
-
 
 cols <- c(RColorBrewer::brewer.pal(6, "Blues")[2],
           RColorBrewer::brewer.pal(6, "YlOrRd")[1:5])
@@ -377,6 +341,77 @@ ggplot(dat_plot, aes(MYEAR, Station, fill = Proref_ratio_WW)) +
 
 ```
 
+### Get trend data  
+```{r}
+
+
+
+dat_trend_all <- readRDS("Files_from_Jupyterhub_2021/Raw_data/126_df_trend_2021.rds")
+
+dat_trend_1 <- dat_trend_all %>%
+  filter(
+    PARAM %in% param, 
+    LATIN_NAME %in% species,
+    TISSUE_NAME %in% tissue)
+
+
+```
+
+#### Add station names
+
+```{r}
+
+dat_trend <- dat_trend_1 %>%
+  left_join(lookup_stations %>% select(STATION_CODE, Station_name)) %>%
+  # Add 'Station'  
+  mutate(
+    Station = paste(STATION_CODE, Station_name))
+    Station = factor(Station, levels = rev(station_order_fish)),
+    Station2 = substr(Station, 1, 15),
+    Station2 = factor(Station2, levels = rev(substr(station_order_fish, 1, 15)))) %>%
+  filter(!is.na(Station))
+
+str(dat_trend$Station)
+
+
+```
+
+## .
+## .
+## . gotten this far
+## .
+## .
+
+### Trend plot  
+
+```{r}
+
+gg_trend_list <- c("long", "short") %>%
+  map(
+    ~ggplot(subset(dat_trend, Trend_type == .x),
+            aes(x = Station, y = Perc_annual)) +
+      geom_linerange(aes(ymin = Perc_annual_lo, ymax = Perc_annual_hi, color = Trend_string)) +
+      geom_point(aes(fill = Trend_string, shape = Trend_string), color = "black") +
+      #scale_color_manual(values = c("red2", "green4", "grey20"), drop = FALSE) +
+      #scale_fill_manual(values = c("red2", "green4", "grey20"), drop = FALSE) +
+      #scale_shape_manual(values = c(24, 25, 21), drop = FALSE) +
+      geom_hline(yintercept = 0) +
+      coord_flip() +
+      # coord_flip(ylim = range(df_slopes$Perc50)) +
+      theme_bw()## +
+      # labs(y = .) 
+  )
+
+gg_trend_list[[1]]
+
+```
+
+
+
+
+
+
+## 1 parameter + 1 species/tissue + all stations      
 
 ### Fish sample  
 ```{r, fig.width=11, fig.height=8, warning=FALSE}
@@ -443,7 +478,6 @@ ggplot(dat_plot, aes(MYEAR, Station, fill = Proref_ratio_WW)) +
 ```
 
 
-## 1 parameter + 1 species/tissue + all stations      
 
 ### Select parameter/species  
 
@@ -486,6 +520,8 @@ if (species_category == "Blue mussel"){
 }
 
 ```
+
+### 
 
 ### Select data  
 ```{r}
@@ -532,7 +568,7 @@ dat_sel_medium <- dat_median %>%
 #                    station = "Osl", firstyear = 2011, data = dat_median)
                     
 get_trend(param = "HG", species = "Gadus morhua", tissue = "Muskel", station = "30B",
-          firstyear = 2011, data = dat_median)
+          firstyear = 2011, data = dat_median)  
 
 ```
 

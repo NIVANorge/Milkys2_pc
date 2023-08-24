@@ -27,14 +27,18 @@ The 2018 version, with changed stations according to '02_Change_stations_in_2014
 ```{r}
 
 folder_data <- "Files_to_ICES/2020/Delivered"
+folder_data <- "Files_to_ICES/2021/Test"
 dir(folder_data)
 fns <- dir(folder_data, ".NO", full.names = TRUE)
 fns
-fn <- paste0(folder_data, "/NIVA2020CF_ver01.NO")
+
+# fn <- paste0(folder_data, "/NIVA2020CF_ver01.NO")
 #  "ICESfiler_innsendte/NIVA2014CF.NO"
 
-fn <- "Files_to_ICES/Submission files 1981-2014/NIVA1990CF.NO"
-fn <- "Files_to_ICES/Submission files 1981-2014/NIVA2000CF.NO"
+# fn <- "Files_to_ICES/Submission files 1981-2014/NIVA1990CF.NO"
+# fn <- "Files_to_ICES/Submission files 1981-2014/NIVA2000CF.NO"
+
+fn <- tail(fns, 1)   # newest file  
 
 ```
 
@@ -44,8 +48,8 @@ fn <- "Files_to_ICES/Submission files 1981-2014/NIVA2000CF.NO"
 
 # debugonce(read_ices_file)
 
-data <- read_ices_file(fn, sep = ",") # 1990
-# data <- read_ices_file(fn, sep = ";") # 2020
+# data <- read_ices_file(fn, sep = ",") # 1990
+data <- read_ices_file(fn, sep = ";") # 2020-21
 
 data <- data %>%
   add_field_codes() %>%
@@ -54,16 +58,8 @@ data <- data %>%
 
 ```
 
-```{r}
 
-# Get key variables (RECID is the table number, not a key variable for the link)
-cols <- var_overlap(data[["04"]], data[["10"]], drop = c("RECID", "Line_no"))
-
-check_link(data[["04"]], 
-            data[["10"]], 
-            cols)
-
-```
+### c. Check links between tables  
 
 ```{r}
 
@@ -111,9 +107,46 @@ check_link(df1, df2, cols, print_values = TRUE)
 cat("\n")
 
 ```
+### d. Check in case of errors - example  
+
+```{r}
+
+# File: "NIVA2021CF_01.NO" gives this error/warning:
+
+# *** 03 (sample occasion per station) and 20 (sampling methods) ***
+# Variables used for join: SMLNK 
+# Table 1 has 52 rows (0 rows with missing values in join variables)
+# Table 2 has 3 rows (0 rows with missing values in join variables)
+# All variable combinations in table 1 exist in table 2
+# 
+# Table 2 has 1 rows (1 variable combinations) without corresponding rows in table 1
+#   Number of SMLNK values in missing rows: 1
+
+table(data[["03"]]$SMLNK)
+table(data[["20"]]$SMLNK)
+
+# In this case, table 20 has SMLNK = 9, which is not in 20:  
+
+data[["20"]]
+# 20;NIVA;11;HAN;;;;;;;
+# 20;NIVA;9;GIL;;;;;;;
+# 20;NIVA;8;BOT;;;;;;;
+
+# But is this variable other places? 
+tables_with_var <- map_lgl(data, ~"SMLNK" %in% names(.x))
+tables_with_var[tables_with_var]
+#   03   20 
+# TRUE TRUE 
+
+# It's not. So we can safely delete  SMLNK = 9 in table 20 
+#   (in this case, we do it by deleting the BOT (bottom trawl) line and change the '9' to '8' in the 2nd line)
 
 
-### c. Check what others do
+  
+```
+
+
+### e. Check what others do
 ```{r}
 
 # source("00_read_ICES_webservice_functions.R")

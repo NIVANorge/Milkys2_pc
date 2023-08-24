@@ -16,7 +16,8 @@ output:
 * Done here:  
     - Change "T" to zero for all results   
     - Set FLAG1 to zero, as it doesn't have any meaning for these data    
-    - Make one data set for merging with "database data" on tall format, but also a "for_analysis" data with lower and upper bound
+    - Make one data set for merging with "database data" on tall format, but also a "for_analysis" data with lower and upper bound  
+* NOTE: 
 
 ## 1. Libraries
 ```{r setup, include=FALSE}
@@ -1040,6 +1041,140 @@ check2 <- check1 %>%
   count(AQUAMONITOR_ID, AQUAMONITOR_CODE)
 
 check2
+
+```
+
+## APPENDIX 2: Check 'ND' for *all* parameters       
+
+### ND in FORMATTED_ENTRY      
+```{r}
+sql <- list(
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%ND%' AND TEXT_ID like '%2018%';",
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%ND%' AND TEXT_ID like '%2019%';",
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%ND%' AND TEXT_ID like '%2020%';",
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%ND%' AND TEXT_ID like '%2021%';",
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%ND%' AND TEXT_ID like '%2022%';"
+)
+names(sql) <- 2018:2022
+
+df_nd <- map_dfr(sql, get_nivabase_data, .id = "Year")
+
+xtabs(~REPORTED_NAME + Year, df_nd)
+
+xtabs(~PROSJEKT + Year, df_nd)
+
+```
+
+### T in FORMATTED_ENTRY      
+
+* Is used for a large number of parameters and projects  
+* Also for single BDEs (e.g. BDE99) in seals in Urban Fjord 2022  
+
+```{r}
+
+sql <- list(
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%T%' AND TEXT_ID like '%2018%';",
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%T%' AND TEXT_ID like '%2019%';",
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%T%' AND TEXT_ID like '%2020%';",
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%T%' AND TEXT_ID like '%2021%';",
+  "select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%T%' AND TEXT_ID like '%2022%';"
+)
+names(sql) <- 2018:2022
+
+df_t <- map_dfr(sql, get_nivabase_data, .id = "Year")
+
+xtabs(~REPORTED_NAME + Year, df_t)
+
+# xtabs(~PROSJEKT + Year, df_t)
+xtabs(~PROSJEKT, df_t)
+
+```
+
+```{r}
+
+# select * from NIVADATABASE.LABWARE_IMPORT where FORMATTED_ENTRY like '%ND%' AND TEXT_ID like '%2022%
+# 
+# "SELECT * FROM nivadatabase.labware_import WHERE formatted_entry LIKE '%ND%' AND text_id LIKE '%2022% AND REPORTED_NAME = 'BDE99' AND  "
+
+test <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 19330;ANA19 - MILKYS2019'",
+  "and extract(year from SAMPLED_DATE) = 2019",
+  "and AQUAMONITOR_CODE in '36B'",
+  "and REPORTED_NAME = 'BDE99';"))
+
+
+```
+
+### Check BDE99 (as an example)  
+
+* T 
+
+```{r}
+
+cat("BDE99 with 't', by project: \n")
+df_t %>%
+  filter(REPORTED_NAME == "BDE99") %>% 
+  xtabs(~PROSJEKT + Year, .)  
+cat("\n")
+
+cat("BDE99 with 't', by stations within Milkys 2019: \n")
+df_t %>%
+  filter(REPORTED_NAME == "BDE99" & PROSJEKT == 'O 19330;ANA19 - MILKYS2019') %>% 
+  xtabs(~AQUAMONITOR_CODE, .)  
+cat("\n")
+
+# Get data from LIMS/Labware  
+df_labw <- get_nivabase_data(paste(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 19330;ANA19 - MILKYS2019'",
+  "and extract(year from SAMPLED_DATE) = 2019",
+  # "and AQUAMONITOR_CODE in ('36B', '13B', '80B')",
+  "and REPORTED_NAME = 'BDE99';"))
+
+# tab1 = LABWARE
+
+tab1 <- table(df_labw$AQUAMONITOR_CODE)
+  
+# tab2 = NIvadatabase
+
+# Get data up until 2021  
+dat_compl <- readRDS("Files_from_Jupyterhub_2021/Raw_data/101_data_updated_2022-09-01.rds")
+
+tab2 <- dat_compl %>%
+  filter(PARAM == "BDE99" & MYEAR == 2019) %>%
+  xtabs(~STATION_CODE, .)
+
+# The first two ('36B', '13B') has one 'T' observation 
+tab1_sample <- tab1[c('36B', '13B', '80B', '19B', '24B')]
+tab2_sample <- tab2[c('36B', '13B', '80B', '19B', '24B')]
+
+cat("Records by station (sample), Labware (): \n")
+tab1_sample
+cat("\n")
+
+cat("Records by station (sample), Nivabase: \n")
+tab2_sample
+cat("\n")
+
+cat("Difference (the first two, '36B' and '13B', has one 'T' observation): \n")
+tab1_sample - tab2_sample
+
+df_labw %>% 
+  filter(AQUAMONITOR_CODE %in% '36B') %>%
+  select(REPORTED_NAME, DESCRIPTION, ENTRY_QUALIFIER:NUMERIC_ENTRY) %>%
+  knitr::kable()
+
+# Example
+if (FALSE){
+  df_labw %>% filter(AQUAMONITOR_CODE %in% '30B') %>% select(REPORTED_NAME, DESCRIPTION, ENTRY_QUALIFIER:NUMERIC_ENTRY)
+}
+
+# For SQL Developer:
+# SELECT * FROM nivadatabase.labware_import WHERE prosjekt = 'O 19330;ANA19 - MILKYS2019'
+# AND EXTRACT(YEAR FROM sampled_date) = 2019
+# AND aquamonitor_code IN '36B'
+# AND reported_name = 'BDE99';
+
+
 
 ```
 

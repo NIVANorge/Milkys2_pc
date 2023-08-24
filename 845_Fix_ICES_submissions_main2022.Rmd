@@ -421,4 +421,574 @@ check %>%
   xtabs(~SPECI, .)
 
 ```
+## 3. Submit imposex on individual basis   
+
+- using data for individual snails (parameter VDS) instead of the mean for all snails per station (parameter VDSI)
+
+### a. Read data
+```{r}
+
+# readLines(fn, 3)
+
+fn <- "Files_to_ICES/2021/Test/NIVA2021CF_04.NO"
+
+dat_txt <- readLines(fn)
+# dat_txt[497]
+
+# comma in older files, semicolon in newer - but this is now checked by 'read_ices_file'  
+dat_raw <- read_ices_file(fn)
+
+# debugonce(set_numeric)
+dat <- dat_raw %>%   
+  add_field_codes() %>%
+  set_numeric()
+
+```
+#### Check all links  
+
+```{r}
+
+check_all_links(dat, print_values = TRUE)
+
+```
+
+### b. Check existing snail data  
+```{r}
+
+table(dat[["03"]]$SPECI)  
+
+species <- c("Nucella lapillus", "Littorina littorea")
+# species <- "Mytilus edulis"
+
+df1 <- dat[["03"]] %>%
+  filter(SPECI %in% species)
+nrow(df1)
+
+df2 <- dat[["04"]] %>%
+  left_join(dat[["03"]] %>% select(-RECID, -Line_no)) %>%
+  filter(SPECI %in% species)
+nrow(df2)
+
+dat_existing <- dat[["10"]] %>%
+  left_join(dat[["04"]] %>% select(-RECID, -Line_no)) %>%
+  left_join(dat[["03"]] %>% select(-RECID, -Line_no)) %>%
+  filter(SPECI %in% species)
+nrow(dat_existing)
+
+xtabs(~PARAM + SUBNO, dat_existing)
+
+```
+
+
+### c. Data for input (from raw data)  
+
+```{r, message=FALSE}
+
+folder_vdsi <- "K:/Prosjekter/Sjøvann/JAMP/2021/opparbeiding/Snegl"
+folder_vdsi <- "Input_files_2021/Snegl"
+
+#
+# 1. Imposex in Littorina
+#
+
+fn <- dir(folder_vdsi, pattern = ".xlsx")
+fn <- fn[!grepl("imposex_mal", fn)]
+fn <- fn[!grepl("intersex", fn)]          # skip intersex for now
+fn <- fn[!grepl("~", fn, fixed = TRUE)]
+
+# Names = Extract all characters to the left of the first underscore  
+names(fn) <- stringr::str_extract(fn, "[^_]+")
+# names(fn)[names(fn) == "131"] <- "131G"
+# fn
+
+
+read_excel_snail <- function(fn){
+  df <- readxl::read_excel(paste0(folder_vdsi, "/", fn), skip = 6)
+  df <- df[1:6]
+  df <- df[!is.na(df$`Analysert av`),]
+  df
+}
+
+dat_vdsi_list <- fn %>% map(read_excel_snail)
+
+# read_excel_snail_s <- safely(read_excel_snail)
+# dat_vdsi_list <- fn %>% map(read_excel_snail_s)
+
+
+
+# Check number of rows - should be 50
+#  unless oherwise noted in sheet (15G "Fant ikke flere snegl i år, men det er over 15 hunner.")
+dat_vdsi_list %>% map_int(nrow)
+
+# Check 15G
+# dat_vdsi_list[["15G"]] %>% View()
+# dat_vdsi_list[["36G"]] %>% View()
+# dat_vdsi_list[["15G"]] <- dat_vdsi_list[["15G"]][1:50,]  # delete last line
+
+# Pick only number, sex and Imposex 
+# ...we will deal with length and penis length later  
+dat_vdsi <- dat_vdsi_list %>% 
+  map(~.[c(1,3,5)]) %>%
+  bind_rows(.id = "STATION_CODE") %>%
+  rename(VALUE_WW = VDSI, 
+         Sex = `Kj<U+00F8>nn`) %>%
+  mutate(PARAM = "VDSI",
+         UNIT = "idx",
+         LATIN_NAME = "Nucella lapillus",
+         Sex = tolower(Sex))
+
+# View(dat_vdsi)
+
+cat("\n------------------------------------------\n")
+cat("Imposex data: \n------------------------------------------\n")
+xtabs(~is.na(VALUE_WW) + addNA(Sex), dat_vdsi)
+
+
+#
+# 2. Intersex
+#
+# dir(folder_vdsi)
+fn <- "71G_fugloy_intersex_LITTORINA_2021.xlsx"
+df <- readxl::read_excel(paste0(folder_vdsi, "/", fn), range = "A3:G53")
+
+dat_intersex <- df %>%
+  filter(F == 1) %>%
+  mutate(STATION_CODE = "71G", 
+         Sex = "f",
+         PARAM = "Intersex",
+         UNIT = "PERCENT",
+         LATIN_NAME = "Littorina littorea") %>%
+  mutate(VALUE_WW = `ISI   (intersex-stadie)`*100) %>%
+  select(STATION_CODE, Sex, VALUE_WW, PARAM, LATIN_NAME)
+
+
+
+```
+
+### d. New rows for tables 04, 10 and 21     
+
+- data for table 04 (station*species), 10 (measurements) and 21 methods     
+
+```{r}
+
+# View(dat[["04"]])
+# View(dat[["10"]])
+# View(dat[["21"]])
+
+table(dat_vdsi$Sex)
+
+xtabs(~CRUIS + STNNO, dat[["04"]])  
+# Snails are in "Cruise number 2"  
+
+# Imposex, all "G" stations except 76G:
+dat_for_insert1 <- dat_vdsi %>%
+  filter(Sex %in% "f") %>%
+  rename(STNNO = STATION_CODE) %>%
+  mutate(
+    SMPNO = 3,               # dog whelk fixed number, see table 03
+    SUBNO = Løpenr + 1,     # to avoid SUBNO=1, which already is "reserved" for RYWT and TBTIN   
+    STNNO = ifelse(STNNO == "227G", "227G2", STNNO),
+    PARAM = "VDS"
+  )
+
+# Intersex, 76G:
+dat_for_insert2 <- dat_intersex %>%
+  rename(STNNO = STATION_CODE) %>%
+  mutate(
+    SMPNO = 3,                          # dog whelk fixed number, see table 03
+    SUBNO = 1:nrow(dat_intersex) + 1,   # to avoid SUBNO=1, which already is "reserved" for RYWT and TBTIN
+    STNNO = ifelse(STNNO == "227G", "227G2", STNNO),
+    PARAM = "INTS"
+  )
+
+dat_for_insert <- bind_rows(dat_for_insert1, dat_for_insert2)
+
+# Only data for 
+
+max(dat[["10"]]$AMLNK)
+
+dat_new_04 <- dat_for_insert %>%
+  mutate(
+    RECID = "04",
+    CRUIS = "2",
+    NOIMP = "1",
+    SEXCO = "F"
+  ) %>%
+  select(
+    RECID, CRUIS, STNNO, SMPNO, SUBNO, NOIMP, SEXCO
+  )
+
+
+dat_new_10 <- dat_for_insert %>%
+  mutate(
+    RECID = "10",
+    CRUIS = "2",
+    MATRX = "WO",
+    MUNIT = "ST",     # Effects parameters VDS and IMPS should have integer range 0-6 with MUNIT ST (WGBEC2010)
+    BASIS = "W",
+    AMLNK = max(dat[["10"]]$AMLNK) + 1,      # new reference number in table 21    
+    VALUE = VALUE_WW
+  ) %>%
+  select(
+    RECID, CRUIS, STNNO, SMPNO, SUBNO, MATRX, PARAM, MUNIT, BASIS, AMLNK, VALUE
+  )
+
+# For table 21 
+# test <- dat[["21"]] %>%
+#   filter(METOA %in% "VISO") 
+# dput(test[1,])
+
+dat_new_21 <- structure(
+  list(
+    RECID = "21", 
+    AMLNK = max(dat[["10"]]$AMLNK) + 1, 
+    ALABO = "NIVA", METDC = "", REFSK = "", METST = "", METFP = "NON", METPT = "", METCX = "", 
+    METPS = "", METOA = "VISO", AGDET = "", SREFW = "", SPECI = "", 
+    RLIST = "", ORGSP = "", SIZRF = "", FORML = "", Line_no = NA), 
+  row.names = 1L, class = "data.frame")
+
+
+```
+#### Check  
+```{r}
+
+# CRUIS, STNNO, SMPNO, SUBNO
+
+xtabs(~CRUIS, dat_new_10 )
+xtabs(~CRUIS, dat_existing)
+
+xtabs(~addNA(STNNO), dat_new_10 )
+xtabs(~addNA(STNNO), dat_existing)
+
+xtabs(~addNA(SMPNO), dat_new_10 )
+xtabs(~addNA(SMPNO), dat_existing)
+
+xtabs(~addNA(SUBNO), dat_new_10 )
+xtabs(~addNA(SUBNO), dat_existing)
+xtabs(~addNA(SUBNO), dat[["04"]] %>% filter(STNNO == "11G"))
+
+
+```
+
+### e. New data 1: remove rows    
+
+```{r}
+
+# New data set
+dat_new <- dat
+
+#
+# Remove rows from table 04 - ot needed (only one line per station)
+#
+
+
+#
+# Remove rows from table 10
+#
+
+nrow(dat_new[["10"]])
+
+dat_new[["10"]] <- dat_new[["10"]] %>%
+  filter(!PARAM %in% "VDSI")
+
+nrow(dat_new[["10"]])
+
+#
+# Remove rows from table 21
+#
+
+amlnk <- dat[["10"]] %>%
+  filter(PARAM %in% "VDSI") %>% 
+  pull(AMLNK) %>%
+  unique()
+
+nrow(dat_new[["21"]])
+dat_new[["21"]] <- dat_new[["21"]] %>%
+  filter(!AMLNK %in% amlnk)
+nrow(dat_new[["21"]])
+
+```
+#### Check  
+```{r}
+
+cat("3 vs. 4 (old / new) \n")
+cols <- var_overlap(dat[["03"]], dat[["04"]], drop = c("RECID", "Line_no"))
+check_link(dat[["03"]], dat[["04"]], cols)
+cols <- var_overlap(dat[["03"]], dat[["04"]], drop = c("RECID", "Line_no"))
+check_link(dat[["03"]], dat_new[["04"]], cols, print_values = TRUE)
+
+cat("\n04 vs. 10 (old / new) \n")
+cols <- var_overlap(dat[["04"]], dat[["10"]], drop = c("RECID", "Line_no"))
+check_link(dat[["04"]], dat[["10"]], cols, print_values = TRUE)
+cols <- var_overlap(dat[["04"]], dat_new[["10"]], drop = c("RECID", "Line_no"))
+check_link(dat[["04"]], dat_new[["10"]], cols, print_values = TRUE)
+
+# View(dat[["04"]])
+
+```
+
+### f. New data 2: add rows     
+```{r}
+
+dat_new[["04"]] <- bind_rows(
+  dat_new[["04"]],
+  dat_new_04
+)
+
+dat_new[["10"]] <- bind_rows(
+  dat_new[["10"]],
+  dat_new_10
+)
+
+dat_new[["21"]] <- bind_rows(
+  dat_new[["21"]],
+  dat_new_21
+)
+
+nrow(dat[["10"]])
+nrow(dat_new[["10"]])
+
+nrow(dat[["21"]])
+nrow(dat_new[["21"]])
+
+```
+
+#### Checking 
+```{r}
+
+cat("Number of rows, original + new: \n")
+dat %>% map_int(nrow)
+dat_new %>% map_int(nrow)
+
+cat("\nCheck of links, new: \n\n")
+check_all_links(dat_new)  
+
+
+
+```
+
+#### Checks  
+```{r}
+
+# table(addNA(dat_new[["04"]]$SMPNO))
+# table(addNA(dat_new[["04"]]$STNNO))
+# table(addNA(dat_new_04$STNNO))
+
+```
+
+
+### g. Write ICES submission file    
+- automatically sets version number (finds the highest existing version number and adds one)  
+- Set up to use UTF-8 when writing, but apparently we need to change the file manually to UTF-8 afterwards anyway (in Notepad++, set encoding to ANSI, then "convert to UTF-8")  
+```{r}
+
+write_ices_file <- FALSE
+ write_ices_file <- TRUE
+ 
+save_folder_txt <- "Files_to_ICES/2021/Test"
+selected_year <- 2021
+
+#
+# Set "scipen" options so we avoid writing scientific notation (almost always)
+# See ?write.table
+#
+cat("Set the way numbers are written as characters: \n")
+cat("Existing setting: \n")
+as.character(0.000004)   # check
+old_options <- options(scipen = 3)
+cat("New setting: \n")
+as.character(0.000004)   # check again
+cat("\n\n")
+
+
+if (write_ices_file){
+
+  if (!dir.exists(save_folder_txt)){
+    message("Creating folder '", save_folder_txt, "'")
+    dir.create(save_folder_txt)
+  }
+  
+  fns <- dir(save_folder_txt, paste0("NIVA", selected_year, "CF*"))
+  existing_versions <- substr(fns, 12, 13) %>% as.numeric()
+  
+  if (length(existing_versions) == 0){
+    version <- 1
+  } else {
+    version <- max(existing_versions) + 1
+  }
+  message("Version number to write: ", version)
+  
+  # Back up
+  dat_with_linenumbers <- dat_new
+
+  # Remove Line_no
+  for (i in seq_along(dat_new)){
+    dat_new[[i]]$Line_no <- NULL
+  }
+  
+  string <- paste0("NIVA", selected_year, "CF_%02i.NO")
+  fn <- sprintf(string, version)
+  icesfile_name <- paste0(save_folder_txt, "/", fn)
+  icesfile <- file(icesfile_name, "w+")
+  write.table(dat_new[["00"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat_new[["03"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat_new[["04"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat_new[["10"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat_new[["20"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat_new[["21"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat_new[["90"]], icesfile, sep = ";", quote = FALSE, na = "",
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat_new[["91"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat_new[["92"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  close(icesfile)
+  cat("Version", version, "written as text file at", as.character(Sys.time()))
+
+  } 
+
+# Reset options
+options(old_options)
+
+```
+
+### h. Read the file we just wrote and check all links yet again  
+
+```{r}
+
+# icesfile_name <- "Files_to_ICES/2021/Test/NIVA2021CF_06.NO"
+
+dat_check <- read_ices_file(icesfile_name) %>%   
+  add_field_codes() %>%
+  set_numeric()
+
+if (FALSE){
+  table(addNA(dat_new[["04"]]$STNNO))
+  table(addNA(dat_new[["10"]]$STNNO))
+  table(addNA(dat_check[["10"]]$STNNO))
+}
+
+check_all_links(dat_check, print_values = TRUE)
+
+```
+
+#### Checking if errors  
+```{r}
+
+if (FALSE){
+
+xtabs(~CRUIS, dat_check[["03"]])
+xtabs(~CRUIS, dat_check[["04"]])
+xtabs(~CRUIS + STNNO, dat_check[["03"]])
+
+xtabs(~SMPNO, dat_check[["03"]])
+
+check <- dat_check[["04"]] %>%
+  filter(Line_no %in% 497:522)
+
+check2 <- dat_check[["04"]] %>%
+  filter(Line_no %in% 497:522) %>%
+  left_join(dat_check[["03"]] %>% select(CRUIS, STNNO, SMPNO ) %>% mutate(TEST = 1))
+table(addNA(check2$TEST))
+      
+
+View(check2)  
+# CRUIS, STNNO, SMPNO 
+
+}
+
+```
+
+
+### Check all links again  
+
+```{r}
+
+check_all_links(dat, print_values = TRUE)
+
+```
+
+### Write ICES submission file    
+- automatically sets version number (finds the highest existing version number and adds one)  
+- Set up to use UTF-8 when writing, but apparently we need to change the file manually to UTF-8 afterwards anyway (in Notepad++, set encoding to ANSI, then "convert to UTF-8")  
+```{r}
+
+write_ices_file <- FALSE
+ write_ices_file <- TRUE
+
+#
+# Set "scipen" options so we avoid writing scientific notation (almost always)
+# See ?write.table
+#
+cat("Set the way numbers are written as characters: \n")
+cat("Existing setting: \n")
+as.character(0.000004)   # check
+old_options <- options(scipen = 3)
+cat("New setting: \n")
+as.character(0.000004)   # check again
+cat("\n\n")
+
+
+if (write_ices_file){
+
+  if (!dir.exists(save_folder_txt)){
+    message("Creating folder '", save_folder_txt, "'")
+    dir.create(save_folder_txt)
+  }
+  
+  fns <- dir(save_folder_txt, paste0("NIVA", selected_year, "CF*"))
+  existing_versions <- substr(fns, 12, 13) %>% as.numeric()
+  
+  if (length(existing_versions) == 0){
+    version <- 1
+  } else {
+    version <- max(existing_versions) + 1
+  }
+  message("Version number to write: ", version)
+  
+  # Back up
+  dat_with_linenumbers <- dat
+
+  # Remove Line_no
+  for (i in seq_along(dat)){
+    dat[[i]]$Line_no <- NULL
+  }
+  
+  string <- paste0("NIVA", selected_year, "CF_%02i.NO")
+  fn <- sprintf(string, version)
+  icesfile_name <- paste0(save_folder_txt, "/", fn)
+  icesfile <- file(icesfile_name, "w+")
+  write.table(dat[["00"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["03"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["04"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["10"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["20"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["21"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["90"]], icesfile, sep = ";", quote = FALSE, na = "",
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["91"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  write.table(dat[["92"]], icesfile, sep = ";", quote = FALSE, na = "", 
+              col.names = FALSE, row.names = FALSE, fileEncoding = "UTF-8")
+  close(icesfile)
+  cat("Version", version, "written as text file at", as.character(Sys.time()))
+
+  } 
+
+# Reset options
+options(old_options)
+
+```
 

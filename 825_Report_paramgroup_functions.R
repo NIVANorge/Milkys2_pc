@@ -69,7 +69,7 @@ if (FALSE){
   get_parametervalues()
 }
 
-get_data_tables <- function(paramgroup, 
+get_data_tables <- function(parameters = NULL, parameter_group = TRUE,
                             filename_109 = "Files_from_Jupyterhub_2021/109_adjusted_data_2022-06-04.rds",
                             filename_lookup_substancegroups = "Input_files_2020/Lookup table - substance groups.xlsx",
                             filename_lookup_stations= "Files_to_Jupyterhub_2019/Kartbase_edit.xlsx",
@@ -77,22 +77,24 @@ get_data_tables <- function(paramgroup,
   
 
   # Parameter names
-  param_values <- get_parametervalues(paramgroup)
+  if (parameter_group){
+    parameters <- get_parametervalues(parameters)
+  }
 
   # Parameter groups
   lookup_paramgroup <- read_excel(filename_lookup_substancegroups) %>%
-    filter(PARAM %in% param_values)
+    filter(PARAM %in% parameters)
   
   # Raw data
   dat_all <- readRDS(filename_109) %>%
-    filter(PARAM %in% param_values)
+    filter(PARAM %in% parameters)
 
   # Stations
   lookup_stations <- read_excel(filename_lookup_stations)
   
   # EQS and proref
   lookup_eqs_ww <- readRDS(filename_bigexcel) %>%
-    filter(PARAM %in% param_values) %>%
+    filter(PARAM %in% parameters) %>%
     rename(Proref = Q95) %>%
     filter(
       Basis %in% "WW"
@@ -187,6 +189,68 @@ if (FALSE){
   x2 <- get_data_paramgroup("metals", "mussel")
 }
 
+get_data_parameter <- function(parameters, speciesgroup, min_obs = 100){
+  
+  X <- get_data_tables(parameters, parameter_group = FALSE)
+  
+  X$lookup_stations <- X$lookup_stations %>%
+    arrange(Station_order) %>%
+    mutate(
+      Station = paste(STATION_CODE, Station_short),        # This will be shown in graphs - make changes here
+      Station2 = substr(Station, 1, 15),                   # This will be shown in graphs - make changes here
+      Station_name = forcats::fct_inorder(Station_name),
+      Station = forcats::fct_inorder(Station),
+      Station2 = forcats::fct_inorder(Station2),
+      Water_region = forcats::fct_inorder(Water_region)
+    )
+  
+  dat_1 <- X$dat_all %>%
+    left_join(X$lookup_paramgroup %>% select(PARAM, Substance.Group), 
+              by = "PARAM") %>%
+    add_count(PARAM) %>%
+    filter(n >= min_obs) %>%
+    # Add 'Station.Name'
+    left_join(X$lookup_stations, by = "STATION_CODE")
+  
+  dat_2 <- dat_1 %>%
+    left_join(X$lookup_eqs_ww, by = c("PARAM", "LATIN_NAME", "TISSUE_NAME")) %>%
+    mutate(
+      Above_EQS = case_when(
+        VALUE_WW > EQS_WW ~ "Over",
+        VALUE_WW <= EQS_WW ~ "Under",
+        TRUE ~ as.character(NA))
+    ) 
+  
+  if (speciesgroup == "fish"){
+    
+    result <- dat_2 %>%
+      filter(LATIN_NAME %in% c("Gadus morhua", "Platichthys flesus"))
+    
+  } else if (grepl("mussel", speciesgroup)){
+    
+    result <- dat_2 %>%
+      filter(LATIN_NAME %in% c("Mytilus edulis"))
+    
+  } else {
+    
+    result <- dat_2
+  }
+  
+  for (col in c("Station_name", "Station", "Station2", "Water_region"))
+    result[[col]] <- droplevels(result[[col]])
+  
+  result
+  
+}
+
+# Test
+if (FALSE){
+  # debugonce(get_data_paramgroup)
+  dat <- get_data_parameter("HG", "fish")
+  dat <- get_data_parameter("HG", "mussel")
+}
+
+
 
 #
 # Data, medians per station/year
@@ -240,6 +304,230 @@ if (FALSE){
   x1 <- get_data_paramgroup("metals", "fish")
   x2 <- get_data_paramgroup("metals", "mussel")
   test <- get_medians(x1, x2)
+}
+
+#
+# Functions for making ggplot tables ----  
+#
+
+# Floor and ceiling (rounding downwards/upwards) 
+#   with a specific no of digits
+floor_digits <- function(x, digits)
+  floor(x*10^digits)/10^digits
+ceiling_digits <- function(x, digits)
+  ceiling(x*10^digits)/10^digits
+
+# Floor and ceiling (rounding downwards/upwards)  
+#   with a specific no of *significant* digits
+floor_signif <- function(x, digits)
+  floor_digits(x, digits - ceiling(log10(abs(x))))
+ceiling_signif <- function(x, digits)
+  ceiling_digits(x, digits - ceiling(log10(abs(x))))
+
+if (FALSE){
+  floor_digits(c(0.1238, 123.8), 3)
+  floor_signif(c(0.1238, 123.8), 3)
+  ceiling_digits(c(0.1238, 123.8), 3)
+  ceiling_signif(c(0.1238, 123.8), 3)
+}
+
+# Static plot (returns ordinary ggplot object)  
+ggtable_getdata <- function(data, x, y,
+                           fill = NULL, fill_breaks = NULL, fill_extend = TRUE,
+                           text = NULL, 
+                           frame = NULL,
+                           frame_value = NULL){
+  
+  fill_column <- fill
+  
+  dat_plot <- data
+  data$x = data[[x]]
+  data$y = data[[y]]
+  
+  # data <- data %>% 
+  #   mutate(
+  #     x = forcats::fct_inorder(x),
+  #     y = forcats::fct_inorder(y))
+  
+  if (!is.null(fill)){
+    data$fill = data[[fill]]
+    if (!is.null(fill_breaks)){
+      fill_breaks <- sort(fill_breaks)
+      value_min <- floor_signif(min(data$fill, na.rm = TRUE), 3)
+      value_max <- ceiling_signif(max(data$fill, na.rm = TRUE), 3)
+      if (value_min < head(fill_breaks,1) & fill_extend)
+        fill_breaks <- c(value_min, fill_breaks)
+      if (value_max > tail(fill_breaks,1) & fill_extend)
+        fill_breaks <- c(fill_breaks, value_max)
+    } else {
+      fill_breaks <- quantile(data$fill, na.rm = TRUE)
+    }
+    data$fill_cut = cut(data$fill, breaks = fill_breaks)
+  }
+  if (!is.null(text))
+    data$text = data[[text]]
+  if (!is.null(frame))
+    data$frame = data[[frame]]
+  
+  data
+}
+
+
+if (FALSE){
+  debugonce(ggtable_getdata)
+  test <- ggtable_getdata(dat_median_fish, x = "MYEAR", y = "Station2", fill = "Proref_ratio_WW")
+  str(test$fill_cut)
+  levels(test$fill_cut)
+  test <- ggtable_getdata(dat_median_fish, x = "MYEAR", y = "Station2", fill = "Proref_ratio_WW",
+                         fill_breaks = c(0.2,1,5,10))
+  str(test$fill_cut)
+  levels(test$fill_cut)
+  test <- ggtable_getdata(dat_median_fish, x = "MYEAR", y = "Station2", fill = "Proref_ratio_WW",
+                         fill_breaks = c(0.2,1,5,10))
+}
+
+
+# Static plot (returns ordinary ggplot object)  
+ggtable_static <- function(data, x, y,
+                           fill = NULL, fill_colours = NULL, 
+                           fill_breaks = NULL, fill_extend = TRUE,
+                           text = NULL, 
+                           frame = NULL,
+                           frame_value = NULL, frame_colour = "red",
+                           xaxis_angle = NULL){
+  
+  fill_column <- fill
+  
+  dat_plot <- ggtable_getdata(data, 
+                              x=x, y=y,
+                              fill = fill, fill_breaks = fill_breaks, fill_extend = fill_extend,
+                              text = text, 
+                              frame = frame,
+                              frame_value = frame_value)
+  
+  gg <- ggplot(dat_plot, aes(x, y, fill = fill_cut)) +
+    geom_tile()
+  
+  if (is.character(fill_colours)){
+    n_levels <- length(levels(dat_plot$fill_cut))
+    if (n_levels != length(fill_colours))
+      stop("The 'fill' column has ", n_levels, " but ", length(fill_colours), 
+           "colours are given")
+    gg <- gg +
+      scale_fill_manual(fill, values = fill_colours)
+  }
+  if (is.numeric(xaxis_angle))
+    gg <- gg +
+    theme(axis.text.x = element_text(angle = xaxis_angle, hjust = 0))
+  gg <- gg +
+    theme_bw()
+  
+  gg
+  
+}
+
+if (FALSE){
+  debugonce(ggtable_getdata)
+  debugonce(ggtable_static)
+  dat_test <- dat_median_fish %>% filter(PARAM == "HG" & MYEAR >= 2012)
+  gg <- ggtable_static(
+    dat_test, 
+    x = "MYEAR", y = "Station2", fill = "Proref_ratio_WW")
+  gg
+  # Text labels may be added
+  gg + 
+    geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3, color = "white")
+  
+  gg <- ggtable_static(
+    dat_test,
+    x = "MYEAR", y = "Station2", fill = "Proref_ratio_WW", 
+    fill_breaks = c(0.0001,0.5,0.75,0.9,1,2,3,5,10,1000), 
+    fill_colours = c(RColorBrewer::brewer.pal(6, "Blues")[5:2],
+                     RColorBrewer::brewer.pal(6, "YlOrRd")[1:5]))
+  gg
+  
+}
+
+
+
+
+xxxxx <- function(){
+  
+  
+
+  cols <- parameter_median_table_colors(dat_plot)
+  
+  gg <- ggplot(dat_plot, aes(Station2, PARAM, fill = fill)) +
+    geom_tile()
+  gg <- gg +
+    geom_tile(data = subset(dat_plot, Above_EQS %in% "Over"),
+              color = "red", size = 1, height = 0.9, width = 0.9) +
+    geom_text(aes(label = round(VALUE_WW_med, 3)), nudge_y = -0.1, size = 3) +
+    geom_text(aes(label = LOQ_label), size = 3, nudge_y = 0.3) +
+    #scale_fill_viridis_b(trans = "log10", breaks = c(0.01,1,2,3,5,10,100), option = "plasma") +
+    #scale_fill_binned(breaks = c(0.01,1,2,3,5,10,100)) +
+    scale_fill_manual(fill, values = cols) +
+    scale_color_manual(values = c("red", "white")) +
+    scale_alpha_manual(values = c(1, 0)) +
+    scale_y_discrete() +
+    theme_bw() +
+    theme(axis.text.x = element_text(angle = -45, hjust = 0))
+  labs(
+    title = "Medians"
+  )
+  
+  gg
+  
+}
+
+
+parameter_median_table_data <- function(parameter, data_medians, fill, 
+                                        series_lasting_until = 2021, 
+                                        min_year = 1995){
+  
+  if (length(min_year) > 1){
+    stop("Several years given. Set 'min_year' to be a single year")
+  }
+  
+  data_medians$fill <- data_medians[[fill]]
+  fill_column <- fill
+  
+  dat_plot <- data_medians %>%
+    # Select parameter
+    filter(PARAM %in% parameter) %>%
+    # Keep only series lasting until 'series_lasting_until'  
+    group_by(Station2) %>%
+    mutate(MYEAR_max = max(MYEAR)) %>%
+    ungroup() %>%
+    filter(MYEAR_max >= series_lasting_until) %>%
+    # Drop years before "min_year"
+    filter(MYEAR >= min_year) %>%
+    # Station levels
+    arrange(desc(Station2)) %>%
+    mutate(Station2 = droplevels(Station2))
+  
+  
+  # fill_min <- floor(1000*min(dat_plot$fill, na.rm = T))/1000
+  # fill_max <- ceiling(max(dat_plot$fill, na.rm = T))
+  fill_min <- 0.0001
+  fill_max <- 1000
+  
+  dat_plot <- dat_plot %>% 
+    mutate(
+      PARAM = forcats::fct_inorder(PARAM),
+      fill_cut = cut(fill, breaks = c(fill_min,0.5,0.75,0.9,1,2,3,5,10,fill_max)),
+      VALUE_WW_txt = paste0(
+        fill_column, ": ", round(fill, 3), "<br>",
+        "Median: ", LOQ_label, round(VALUE_WW_med, 4), " ug/kg<br>",
+        "(", round(VALUE_WW_min, 4), "-", round(VALUE_WW_max, 4), "; N =", N, ")")) %>%
+    select(Proref_ratio_WW, VALUE_WW_txt, MYEAR, Station2, PARAM, fill, fill_cut,
+           Above_EQS, VALUE_WW_med, LOQ_label)
+  
+  if (nrow(dat_plot) == 0)
+    stop("No data selected with given arguments")
+  
+  dat_plot
+  
 }
 
 #
