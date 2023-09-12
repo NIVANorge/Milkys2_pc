@@ -378,6 +378,67 @@ check_dates <- labware_import_2021$SAMPLED_DATE
 table(year(check_dates))
 
 ```
+## 8. 2022 data  
+
+
+### b1. Get 'check sample' data    
+```{r}
+
+# o # o # o # o # o # o # o # o # o # o 
+# NOTE: HARD-CODED project name  
+# o # o # o # o # o # o # o # o # o # o 
+
+prosj <- "O 210200.ANAIN"
+cat("Name of project:", prosj, " \n\n")
+
+labware_2021plus <- get_nivabase_selection(
+  "*",
+  "LABWARE_CHECK_SAMPLE",
+  "PROSJEKT",
+  prosj, values_are_text = TRUE
+  )
+
+check_dates1 <- labware_2021plus$SAMPLED_DATE
+table(addNA(year(check_dates1)))
+
+check_dates2 <- substr(labware_2021plus$TEXT_ID, 4, 7)
+table(check_dates2)
+
+# Check those with conflicting year info  
+df_check <- labware_2021plus %>% 
+  filter(!year(SAMPLED_DATE) %in% 2022 & substr(labware_2022$TEXT_ID, 4, 7) == "2022")
+
+labware_2022 <- labware_2021plus %>% 
+  filter(SAMPLED_DATE >= ymd_hms("2022-03-01 00:00:00"),
+         SAMPLED_DATE < ymd_hms("2023-03-01 00:00:00")) 
+nrow(labware_2022)
+
+```
+
+
+
+### b3. Get 'import' data    
+```{r}
+
+# o # o # o # o # o # o # o # o # o # o 
+# NOTE: HARD-CODED
+# o # o # o # o # o # o # o # o # o # o 
+
+prosj <- "O 210200.ANAIN"
+cat("Name of project:", prosj, " \n\n")
+
+labware_import_2021 <- get_nivabase_selection(
+  "*",
+  "LABWARE_IMPORT",
+  "PROSJEKT",
+  prosj, values_are_text = TRUE
+  )
+
+# Should be mostly 2021! 
+check_dates <- labware_import_2021$SAMPLED_DATE
+table(year(check_dates))
+
+```
 
 
 ## 20. Save   
@@ -393,27 +454,19 @@ file_date <- Sys.time() %>% substr(1, 10)
 
 if (FALSE){
   
-  filename <- paste0("Labware_samples_2018_", file_date, ".rds")
-  saveRDS(labware_2018_2, paste0("Data_to_upload_to_Jupyterhub/", filename))
-  cat("File", sQuote(filename), "saved for 2018 \n\n")
+  filename <- paste0("Labware_samples_2021_", file_date, ".rds")
+  saveRDS(labware_2022, paste0("Files_to_Jupyterhub_2021/", filename))
+  cat("File", sQuote(filename), "saved for 2021 \n")
   
-  filename <- paste0("Labware_samples_2019_", file_date, ".rds")
-  saveRDS(labware_2019, paste0("Data_to_upload_to_Jupyterhub/", filename))
-  cat("File", sQuote(filename), "saved for 2019 \n")
-  
-  filename <- paste0("Labware_samples_2020_", file_date, ".rds")
-  saveRDS(labware_2020, paste0("Files_to_Jupyterhub_2020/", filename))
-  cat("File", sQuote(filename), "saved for 2020 \n")
+  filename <- paste0("Labware_import_2021_", file_date, ".rds")
+  saveRDS(labware_import_2021, paste0("Files_to_Jupyterhub_2021/", filename))
+  cat("File", sQuote(filename), "saved for 2021 \n")
   
 }
 
-filename <- paste0("Labware_samples_2021_", file_date, ".rds")
-saveRDS(labware_2021, paste0("Files_to_Jupyterhub_2021/", filename))
-cat("File", sQuote(filename), "saved for 2021 \n")
-
-filename <- paste0("Labware_import_2021_", file_date, ".rds")
-saveRDS(labware_import_2021, paste0("Files_to_Jupyterhub_2021/", filename))
-cat("File", sQuote(filename), "saved for 2021 \n")
+filename <- paste0("Labware_samples_2022_", file_date, ".rds")
+saveRDS(labware_2022, paste0("Files_to_Jupyterhub_2022/", filename))
+cat("File", sQuote(filename), "saved for 2022 \n")
 
 
 ```
