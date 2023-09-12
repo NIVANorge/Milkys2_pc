@@ -262,9 +262,48 @@ xtabs(~is.na(NUMERIC_ENTRY) + addNA(year(SAMPLED_DATE)), test2 %>% filter(grepl(
 
 ## APPENDIX 3: Get chlorparaffine data (SCCP and MCCP)  
 
-* In order 
+### Nivadatabase data  
 
-### Get names
+Number of measurements  
+```{r}
+
+pars <- c(
+  "SCCP eksl. LOQ", "SCCP inkl. LOQ",
+  "MCCP eksl. LOQ", "MCCP inkl. LOQ")
+
+df_chemdata %>%
+  filter(NAME %in% pars) %>%
+  mutate(NAME = factor(NAME)) %>%
+  count(STATION_CODE, NAME) %>%
+  # ggplot(aes(STATION_CODE, NAME)) +
+  ggplot(aes(NAME, STATION_CODE)) +
+  geom_tile(aes(fill = n)) +
+  scale_fill_viridis_c() +
+  ggeasy::easy_rotate_x_labels(-45)
+
+```
+
+Measurements  
+```{r}
+
+pars <- c("SCCP eksl. LOQ", "SCCP inkl. LOQ")
+#  "MCCP eksl. LOQ", "MCCP inkl. LOQ"
+
+df_chemdata %>%
+  filter(NAME %in% pars) %>%
+  # add_count(STATION_CODE) %>%
+  # filter(n >= 15) %>%
+  filter(STATION_CODE %in% c("02B", "19B", "20B", "23B", "30B", "898B1")) %>%
+  ggplot(aes(VALUE)) +
+  geom_histogram() +
+  facet_grid(vars(NAME), vars(STATION_CODE))
+
+```
+
+
+### From LABWARE_IMPORT   
+
+Get names
 ```{r}
 
 # One project, one sample   
