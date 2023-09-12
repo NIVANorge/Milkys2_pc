@@ -51,13 +51,18 @@ selected_year <- 2021
 library(tidyverse)
 library(lubridate)
 
-library(safejoin) # https://github.com/moodymudskipper/safejoin
+# library(safejoin) # https://github.com/moodymudskipper/safejoin
+# - results in error when used. Tried to reinstall:
+# devtools::install_github("moodymudskipper/safejoin")
+# -  HTTP error 401. Bad credentials
+# Instead, defined my own safe_left_join (see 'Functions')  
 
 # source("01_Get_chemical_data_NIVAbasen_functions.R")  # for get_standard_parametername()
 
 source("844_ICES_submission_check_functions.R")
 
 ```
+
 
 
 ### Functions  
@@ -83,6 +88,38 @@ minute2decimal <- function(x) {
 # x %>% head()
 # x %>% decimal2minute() %>% head()
 # x %>% decimal2minute() %>% minute2decimal() %>% head()
+
+
+
+#
+# left-join that fails if there are several rows in the 'right' table that fits one row in the 'left' table 
+#
+# This is used instead of safe_left_join in the safejoin package (https://github.com/moodymudskipper/safejoin)
+#
+safe_left_join <- function(x, ...){
+  n1 <- nrow(x)
+  result <- left_join(x=x, ...)
+  n2 <- nrow(result)
+  if (n2 > n1){
+    stop("Number of rows in 'left' table increased by ", n2-n1, ". In at least one case, there are several rows in the 'right' table that fits one row in the 'left' table.")
+  } else {
+    message("Left join performed. Rows in the 'left' table are unchanged.")
+  }
+  result
+}
+
+if (FALSE){
+  # Test  
+  df1 <- tibble(x = 1:3)
+  df2a <- tibble(x = c(1, 1, 2), y = c("first", "second", "third"))
+  df2b <- tibble(x = c(1,  2), y = c("first", "third"))
+  df1 %>% left_join(df2a)        # does not fail, gives 4 rows   
+  df1 %>% safe_left_join(df2a)   # fails
+  df1 %>% safe_left_join(df2b)   # does not fail
+}
+
+
+
 
 ```
 
@@ -706,8 +743,7 @@ df_ind <- df_ind %>%
   safe_left_join(    # using safe_lef_join, see https://github.com/moodymudskipper/safejoin 
     data_ind_fish %>% select(STATION_CODE, Fish_no, Length, Weight, Gonad_weight),
     by = c("STATION_CODE", "Fish_no"),
-    na_matches = "never",
-    check = "V"    # checks if y is unique on joining columns 
+    na_matches = "never"
   )
 
 range(df_ind$Length, na.rm = TRUE)  # must not include zero
