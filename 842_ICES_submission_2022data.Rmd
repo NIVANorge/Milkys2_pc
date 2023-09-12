@@ -40,7 +40,7 @@ save_folder_excel <- "Files_to_ICES/2021/Excel"
 ### Selected year  
 ```{r}
 
-selected_year <- 2021
+selected_year <- 2022
 
 ```
 
@@ -52,10 +52,10 @@ library(tidyverse)
 library(lubridate)
 
 # library(safejoin) # https://github.com/moodymudskipper/safejoin
-# - results in error when used. Tried to reinstall:
-# devtools::install_github("moodymudskipper/safejoin")
-# -  HTTP error 401. Bad credentials
+# - results in error when used. Tried to reinstall bu failed (bad credentials)
 # Instead, defined my own safe_left_join (see 'Functions')  
+# UPDATE: this package is now renamed to powerjoin 
+#   (https://github.com/moodymudskipper/powerjoin)
 
 # source("01_Get_chemical_data_NIVAbasen_functions.R")  # for get_standard_parametername()
 
@@ -134,10 +134,10 @@ if (FALSE){
 
 ```{r}
 
-folder <- "Files_from_Jupyterhub_2021/Raw_data"
+folder <- "Files_from_Jupyterhub_2022/Raw_data"
 dir(folder, "105_*")
 
-data_all <- readRDS(paste0(folder, "/", "105_data_with_uncertainty_2022-09-23.rds")) %>%
+data_all <- readRDS(paste0(folder, "/", "105_data_with_uncertainty_2023-09-12.rds")) %>%
   # Set 36A to 36A1
   mutate(
     STATION_CODE = ifelse(STATION_CODE == "36A", "36A1", STATION_CODE)
@@ -180,7 +180,7 @@ xtabs(~ addNA(LATIN_NAME), data_ind2)
 # data_ind_fish_old <- readRDS("Data/03_Fish_individual_data.rds")
 
 dir(folder, "150_*")
-data_ind_fish <- readRDS(paste0(folder, "/", "150_Fish_individual_data_2021.rds"))
+data_ind_fish <- readRDS(paste0(folder, "/", "150_Fish_individual_data_ELU_2022.rds"))
 
 ```
 
@@ -225,6 +225,19 @@ cat("Intersex changed to code INTF% for", sum(sel), "records")
 
 ### a2-2. Add VDSI + intersex data   
 - NOT NEEDED anymore (see scripts from previous years)   
+
+
+### a2-3. Remove stations not to submit  
+
+- Particular for 2022  
+- Ranfjord stations (I969, I965) and eider duck (19N)  
+
+```{r}
+
+data_all <- data_all %>%
+  filter(!STATION_CODE %in% c("I969", "I965", "19N"))
+
+```
 
 
 ### a3. For checking single stations
@@ -295,11 +308,18 @@ data_ind2 %>%
 
 ```
   
-#### Drop I964  
-We drop I964 - Toraneskaien (B4), Mo i Rana (industry station)
+#### Drop I964, I965, I969    
+
+- We drop I964 - Toraneskaien (B4), Mo i Rana (industry station)  
+
 ```{r}
 
-data_ind2 <- data_ind2 %>% filter(!STATION_CODE %in% "I964")
+data_ind2 <- data_ind2 %>% filter(!STATION_CODE %in% c("I964", "I965", "I969"))
+
+# No eider duck (station 19N) in 2022
+if (selected_year == 2022){
+  data_ind2 <- data_ind2 %>% filter(!STATION_CODE %in% c("19N"))
+}
 
 ```
 
@@ -464,7 +484,7 @@ df_muscle_33F_old <- readRDS("../Milkys_2018/Data/09_df_muscle_33F.RData")
 folder <- paste0("Files_to_Jupyterhub_", selected_year)
 dir(folder, pattern = "Labware_samples_*")
 
-df_samples <- readRDS(paste0(folder, "/Labware_samples_2021_2022-09-21.rds")) %>%
+df_samples <- readRDS(paste0(folder, "/Labware_samples_2022_2023-09-12.rds")) %>%
   filter(STATUS %in% "Ferdig") %>%
   # Set 36A to 36A1
   mutate(
@@ -820,7 +840,8 @@ df_station <- data_ind2 %>%
 ####################################################
 
 df_station <- df_station %>% 
-  left_join(df_smpno, by = "LATIN_NAME", .groups = "drop")
+  ungroup() %>%
+  left_join(df_smpno, by = "LATIN_NAME") 
 
 data_03 <- data.frame(RECID = "03", 
                       CRUIS = "AA711", 
@@ -1170,7 +1191,7 @@ cat(nrow(check), "specimens lack in 'data_04_fish_main'")
 
 if (nrow(check) > 0){
    
-  stop("You must create 'data_04_fish_extra' for the lacking specimens. See next chunk. (Error in section 'Table 04 i1')")
+  warning("You must create 'data_04_fish_extra' for the lacking specimens. See next chunk. (Error in section 'Table 04 i1')")
   
 } else {
   
@@ -1188,16 +1209,19 @@ if (nrow(check) > 0){
 
 if (nrow(check) > 0){
   
-  # NOTE: this code is not finished - must add new SUBNO numbers (wher it says 'extra_subno_numbers' in the code
   # These SUBNO numbers must continue where the former SUBNO numbers stop for this station
-  
   # NOTE: at least works if check has a single station 
+  
+  if (length(unique(check$STATION_CODE)) > 1){
+    stop("This code works only if we need to add specimens for a single station. Otherwise something smarter must be written.")
+  }
+  
   max_subno <- data_04_fish_main %>%
     filter(STATION_CODE %in% unique(check$STATION_CODE)) %>%
     pull(SUBNO) %>%
     max()
   
-  extra_subno_numbers <- max_subno + 1
+  extra_subno_numbers <- max_subno + 1:nrow(check)
     
   data_04_fish_extra <- check %>%
     mutate(LATIN_NAME = "Gadus morhua",
@@ -1310,6 +1334,8 @@ data_04_snail
 For eider duck, the same SAMPLE_NO2 = 1 for blood and SAMPLE_NO2 = 1 for egg doesn't mean that this is the same individual (obviously). So we use SUBNO 1-15 for blood SAMPLE_NO 1-15, and SUBNO 16-30 for egg SAMPLE_NO 1-15.  
 ```{r}
 
+if (selected_year != 2022){
+
 data_04_eider <- 
   data_ind2 %>%
   filter(LATIN_NAME %in% c("Somateria mollissima") & MYEAR %in% selected_year) %>% # View()
@@ -1322,6 +1348,8 @@ data_04_eider <-
   ungroup()
 data_04_eider$SUBNO <- 1:nrow(data_04_eider)     # SUBNO given = 1-30
 data_04_eider
+
+}
 
 ```
 
@@ -1381,6 +1409,8 @@ data_04_3 <- data.frame(
   stringsAsFactors = FALSE
   )
 
+if (selected_year != 2022){
+
 data_04_4 <- data.frame(
   RECID = "04", 
   CRUIS = "AA711", 
@@ -1398,11 +1428,16 @@ data_04_4 <- data.frame(
   stringsAsFactors = FALSE
   )
 
-# Without Somateria /Eider duck:
-# data_04 <- rbind(data_04_1, data_04_2, data_04_3)
+}
 
-# With Somateria /Eider:
-data_04 <- rbind(data_04_1, data_04_2, data_04_3, data_04_4)
+
+if (selected_year != 2022){
+  # With Somateria /Eider:
+  data_04 <- rbind(data_04_1, data_04_2, data_04_3, data_04_4)
+} else {
+  # Without Somateria /Eider duck:
+  data_04 <- rbind(data_04_1, data_04_2, data_04_3)
+}
 
 
 # Checks
@@ -1826,6 +1861,13 @@ data_conc_fishmuscle <- data_conc %>%
   left_join(df_matrx, by = c("TISSUE_NAME", "MATRX"))
 
 # Add SMPNO and SUBNO
+
+if (selected_year == 2022){
+  # A special case discovered further down in this chunk:
+  sel <- with(data_04_fish, STATION_CODE == "36B" & Fish_no == 16); sum(sel)
+  data_04_fish$SAMPLE_NO_Muscle[sel] <- 16
+}
+
 df_for_join <- data_04_fish %>% 
   select(STATION_CODE, LATIN_NAME, SAMPLE_NO_Muscle, SMPNO, SUBNO) %>%
   filter(!is.na(SAMPLE_NO_Muscle))
@@ -2451,6 +2493,8 @@ xtabs(~addNA(MUNIT), data_10_vdsi)
 - SUBNO 1-15 should have BL - Blood  
 ```{r}
 
+if (selected_year != 2022){
+
 # Use left join to data_04_eider to add SUBNO 
 # df_eider <- 
 df1 <- data_conc %>% 
@@ -2510,19 +2554,24 @@ data_10_eider <- data.frame(
   )
 
 # xtabs(~PARAM + BASIS, data_10_bluemussel)
+
+}
+
 ```
 
 
 ### j. Combine fish, blue mussel and fat weight/dryweight
 ```{r}
 
-# Length version 1
-# data_10 <- rbind(data_10_fish, data_10_bluemussel, data_10_fatdry, data_10_length, data_10_vdsi)
-
-# Length version 2
-# note: data_10_fatdry deleted
-data_10 <- rbind(data_10_fish, data_10_bluemussel, data_10_length2, data_10_vdsi, data_10_eider)
-  
+if (selected_year != 2022){
+  # with eider
+  # note: data_10_fatdry deleted
+  data_10 <- rbind(data_10_fish, data_10_bluemussel, data_10_length2, data_10_vdsi, data_10_eider)
+} else {
+  # without eider
+  data_10 <- rbind(data_10_fish, data_10_bluemussel, data_10_length2, data_10_vdsi)
+}
+ 
 
 # Round all values (5 decimals)
 data_10$VALUE <- round(data_10$VALUE, 5)
@@ -3345,17 +3394,15 @@ Note that the eider duck sampling (SMTYP) we will denote as 'HAN' = "by hand'
 # 20;NIVA;11;HAN;;;;;;;
 # 20;NIVA;8;GIL;;;;;;;
 
-data_20 <- structure(
-  list(
+data_20 <- data.frame(
     RECID = c("20", "20", "20"), 
     SLABO = c("NIVA", "NIVA", "NIVA"), 
     SMLNK = c("11", "9", "8"), 
     SMTYP = c("HAN", "GIL", "BOT"), 
     NETOP = c("", "", ""), MESHS = c("", "", ""), SAREA = c("", "", ""), 
     LNSMB = c("", "", ""), SPEED = c("", "", ""), PDMET = c("", "", ""), 
-    SPLIT = c("", "", ""), 
-    row.names = c(NA, 
--3L), class = "data.frame")
+    SPLIT = c("", "", "")
+    )
 
 ```
 
@@ -3471,8 +3518,11 @@ if (sum(check) == 0){
 
 check <- setdiff(unique(data_10$STNNO), data_91$STNNO)
 
-if (length(check) > 0)
+if (length(check) > 0){
   stop("Lacking station(s)", paste(check, collapse = ", "))
+} else {
+  message("Stations in tables 10 and 91 are the same")
+}
 
 ```
 
@@ -3584,12 +3634,13 @@ data_91 <- data_91 %>%
   # Remove old date
   select(-SDATE) %>%
   # Add SAMPLE_DATE
-  left_join(df_dates %>% select(STNNO, SDATE),  by = "STNNO")
+  left_join(df_dates %>% 
+              rename(SDATE = SAMPLE_DATE) %>%
+              select(STNNO, SDATE),  
+            by = "STNNO")
 
 # Correct column order
 data_91 <- data_91[column_order_91]
-
-
 
 ```
 
@@ -4176,7 +4227,7 @@ copy_decimal <- function(string){
 ```{r}
 
 check <- FALSE
- check <- TRUE
+# check <- TRUE
 if (check) {
   dat <- readLines(fn_txt)  
   # Here, check which stations which "appears to be on land"
@@ -4196,8 +4247,10 @@ Due to some critical errors, it is presently impossible to upload the NIVA 2018 
 The SHIPC references in all records but record 90 are erroneous, and don’t match the ‘parent’ 90.SHIPC code.  
 ```{r}
 
+if (FALSE){
+  
 # Which tables contain SHIPC?
-sel <- data %>% map_lgl(~("SHIPC" %in% colnames(.)))
+sel <- data %>% map_lgl(~("SHIPC" %in% colnames(.x)))
 names(data)[sel] 
 
 # Which tables contain CRUIS?
@@ -4211,8 +4264,8 @@ data_03$CRUIS %>% unique() %>% sort()
 data_04$CRUIS %>% unique() %>% sort()
 data_10$CRUIS %>% unique() %>% sort()
 
-if (FALSE){
   data_90
+  
 }
 ```
 
@@ -4221,6 +4274,8 @@ Mail from Anna (accessions@ices.dk) 12. sept 2019:
 'There is actually a problem with a missing record 91 for the STNNO=97A3 that is used in other record types'.  
 Also lacking from record 92 but that doesnæt matter (only contains bottom temperatures)      
 ```{r}
+
+if (FALSE){
 
 # Which tables contain STNNO?
 sel <- data %>% map_lgl(~("STNNO" %in% colnames(.)))
@@ -4235,6 +4290,7 @@ for (station_code in c("97A2", "97A3")){
   cat("\n")
 }
 
+}
 
 ```
 
@@ -4286,6 +4342,8 @@ data_10 %>%
 ### Check a parameter, inc.. uncertainty     
 ```{r}
 
+if (FALSE){
+  
 param <- "TBSN+"
 metcu <- "SD"     # standard deviation  
 
@@ -4302,6 +4360,7 @@ data[["10"]] %>%
   geom_pointrange(aes(ymin = VALUE - UNCRT, ymax = VALUE + UNCRT)) +
   facet_wrap(vars(MATRX))
 
+}
 
 ```
 
