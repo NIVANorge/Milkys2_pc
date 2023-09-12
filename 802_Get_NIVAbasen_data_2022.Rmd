@@ -106,7 +106,7 @@ df_chemdata <- get_biota_chemistry(
 
 ```
 
-#### Plot (for example parameters)  
+#### Plot (for sample parameters)  
 
 ```{r, fig.height=8, fig.width=5}  
 
@@ -115,10 +115,11 @@ df_chemdata <- get_biota_chemistry(
 
 pars <- c("ALAD", "Aldrin", "BDE49", "Benzo[a]pyren", "EROD", "Fettinnhold", 
   "Kadmium", "p,p'-DDE", "PCB 118", "Perfluoroktansulfonamid (PFOSA)", 
-  "SCCP eksl. LOQ", "Toksafen Parlar 26", "Tørrstoff %", "Tributyltinn (TBT)")
+  "SCCP eksl. LOQ", "Toksafen Parlar 26", "Tørrstoff %", "Tributyltinn (TBT)", "VDSI")
 
 df_chemdata %>%
   filter(NAME %in% pars) %>%
+  mutate(NAME = factor(NAME)) %>%
   count(STATION_CODE, NAME) %>%
   # ggplot(aes(STATION_CODE, NAME)) +
   ggplot(aes(NAME, STATION_CODE)) +
@@ -145,7 +146,7 @@ filename <- paste0(folder, "/", filename_only)
 filename
 
 # Set to TRUE/FALSE depending on whether file should be saved or not  
-if (FALSE){
+if (TRUE){
 
   saveRDS(df_chemdata, file = filename)
   cat(measurement_year, "data saved as rds,", sQuote(filename), "\n")
@@ -168,7 +169,7 @@ if (FALSE){
 ```
 
 
-## APPENDIX 1
+## APPENDIX 1 - read saved data
 
 ```{r}
 
@@ -255,6 +256,58 @@ xtabs(~is.na(NUMERIC_ENTRY) + addNA(year(SAMPLED_DATE)), test2 %>% filter(grepl(
 
 ```
 
+## APPENDIX 3: Get chlorparaffine data (SCCP and MCCP)  
+
+* In order 
+
+### Get names
+```{r}
+
+# One project, one sample   
+test <- get_nivabase_data(
+  "select * from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN' and DESCRIPTION = '30B Inner Oslofjord - Torsk galle 1'")
+
+test %>% filter(grepl("CCP", ANALYS)) %>% xtabs(~ANALYS, .) 
+test %>% filter(grepl("CCP", REPORTED_NAME)) %>% xtabs(~REPORTED_NAME, .) 
+
+names(test) %>% paste(collapse = ", ")
+
+```
 
 
+```{r}
+
+pars <- c(
+  "SCCP eksl. LOQ", "SCCP inkl. LOQ",
+  "MCCP eksl. LOQ", "MCCP inkl. LOQ")
+
+varstring <- "STATUS, STATUSX, PROSJEKT, TEXT_ID, SAMPLED_DATE, DESCRIPTION, AQUAMONITOR_ID, AQUAMONITOR_CODE, AQUAMONITOR_NAME, REPORTED_NAME, FORMATTED_ENTRY, NUMERIC_ENTRY, UNITS"
+
+df_cp <- get_nivabase_selection(
+  varstring,
+  "LABWARE_IMPORT",
+  "REPORTED_NAME",
+  pars, values_are_text = TRUE, extra_sql = "and PROSJEKT = 'O 210200.ANAIN'")
+
+# Alternative:
+# df_cp <- get_nivabase_data(paste(
+#   "select STATUS, STATUSX, PROSJEKT, TEXT_ID, SAMPLED_DATE, DESCRIPTION, AQUAMONITOR_ID, AQUAMONITOR_CODE,",
+#   "AQUAMONITOR_NAME, REPORTED_NAME, FORMATTED_ENTRY, NUMERIC_ENTRY, UNITS",
+#   "from NIVADATABASE.LABWARE_IMPORT where PROSJEKT = 'O 210200.ANAIN'",
+#   "and REPORTED_NAME in ('SCCP eksl. LOQ', 'SCCP inkl. LOQ', 'MCCP eksl. LOQ', 'MCCP inkl. LOQ')"))
+
+df_cp_wide <- df_cp %>%
+  mutate(Year = year(SAMPLED_DATE)) %>%
+  select(TEXT_ID, REPORTED_NAME, Year, FORMATTED_ENTRY) %>%
+  # mutate(REPORTED_NAME = factor(REPORTED_NAME, levels = pars)) %>%
+  tidyr::pivot_wider(names_from = REPORTED_NAME, values_from = FORMATTED_ENTRY, names_sort = TRUE)
+
+# Confirm thar the inkl. LOQ vaøues never are ND (i.e. they are always a number and therefore imported
+#   to Nivabase)
+for (par in pars){
+  cat("\n----------------\n", par, " equals 'ND':\n")
+  table(df_cp_wide[[par]] == "ND") %>% print
+}
+
+```
 
