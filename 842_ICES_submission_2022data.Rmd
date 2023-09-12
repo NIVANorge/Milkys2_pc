@@ -2112,10 +2112,10 @@ data_conc_fish <- rbind(data_conc_fishmuscle, data_conc_fishbiol, data_conc_fish
 data_conc_fish <- data_conc_fish %>%
   # add MUNIT
   safe_left_join(df_munit, by = "UNIT", 
-                 na_matches = "never", check = "BCV") %>%
+                 na_matches = "never") %>%
   # add AMLNK
   safe_left_join(df_amlnk, by = "PARAM", 
-                 na_matches = "never", check = "BCV") %>%
+                 na_matches = "never") %>%
   # Fix MUNIT for dry weight and fat weight  
   mutate(
     MUNIT = case_when(
@@ -2657,8 +2657,7 @@ df_statistics <- data_10[sel,] %>%
 # Add DETLI
 data_10 <- data_10 %>%
   safe_left_join(df_statistics %>% select(PARAM, Min), 
-                 na_matches = "never",
-                 check = "V") %>%
+                 na_matches = "never") %>%
   mutate(DETLI = case_when(!is.na(Min) ~ Min,
                            is.na(Min) ~ DETLI)
          ) %>%
@@ -3164,8 +3163,8 @@ n1 <- nrow(data_21)
 data_21 <- data_21 %>%
   safe_left_join(data_10 %>% count(PARAM, AMLNK, MUNIT) %>% select(-n), 
             by = "AMLNK",
-            na_matches = "never",
-            check = "BCV")
+            na_matches = "never"
+            )
 n2 <- nrow(data_21)
 
 if (FALSE){
@@ -3779,7 +3778,7 @@ if (nrow(check) > 0){
 #
 check <- data_10 %>%
   safe_left_join(data_91, by = c("CRUIS", "STNNO"), 
-                 na_matches = "never", check = "VMN")
+                 na_matches = "never")
 
 cat("Checked measurement table (10) vs station table (91). If no error, check has passed.")
 
@@ -3803,7 +3802,7 @@ if (FALSE){
 #
 check <- data_10 %>%
   safe_left_join(data_04, by = c("CRUIS", "STNNO", "SMPNO", "SUBNO"), 
-                 na_matches = "never", check = "VMN")
+                 na_matches = "never")
 
 cat("Checked measurement table (10) vs sample table (04). If no error, check has passed.")
 
@@ -3834,7 +3833,7 @@ if (FALSE){
 
 check <- data_91 %>%
   safe_left_join(data_92, by = c("CRUIS", "STNNO"), 
-                 na_matches = "never", check = "VN")
+                 na_matches = "never")
 
 cat("Checked station table (91) vs station information table (92). If no error, check has passed.")
 
