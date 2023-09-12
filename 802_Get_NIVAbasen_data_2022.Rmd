@@ -32,6 +32,10 @@ source("802_Get_NIVAbasen_data_functions.R")
 
 measurement_year <- 2022
 
+# Whether the data shall be saved (as Rdata and csv)  
+# If the script has been run before on the same date, it will be overwritten
+save_files <- TRUE
+
 ```
 
 
@@ -145,8 +149,8 @@ filename_only <- paste0("01_df_", measurement_year, "_notstandard_", timestamp, 
 filename <- paste0(folder, "/", filename_only)
 filename
 
-# Set to TRUE/FALSE depending on whether file should be saved or not  
-if (TRUE){
+# save_files is set to TRUE/FALSE in the beginnig of the script  
+if (save_files){
 
   saveRDS(df_chemdata, file = filename)
   cat(measurement_year, "data saved as rds,", sQuote(filename), "\n")
