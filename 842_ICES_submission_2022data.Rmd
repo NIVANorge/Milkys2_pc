@@ -6,6 +6,12 @@ output:
 ---
 
 For submission of 2021 data in autumn 2022    
+
+**NOTE**
+- Last version made with this script is version 08  
+- Last version made manually is version 09. This is version 08, just with three lines (755,775,780) changed manually (DETLI changed to 0.5). See script 845  
+
+
   
 Soure of main data (data_ind2):
 - prepared in Jupyterhub script 101 (where it also gets input from scr. 101 in this folder)    
@@ -28,14 +34,6 @@ get_nivabase_data(str)
 (...times out...)  
 
 
-## Where files will be saved  
-```{r}
-
-save_folder_txt <- "Files_to_ICES/2021/Test"
-save_folder_rds <- "Files_to_ICES/2021/Rdata"
-save_folder_excel <- "Files_to_ICES/2021/Excel"
-
-```
 
 ### Selected year  
 ```{r}
@@ -44,6 +42,16 @@ selected_year <- 2022
 
 ```
 
+
+## Where files will be saved  
+```{r}
+
+save_folder <- paste0("Files_to_ICES/", selected_year)
+save_folder_txt <- paste0("Files_to_ICES/", selected_year, "/Test")
+save_folder_rds <- paste0("Files_to_ICES/", selected_year, "/Rdata")
+save_folder_excel <- paste0("Files_to_ICES/", selected_year, "/Excel")
+
+```
 
 ## 0. Libraries and functions
 ```{r}
@@ -857,6 +865,8 @@ data_03 <- data.frame(RECID = "03",
                       stringsAsFactors = FALSE
                       )
 ```
+
+
 
 ### Check that SMPNO has been set
 ```{r}
@@ -2717,6 +2727,17 @@ data_10 <- data_10 %>%
 
 ```
 
+### DETLI for PYR1OH
+```{r}
+
+sel <- data_10$PARAM == "PYR1OH"; sum(sel)
+data_10$DETLI[sel] <- 0.5
+
+sel <- data_10$PARAM == "PA1OH"; sum(sel)
+data_10$DETLI[sel] <- 0.5
+
+```
+
 
 ### k7. UNCRT for DRYWT% FATWT%  LNMEA  WTMEA    
 Set to 10% (SD = 5%)
@@ -3397,7 +3418,7 @@ Note that the eider duck sampling (SMTYP) we will denote as 'HAN' = "by hand'
 data_20 <- data.frame(
     RECID = c("20", "20", "20"), 
     SLABO = c("NIVA", "NIVA", "NIVA"), 
-    SMLNK = c("11", "9", "8"), 
+    SMLNK = c(11, 9, 8), 
     SMTYP = c("HAN", "GIL", "BOT"), 
     NETOP = c("", "", ""), MESHS = c("", "", ""), SAREA = c("", "", ""), 
     LNSMB = c("", "", ""), SPEED = c("", "", ""), PDMET = c("", "", ""), 
@@ -3406,6 +3427,28 @@ data_20 <- data.frame(
 
 ```
 
+
+### Fix SMPNO in table 03 for 30B (Steilene, Oslofjord)  
+```{r}
+
+# Has 9 (bottom trawl)
+# table(data_20$SMLNK)
+
+# Lacks 9   
+# table(data_03$SMLNK)
+
+# Find 30B in table 04
+sel <- data_03$STNNO == "30B"
+
+if (sum(sel) == 1){
+  data_03$SMLNK[sel] <- 9
+  cat("SMLNK changed to 9 for", sum(sel), "row of table 03")
+} else {
+  stop("Either zero or >1 rows of table 04 were found (this error is from the 'Table 20' part")
+}
+
+
+```
 
 ## Table 91 - stations  
 We will base ourself on using last year's table  
@@ -3526,6 +3569,24 @@ if (length(check) > 0){
 
 ```
 
+### c4. Check using leaflet map  
+
+```{r}
+
+if (FALSE){
+  # Run by marking and Ctrl+Enter, or copy-paste to Console
+  library(leaflet)
+  leaflet() %>%
+    addTiles() %>%
+    addMarkers(
+      lng = minute2decimal(data_91$LONGI),
+      lat = minute2decimal(data_91$LATIT), 
+      popup = data_91$STATN) 
+}
+
+
+```
+
 
 ### d. Remove stations not needed  
 ```{r}
@@ -3544,7 +3605,7 @@ cat("\n", sum(!sel), "stations deleted from table 91 \n")
 
 ```
 
-### e. Fix coordinates of station 76A2  
+### e1. Fix coordinates of station 76A2  
 ICES station dictionary: "Latitude, Longitude (58.7327 9.28104) Latitude range +/-, Longitude range +/- (0.00718, 0.01381)"  
 - This also fits with "Kartbase.xlsx"  
 ```{r}
@@ -3560,6 +3621,15 @@ data_91$LONGI[sel] <- decimal2minute(9.28104)
 cat("New coordinates for", station, ":", 
     minute2decimal(data_91$LATIT[sel]), ",", minute2decimal(data_91$LONGI[sel]), "\n")
 
+
+```
+
+### e2. Fix name of 20B  
+```{r}
+
+sel <- data_91$STNNO == "20B"
+# data_91[sel,]
+data_91$STATN[sel] <- "20B Longyearbyen"
 
 ```
 
@@ -3635,7 +3705,9 @@ data_91 <- data_91 %>%
   select(-SDATE) %>%
   # Add SAMPLE_DATE
   left_join(df_dates %>% 
-              rename(SDATE = SAMPLE_DATE) %>%
+              mutate(SDATE = paste0(substr(SAMPLE_DATE,1,4),
+                                    substr(SAMPLE_DATE,6,7),
+                                    substr(SAMPLE_DATE,9,10))) %>%
               select(STNNO, SDATE),  
             by = "STNNO")
 
@@ -3845,7 +3917,7 @@ if (FALSE){
 ```
 
 
-### Check 4 - join 10 + 04
+### Check 4a - join 10 + 04
 ```{r}
 
 #
@@ -3856,6 +3928,44 @@ check <- data_10 %>%
                  na_matches = "never")
 
 cat("Checked measurement table (10) vs sample table (04). If no error, check has passed.")
+
+# If errors, do this:
+if (FALSE){
+  
+  # If  y is not unique on CRUIS, STNNO, SMPNO and SUBNO, do this:
+  data_04 %>%
+    group_by(CRUIS, STNNO, SMPNO, SUBNO) %>%
+    mutate(n = n()) %>%
+    filter(n > 1) %>%
+    arrange(CRUIS, STNNO, SMPNO, SUBNO) %>%
+    select(RECID:NOIMP, SUBNO, NOIMP, BULKID, everything())
+  
+  # If  x has unmatched sets of joining values:
+  full_join(
+    data_10 %>% distinct(STNNO, SMPNO, SUBNO) %>% mutate(tab10 = 1),
+    data_04 %>% distinct(STNNO, SMPNO, SUBNO) %>% mutate(tab04 = 1)
+  ) %>%
+    filter(is.na(tab10) | is.na(tab04))
+}
+
+```
+
+
+### Check 4b - join 20 + 03
+```{r}
+
+#
+# Stations and sample numbers: Measurement table vs sample table
+#
+check <- data_03 %>%
+  safe_left_join(data_20 , by = c("SMLNK"), 
+                 na_matches = "never")
+
+if (sum(is.na(check$SLABO)) > 0){
+  stop("Table 20 lacks some rows")
+}
+
+cat("Checked sampling method table (20) vs sample event table (03). If no error, check has passed.")
 
 # If errors, do this:
 if (FALSE){
@@ -4037,6 +4147,10 @@ cat("New setting: \n")
 as.character(0.000004)   # check again
 cat("\n\n")
 
+if (!dir.exists(save_folder)){
+  message("Creating folder '", save_folder, "'")
+  dir.create(save_folder)
+}
 
 if (write_ices_file){
 
@@ -4087,7 +4201,7 @@ options(old_options)
 
 ### Save as R data
 ```{r}
-
+  
 if (write_ices_file){
   
 

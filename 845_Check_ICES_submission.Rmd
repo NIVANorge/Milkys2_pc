@@ -27,7 +27,7 @@ The 2018 version, with changed stations according to '02_Change_stations_in_2014
 ```{r}
 
 folder_data <- "Files_to_ICES/2020/Delivered"
-folder_data <- "Files_to_ICES/2021/Test"
+folder_data <- "Files_to_ICES/2022/Test"
 dir(folder_data)
 fns <- dir(folder_data, ".NO", full.names = TRUE)
 fns
@@ -439,3 +439,25 @@ fn3 <- "Rob_Norway_station_edits/NIVA2014CF_ver03.NO"
 write_ices_file(data, fn3)
 
 ```
+
+## 7. Year 2022 - LMQNT being lower than DETLI  
+```{r}
+
+
+# Record Line	Type	Reported errors	Error Values	Error fields
+# 755	error	Cross field check (error preventing data import)	Line 755, Limit of Quantification cannot be lower than the Detection limit	R10, Condition
+# 775	error	Cross field check (error preventing data import)	Line 775, Limit of Quantification cannot be lower than the Detection limit	R10, Condition
+# 780	error	Cross field check (error preventing data import)	Line 780, Limit of Quantification cannot be lower than the Detection limit	R10, Condition
+
+
+head(data[["10"]])
+
+data[["10"]] %>%
+  filter(Line_no %in% c(755,775,780))
+
+```
+
+### Changed manually  
+
+- DETLI changed to 0.5 for the 3 lines above
+- Saved as NIVA2022CF_09.NO  
