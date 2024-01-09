@@ -32,6 +32,10 @@
     - Select first project, then stations and/or years (but needs one of them), then parameter 
     - Can be made a bit quicker if samples are selected using a join in the database   
     
+* App_809 - Select station on map  
+    - Based on App_801 (Annual median concentrations from Jupyterhub script 110)  
+  
+    
 * Notes for Milkys app:  
     - Menu for parameter group + menu for parameters (w/ defaults) + station type (species/tissue) stations (defaults)     
     - That menu should be in left margin  
