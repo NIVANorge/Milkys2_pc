@@ -1,0 +1,1179 @@
+---
+title: "95_Check_data_pipeline"
+author: "DHJ"
+date: "1 10 2019"
+output:  
+  html_document:
+    keep_md: true
+    toc: true
+---
+
+## Oversikt   
+
+### Mo Industripark, overvåking av Ranfjorden  
+
+- O-nr  
+    - O-200231 i 2020
+    - O-210181 i 2021
+    
+- Der er det tre blåskjellstasjoner, og tre replikater pr stasjon i 2020. Jeg vil gjerne ha oppdatert trendfigurene som du laget for ett år siden. Da var det trendfigurer for mange PAH-forbindelser og metaller.
+Jeg tror disse dataene lå sammen med Milkys-dataene i Milkys-regnearket. Jeg tror du har lagret et eget R-skript for disse trendfigurene.
+VANNMILJØ: DHJ
+
+## .
+## 1. Preparations  
+## .
+
+### Packages + functions  
+```{r, echo = FALSE, results='hide', warning=FALSE, message=FALSE}
+
+### 0. Libraries   
+
+library(dplyr)
+library(purrr)
+library(ggplot2)
+library(lubridate)
+library(readxl)
+library(tidyr)
+library(knitr)         
+library(RColorBrewer)
+library(keyring)
+
+# library(niRvana)
+
+source('994_Industry_data_functions.R', encoding = "UTF-8")  # Used to read from Nivadatabase
+
+library(niRvana)
+
+knitr::opts_chunk$set(results = 'hold', echo = FALSE)
+
+# For Kristiansand sediment  
+source("991_Vannmiljo_snippets_functions.R", encoding = "UTF-8")
+source("992_Vannmiljo_Urban_fjord_functions.R", encoding = "UTF-8")
+
+# RColorBrewer::display.brewer.all()
+
+```
+
+
+
+## .
+## 2. 2022 - Ranfjorden + Elkem Carbon og REC Solar 2022                   
+## .
+
+Tiltaksorientert overvåking av Ranfjorden i 2022: O-220189
+Tiltaksorientert overvåking for Elkem Carbon og REC Solar i Kr.sand i 2022: O-220073
+
+
+### Station IDs from O-numbers 
+```{r}
+
+df_projects1 <- get_project_from_onumber(220189)   
+df_projects2 <- get_project_from_onumber(220073)  
+df_projects3 <- get_project_from_onumber(210317)  # this was Alcoa Lista
+
+df_projects <- bind_rows(df_projects1, df_projects2)
+
+```
+
+
+
+### Stations from O-number  
+
+```{r}
+
+df_stations <- get_nivabase_selection(
+  "PROJECT_ID, STATION_ID, STATION_CODE, STATION_NAME",
+  "PROJECTS_STATIONS",
+  "PROJECT_ID",
+  df_projects$PROJECT_ID) %>%
+  left_join(
+    df_projects, by = "PROJECT_ID"
+  )
+
+df_stations_summ <- df_stations %>%
+  group_by(STATION_ID) %>%
+  summarise(
+    across(c(PROJECT_ID, O_NUMBER, STATION_CODE, STATION_NAME), 
+           .fn = ~ paste(unique(.x), collapse = ","))
+  ) %>%
+  arrange(STATION_CODE)
+
+df_stations_summ
+
+df_stations_summ2 <- df_stations_summ
+
+
+
+```
+
+
+### Specimens     
+```{r}
+
+df_specimens_1 <- get_specimens_from_stationdata(
+  df_stations_summ2, 
+  years = 2022)
+
+df_specimens_2 <- df_specimens_1 %>%
+  left_join(df_stations_summ2, by = "STATION_ID")
+
+# df_specimens %>%
+#   count(DATE_CAUGHT, STATION_CODE, STATION_NAME)
+
+# Get 2021 for Elkem (St. 1 - St. 5)
+df_specimens_2021 <- get_specimens_from_stationdata(
+  df_stations_summ2, 
+  years = 2021) %>%
+  left_join(df_stations_summ2, by = "STATION_ID") %>%
+  filter(O_NUMBER %in% 220073)
+
+df_specimens <- bind_rows(
+  df_specimens_2,
+  df_specimens_2021
+)
+
+
+
+```
+
+
+### Samples and chemistry values  
+
+```{r}
+
+# debugonce(get_biota_chemistry)
+df_chem1 <- get_biota_chemistry(years = 2021:2022, months_second_year = NA, 
+                               specimendata = df_specimens, 
+                               stationdata = df_stations_summ2)
+
+# mean(is.na(df_chem1))
+mean(is.na(df_chem1$SAMPLE_DATE))
+mean(is.na(df_specimens$DATE_CAUGHT))
+
+df_specsamp <- get_nivabase_selection(
+  "SAMPLE_ID, SPECIMEN_ID",
+  "BIOTA_SAMPLES_SPECIMENS",
+  "SAMPLE_ID",
+  unique(df_chem1$SAMPLE_ID)
+)
+
+df_specimens_year <- df_specimens %>%
+  group_by(SPECIMEN_ID) %>%
+  summarise(MYEAR = mean(Year), Year_range = diff(range(Year, na.rm = TRUE)))
+
+# check
+if (max(df_specimens_year$Year_range) > 0){
+  stop("More than one year for the same specimen!")
+} else {
+  df_specimens_year$Year_range <- NULL
+}
+
+df_specsamp_year <- df_specsamp %>%
+  left_join(df_specimens_year) %>%
+  group_by(SAMPLE_ID) %>%
+  summarise(MYEAR = mean(MYEAR), Year_range = diff(range(MYEAR, na.rm = TRUE)))
+  
+# check
+if (max(df_specsamp_year$Year_range) > 0){
+  stop("More than one year for the same sample!")
+} else {
+  df_specsamp_year$Year_range <- NULL
+}
+
+
+df_chem2a <- df_chem1 %>%
+  left_join(df_specsamp_year, by = "SAMPLE_ID")
+
+
+
+```
+
+### Stations tables   
+
+```{r}
+
+df_specimens %>%
+  distinct(Year, DATE_CAUGHT, STATION_CODE, STATION_NAME) %>%
+  arrange(Year) %>%
+  xtabs(~Year + STATION_CODE, .)
+
+df_specimens %>%
+  distinct(DATE_CAUGHT, STATION_ID, STATION_NAME) %>%
+  xtabs(~DATE_CAUGHT + STATION_ID, .)
+
+
+```
+
+
+
+### Add species 
+- not necessary anymore
+
+```{r}
+
+df_chem2b <- df_chem2a 
+  
+```
+
+```{r}
+
+xtabs(~MYEAR + STATION_CODE, df_chem2b)
+
+xtabs(~MYEAR + LATIN_NAME, df_chem2b)
+
+```
+
+### Pick blue mussel
+
+* Blue mussel and *Patella vulgata* (albusnegl)        
+
+```{r}
+
+xtabs(~STATION_CODE + addNA(LATIN_NAME), df_chem1)
+
+df_chem2c <- df_chem2b # %>%
+#  filter(LATIN_NAME %in% "Mytilus edulis")
+
+```
+
+
+### Set SAMPLE_NO2   
+
+
+#### a. Correct SAMPLE_NO
+
+- may be to set SAMPLE_NO for a few cases where only some samples lack SAMPLE_NO  
+- or there may be several samples per year  
+- this will make errors in c.
+
+```{r}
+
+check1 <- df_chem2c %>%
+  distinct(STATION_CODE, MYEAR, LATIN_NAME, TISSUE_NAME, SAMPLE_DATE, SAMPLE_ID, SAMPLE_NO) %>%
+  arrange(STATION_CODE, MYEAR, LATIN_NAME, TISSUE_NAME) %>%
+  group_by(STATION_CODE, MYEAR, LATIN_NAME, TISSUE_NAME) %>%
+  mutate(n = n(), 
+         n_no = sum(!is.na(SAMPLE_NO)), 
+         SAMPLE_NO_max = case_when(
+           n_no == 0 ~ 0,
+           n_no > 0 ~ max(SAMPLE_NO, na.rm = TRUE))
+         )
+
+check2 <- check1 %>%
+  # filter n_no > 0 (some SAMPLE_NO exist) + n_no < n (but not all, for that tissue/year)
+  filter(n_no > 0 & n_no < n) 
+
+if (FALSE)  {
+  
+  # Get Error two chunks down: "There are several samples (given by SAMPLE_ID) for each SAMPLE_NO"
+  # Do manually and rerun this chunk
+  
+  # 2 sampling occations in one year
+  # - Add 10 to SAMPLE_NO for the extra date
+  # - So SAMPLE_NO is still 1 for date number 1
+  # - and SAMPLE_NO changed from 1 to 11 for date number 2
+  df_chem2c <- df_chem2c %>%
+    group_by(STATION_ID, STATION_CODE, MYEAR, LATIN_NAME, TISSUE_NAME, SAMPLE_NO) %>%
+    mutate(
+      Date_no = as.numeric(factor(SAMPLE_DATE)),
+      SAMPLE_NO = SAMPLE_NO + 10*(Date_no-1)) %>%
+    select(-Date_no) %>%
+    ungroup()
+  
+}
+
+df_chem3 <- df_chem2c  
+
+if (nrow(check2) > 0){
+  stop("Some SAMPLE_NO must be set manually. See below for example")
+}
+
+
+
+```
+
+
+#### b. Set SAMPLE_NO2 based on SAMPLE_ID where SAMPLE_NO doesn' exist     
+```{r}
+
+check <- is.na(df_chem3$SAMPLE_NO)
+
+if (sum(check) >  0){
+  
+  stop("Some SAMPLE_NO doesn't exist. See below for how to set SAMPLE_NO2 based on SAMPLE_ID.")
+
+} else {
+  
+  df_chem3 <- df_chem3 %>%
+    mutate(SAMPLE_NO2 = SAMPLE_NO)
+  
+}
+
+if (FALSE){
+  
+  # Run only if some SAMPLE_NO doesn't exist.
+  # In this case we just use REPNO 
+  
+  df_chem3 <- df_chem3 %>%
+    mutate(SAMPLE_NO2 = case_when(
+      !is.na(SAMPLE_NO) ~ SAMPLE_NO,
+      is.na(SAMPLE_NO) ~ as.numeric(factor(SAMPLE_ID))
+    )
+    )
+
+}
+
+```
+
+
+#### c. Check SAMPLE_NO + SAMPLE_NO2   
+
+- If warnings, see chunk a  
+
+```{r}
+
+# Quick fix for avoiding duplicates: add month 
+df_chem3 <- df_chem3 %>%
+  mutate(SAMPLE_NO = paste0(SAMPLE_NO, "_month", month(SAMPLE_DATE)))
+
+check1 <- df_chem3 %>%
+  filter(!is.na(SAMPLE_NO)) %>%
+  group_by(STATION_CODE, LATIN_NAME, TISSUE_NAME, MYEAR, SAMPLE_NO) %>%
+  mutate(n_SAMPLE_ID = length(unique(SAMPLE_ID))) %>%
+  filter(n_SAMPLE_ID > 1)  
+
+check2 <- df_chem3 %>%
+  group_by(STATION_CODE, LATIN_NAME, TISSUE_NAME, MYEAR, SAMPLE_NO2) %>%
+  mutate(n_SAMPLE_ID = length(unique(SAMPLE_ID))) %>%
+  filter(n_SAMPLE_ID > 1)  
+
+
+if (nrow(check1) > 0){
+  stop("There are several samples (given by SAMPLE_ID) for each SAMPLE_NO (", nrow(check1), " records) \n")
+  xtabs(~MYEAR + STATION_CODE, check1 )
+} else {
+  message("All SAMPLE_NO defines unique samples \n")
+}
+if (nrow(check2) > 0){
+  warning ("There are several samples (given by SAMPLE_ID) for each SAMPLE_NO2 (", nrow(check2), " records) \n")
+} else {
+  message("All SAMPLE_NO2 defines unique samples \n")
+}
+
+
+
+if (FALSE){
+  
+  check1 %>% 
+    count(STATION_CODE, LATIN_NAME, TISSUE_NAME, MYEAR, n_SAMPLE_ID) %>% View()
+  
+  xtabs(~STATION_CODE + MYEAR, check1)  
+  tab <- xtabs(~STATION_CODE + MYEAR + NAME, check1)  
+  tab[,,1:3]
+  
+  # Quick fix: add month 
+  df_chem3 <- df_chem3 %>%
+    mutate(SAMPLE_NO = paste0(SAMPLE_NO, "_month", month(SAMPLE_DATE)))
+  
+}
+
+```
+
+### Parameter names  
+
+* Change "-B" names (e.g. "HCHA-B") by removing "-B"  
+```{r}
+# debugonce(get_standard_parametername)
+
+if (FALSE){
+  test <- head(df_chem3$NAME, 20)
+  test
+  stringr::str_sub(test, start = -2)
+  stringr::str_sub(test, end = -3)
+}
+
+df_chem3 <- df_chem3 %>%
+  mutate(
+    NAME = case_when(
+      stringr::str_sub(NAME, start = -2) %in% "-B" ~ stringr::str_sub(NAME, end = -3),
+      TRUE ~ NAME)
+  )
+
+
+
+
+```
+
+Set 'PARAM' based on 'NAME'    
+*Note that we use standard parameter names 2*     
+
+```{r}
+
+# debugonce(get_standard_parametername)
+# df_synonyms <- read.csv2(
+#   "../Milkys2_pc/Files_to_Jupyterhub_2019/Lookup table - standard parameter names 2.csv", 
+#   encoding = "latin1")
+
+# debugonce(get_standard_parametername)
+df_chem3$PARAM <- get_standard_parametername(
+  df_chem3$NAME, 
+  "../Milkys2_pc/Files_to_Jupyterhub_2019/Lookup table - standard parameter names 2.csv")
+
+# Also CHR/Krysen (no enough columns in the lookup file!):
+sel <- df_chem3$NAME %in% "Krysen"; sum(sel)
+df_chem3$PARAM[sel] <- "CHR"
+
+# For checking which changed
+check <- df_chem3 %>%
+  count(NAME, PARAM) %>%
+  mutate(Changed = NAME != PARAM)
+
+# Dry weigth
+sel <- df_chem3$NAME %in% "Tørrstoff %"
+cat("Change", sum(sel), "'Tørrstoff %' to 'DRYWT%' \n")
+df_chem3$PARAM[sel] <- "DRYWT%"
+
+if (sum(df_chem3$PARAM == "Kvikksølv") > 0){
+  stop("Wrong name for mercury")
+}
+
+```
+
+
+### Fix units  
+
+```{r}
+
+# back up
+df_chem3 <- df_chem3 %>%
+  mutate(UNIT_old = UNIT)
+
+```
+
+#### Units found  
+```{r}
+
+table(df_chem3$UNIT)
+
+df_chem3 <- df_chem3 %>%
+  mutate(UNIT = case_when(
+    UNIT %in% "µg/kg" ~ "UG_P_KG",
+    UNIT %in% "µg/kg v.v." ~ "UG_P_KG",
+    UNIT %in% "PPB" ~ "UG_P_KG",
+    UNIT %in% "mg/kg" ~ "MG_P_KG",
+    UNIT %in% "µg/g" ~ "MG_P_KG",
+    UNIT %in% "µg/g v.v." ~ "MG_P_KG",
+    TRUE ~ UNIT)
+  )
+
+```
+
+
+#### Add preferred unit to data
+```{r}
+
+fn <- "../Milkys2_pc/Files_to_Jupyterhub_2019/Lookup table - preferred parameter units.xlsx"
+preferred_units <- read_excel(fn, sheet = "Preferred units")
+unit_conversion <- read_excel(fn, sheet = "Conversion factors")
+
+check <- preferred_units %>%
+  count(PARAM) %>%
+  filter(n > 1) %>%
+  nrow()
+
+if (check == 0){
+  
+  df_chem4 <- df_chem3 %>%
+    left_join(preferred_units, by = "PARAM") %>% 
+    left_join(unit_conversion, by = c("UNIT", "Preferred_unit")) %>%
+    mutate(Conversion_factor = ifelse(UNIT == "PERCENT", 1, Conversion_factor))
+    cat("Preferred_unit and Conversion_factor added to data using 'Parameter_units.xlsx' \n")
+    
+} else {
+  
+  stop(paste(
+    "WARNING! Parameter_units.xlsx contains some PARAM with more than one preferred unit.\n",
+    "Fix Parameter_units.xlsx and repeat"))
+  
+}  
+
+#
+# CHECKS
+#
+
+
+test1 <- df_chem4 %>%
+  filter(is.na(Preferred_unit))
+  
+test2 <- df_chem4 %>%
+  filter(UNIT != Preferred_unit & is.na(Conversion_factor))
+
+cat("\n")
+if (nrow(test1) > 0){
+  
+  cat("WARNING! Preferred_unit not found for", 
+      nrow(test1), "records of the following parameters: \n")
+  test1 %>%
+    pull(PARAM) %>%
+    unique() %>%
+    print()
+  
+} else {
+  cat("Preferred_unit found for all parameters. \n")
+}
+
+cat("\n")
+if (nrow(test2) > 0){
+  cat("WARNING! Conversion_factor not found for", 
+      nrow(test2), "records of the following parameters: \n")
+  test2 %>%
+    mutate(PARAM_UNIT = paste(PARAM, UNIT)) %>%
+    pull(PARAM_UNIT) %>%
+    unique() %>%
+    print()
+  cat("\n")
+  cat("You must either change the preferred unit or add the lacking conversion factors. \n")
+  test3 <- test2 %>%
+    distinct(PARAM, UNIT, Preferred_unit) %>%
+    count(UNIT, Preferred_unit)
+  for (i in nrow(test3))
+    cat("Cannot convert from", test3$UNIT[i], "to", test3$Preferred_unit[i], "for", test3$n[i], "parameters \n")
+  
+  cat("\n")
+  cat("Table of existing units ('UNIT' in table below) and preferred units: \n")
+  xtabs(~PARAM + Preferred_unit + UNIT,  test2)  
+  
+} else {
+  cat(" Conversion_factor found for all parameters. \n")
+}
+
+if (nrow(test1) > 0 | nrow(test2) > 0){
+  cat("\n")
+  cat("------------------------------------------------------------ \n")
+  cat("Please edit 'Lookup table - preferred parameter units.xlsx'  \n")
+  cat("(NOTE: in project 'Milkys2_pc') \n")
+  cat("Download the file to your PC, edit it based on 'test1', and   \n")
+  cat("   upload it back to the 'Input_data' folder.  \n")
+  cat("------------------------------------------------------------ \n")
+}
+
+
+if (FALSE){
+  
+  # Ran this to copy, then pasted into the file given by 'fn'  
+  write.table(unique(test1$PARAM), "clipboard", quote = FALSE, row.names = FALSE, col.names = FALSE)
+
+}
+
+
+
+```
+
+
+### Check units that are different from preferred units   
+```{r}
+
+df_chem4 %>%
+  filter(is.na(UNIT) | is.na(Preferred_unit) | UNIT != Preferred_unit) %>%
+  count(PARAM, UNIT, Preferred_unit, Conversion_factor)
+
+```
+
+### If OK, we convert units   
+*Note: change to UNIT_orig2 (to separate form UNIT_orig added in 'get chemical data')*  
+```{r}
+
+df_chem5 <- df_chem4 %>%
+  rename(
+    VALUE_orig = VALUE,
+    UNIT_orig2 = UNIT) %>%
+  mutate(
+    VALUE = case_when(
+      is.na(Preferred_unit) ~ VALUE_orig,
+      UNIT_orig2 == Preferred_unit ~ VALUE_orig,
+      UNIT_orig2 != Preferred_unit ~ VALUE_orig*Conversion_factor),
+    UNIT = case_when(
+      is.na(Preferred_unit) ~ UNIT_orig2,
+      UNIT_orig2 == Preferred_unit ~ UNIT_orig2,
+      UNIT_orig2 != Preferred_unit ~ Preferred_unit)
+  ) %>%
+  filter(!is.na(VALUE))
+
+cat(with(df_chem5, sum(UNIT != UNIT_orig2)), "units changed \n")
+
+#
+# For checking result
+#
+if (FALSE){
+  sel <- with(df_chem5, UNIT != Preferred_unit)
+  df_chem5[sel,] %>% select(PARAM, UNIT, VALUE)
+  df_chem5[sel,] %>% select(PARAM, UNIT, VALUE)
+}
+
+```
+
+
+### Measurement duplicates - checking  
+I.e.: >1 measurment per sample and parameter
+```{r}
+
+check_dupl <- df_chem5 %>%
+  group_by(SAMPLE_ID, PARAM) %>%
+  mutate(n_values = n()) %>%
+  filter(n_values > 1)
+
+cat("Number of duplicates:", nrow(check))
+
+if (FALSE){
+  
+  # Fix after checking 'check'
+  df_chem5 <- df_chem5 %>%
+    filter(!VALUE_ID %in% 664537)
+  nrow(df_chem5)
+  
+  # All duplicates
+  check_dupl %>%
+    select(PROJECT_ID, SAMPLE_ID, VALUE_ID, STATION_CODE, MYEAR, SAMPLE_NO2, 
+           PARAM, VALUE, FLAG1, UNIT, METHOD_REF) %>%
+    arrange(PROJECT_ID, STATION_CODE, MYEAR, SAMPLE_ID, PARAM, VALUE_ID)
+  
+  # Example: I969, 2018 
+  check2 <- check_dupl %>%
+    filter(STATION_CODE == "I969" & MYEAR == 2018 & SAMPLE_NO2 == 1) %>%
+    select(PROJECT_ID, SAMPLE_ID, VALUE_ID, SAMPLE_NO2, PARAM, VALUE, FLAG1, UNIT, METHOD_REF) %>%
+    arrange(PROJECT_ID, SAMPLE_ID, PARAM, VALUE_ID)
+  nrow(check2)  # 66
+  length(unique(check2$PARAM))  # 33
+  
+  
+}
+
+# View(check2)
+
+#
+# Compare with AqM export:
+#
+# - In AqM, CB118 is given as 73 ug/kg  (correct is 0.073, given highest VALUE_ID)
+# - In AqM, CB123 is given as 1,12 ug/kg (correct is <0.0012, given highest VALUE_ID, note less-than)
+# - In AqM, ANT is given is lowest VALUE_ID, but the highest has TEST in method)
+# - BAA: as ANT
+# - In AqM, AS is given is highest VALUE_ID (the lowest has TEST in method)  
+# - In AqM, Total PFOS/PFOA inkl. LOQ is is highest VALUE_ID (the lowest has 'not accredited' in method) 
+
+if (FALSE){
+  
+  stem(check2$VALUE_ID) # three groups, starting with 188, with 191 and with 195  
+  
+  subset(check2, VALUE_ID < 1890000)$METHOD_REF
+  subset(check2, VALUE_ID > 1890000 & VALUE_ID < 1930000)$METHOD_REF
+  subset(check2, VALUE_ID > 1930000)$METHOD_REF
+  
+  ggplot(check2, aes(PARAM, VALUE_ID)) + 
+    geom_point() + coord_flip()
+  
+}
+
+```
+
+### Add BASIS  
+
+```{r}
+
+# Add BASIS_ID
+df_chem6 <- merge(
+  df_chem5,
+  get_nivabase_selection(
+    "METHOD_ID, BASIS_ID", 
+    "METHOD_DEFINITIONS", 
+    "METHOD_ID", 
+    unique(df_chem5$METHOD_ID)), 
+  all.x = TRUE, all.y = FALSE)
+  
+
+# Add BASIS_CODE
+df_chem6 <- merge(
+  df_chem6, 
+  get_nivabase_data("select BASIS_ID, BASIS_CODE from NIVADATABASE.BASIS_DEFINITIONS"), 
+            by = "BASIS_ID", all.x = TRUE, all.y = FALSE)
+
+# Check BASIS_CODE
+cat("Basis code: \n")
+xtabs(~addNA(BASIS_CODE), df_chem6)
+xtabs(~addNA(BASIS_ID), df_chem6)
+
+df_chem7 <- df_chem6 %>%
+  mutate(BASIS = case_when(
+    is.na(BASIS_CODE) ~ "W",
+    !is.na(BASIS_CODE) ~ BASIS_CODE))
+
+cat("\nBasis: \n")
+xtabs(~addNA(BASIS), df_chem7)
+
+cat("\nDry weight - parameter per year: \n")
+xtabs(~PARAM + MYEAR, df_chem7 %>% filter(BASIS %in% "D"))
+
+
+# When DRYWT% is set to "D", we set it to W
+df_chem7 <- df_chem7 %>%
+  mutate(
+    BASIS = case_when(
+      BASIS == "D" & PARAM %in% "DRYWT%" ~ "W",
+      TRUE ~ BASIS,
+    )
+  )
+
+```
+
+
+
+
+
+
+### Check station names   
+* Get rid of NA in STATION_NAME  
+```{r}
+
+df_lookup <- df_chem7 %>%
+  filter(!is.na(STATION_NAME)) %>%
+  distinct(STATION_CODE, STATION_NAME) %>%
+  arrange(STATION_CODE, STATION_NAME)
+
+df_lookup
+
+df_chem8 <- df_chem7 %>%
+  select(-STATION_NAME) %>%
+  left_join(df_lookup, by = "STATION_CODE")
+
+```
+#### Check  
+```{r}
+
+table(addNA(df_chem7$MYEAR)) 
+table(df_chem7$STATION_CODE, addNA(df_chem7$PARAM)) 
+
+```
+
+
+### Add 'old' data  
+
+#### Get data 
+
+* Note: keeping data from only 3 stations and 3 parameters!
+
+```{r}
+
+# From section 1
+df_ranfjorden <- readRDS("994_Industry_data/data_chem_industry_ranfjorden_ind_2021.rds")
+
+# From section 1
+df_elkem <- readRDS("994_Industry_data/data_chem_industry_kristiansand_ind(script_994).rds")
+
+```
+
+#### Check Hg in Elkem  
+```{r}
+
+df_elkem %>%
+  filter(PARAM %in% "HG") %>%
+  xtabs(~MYEAR + STATION_CODE, .)
+
+
+# sel <- df_elkem$PARAM == "HG"
+
+```
+
+
+#### Check Hg at I964/I964b
+
+```{r}
+
+table(df_ranfjorden$MYEAR)
+table(df_ranfjorden$STATION_CODE)
+table(df_ranfjorden$MYEAR, df_ranfjorden$STATION_CODE)
+
+df_check <- df_ranfjorden %>%
+  filter(STATION_CODE %in% c("I965"),
+  # filter(STATION_CODE %in% c("I964/I964b", "I964b"),
+         PARAM %in% "HG")
+
+df_check_med <- df_check %>%
+  group_by(STATION_CODE, STATION_NAME, 
+           LATIN_NAME, TISSUE_NAME, 
+           PARAM, UNIT, MYEAR) %>%  # calculate medians
+  summarise(N = n(),
+            Median = median(VALUE),
+            Over_LOQ = sum(is.na(FLAG1)),
+            Min = min(VALUE),
+            Max = max(VALUE),
+            .groups = "drop"
+  )
+
+ggplot(df_check_med, aes(MYEAR, Median, shape = (Over_LOQ < 0.5*N))) +
+  geom_point()
+  
+
+```
+
+
+#### Check columns and column names  
+```{r}
+
+check_columns <- function(df1, df2){
+  full_join(
+    data.frame(col = names(df1), data1 = seq_len(ncol(df1))),
+    data.frame(col = names(df2), data2 = seq_len(ncol(df2))),
+      by = "col"
+  )
+}
+
+check_columns(df_chem8, df_ranfjorden)
+check_columns(df_chem8, df_elkem)
+check_columns(df_ranfjorden, df_elkem)
+
+
+```
+
+#### Combine  
+
+```{r}
+
+# We use only the columns from the 'old' Ranfjorden data (except N_par)
+nm <- names(df_ranfjorden)
+nm <- nm[nm != "N_par"]
+
+df_comb_1 <- bind_rows(
+  df_ranfjorden,
+  df_elkem,
+  df_chem8[nm]
+)
+
+# This should be:
+# df_comb <- df_comb_1 %>% 
+#   left_join(df_stations %>% select(STATION_ID, PROJECT_ID, O_NUMBER, PROJECT_NAME), by = "STATION_ID")
+
+# Use this if we need to add STATION_ID:
+df_comb_2 <- df_comb_1 %>%
+  left_join(df_stations %>% select(STATION_ID, PROJECT_NAME), by = "STATION_ID")
+#  left_join(df_stations %>% select(STATION_CODE, STATION_ID, O_NUMBER, PROJECT_NAME), by = "STATION_CODE")
+
+
+```
+
+#### Check stations    
+```{r}
+
+df_comb_2 %>%
+  count(PROJECT_NAME, STATION_CODE, STATION_NAME) %>%
+  arrange(STATION_CODE, STATION_NAME)
+
+```
+#### Fix station codes/names     
+
+```{r}
+
+sel <- df_comb_2$STATION_CODE %in% "I964b"; sum(sel)
+df_comb_2$STATION_CODE[sel] <- "I964/I964b"
+
+#
+# HARD-CODED, obvoiusly
+#
+
+sel <- df_comb_2$STATION_CODE %in% "I964/I964b"; sum(sel)
+df_comb_2$STATION_NAME[sel] <- "Toraneskaia"
+
+sel <- df_comb_2$STATION_CODE %in% "I965"; sum(sel)
+df_comb_2$STATION_NAME[sel] <- "Moholmen"               
+
+sel <- df_comb_2$STATION_CODE %in% "I969"; sum(sel)
+df_comb_2$STATION_NAME[sel] <- "Bjørnbærvika"
+
+df_comb_2 %>%
+  count(STATION_CODE, STATION_NAME)
+
+```
+#### Fix unit for percentage    
+```{r}
+
+sel <- df_comb_2$UNIT %in% "PERCENT"
+cat(sum(sel), "rows selected")
+
+df_comb_2$UNIT[sel] <- "%"
+
+```
+
+
+#### Check units (again)   
+```{r}
+
+check_unit <- df_comb_2 %>%
+  distinct(PARAM, UNIT) %>%
+  add_count(PARAM) %>%
+  filter(n > 1)
+
+if (nrow(check_unit) > 0){
+  stop("Some parameters have several different UNIT")
+}
+
+```
+
+
+
+
+### Add sum parameters (as extra rows)   
+
+- Note that we use the 'exloq' version (sum excluding LOQ)    
+
+```{r}
+
+df_comb_3 <- df_comb_2
+
+for (i in seq_along(sum_parameters)){     # go through numbers 1 to 9
+  # We add new rows every time we go through the loop
+  df_comb_3 <- add_sumparameter_exloq(i, sum_parameters, df_comb_3)
+  }
+
+df_comb_3 <- df_comb_3 %>%
+  filter(!PARAM %in% c("Sum 16 EPA-PAH ekskl. LOQ", "Sum 16 EPA-PAH inkl. LOQ", "PAH16_woLOQ"))
+
+```
+
+
+### Test plot  
+
+```{r}
+
+# table(df_comb_3$PARAM)
+#  sum_parameters$KPAH
+
+param <- "HG"
+param <- "PB"
+# param <- "BAP"
+# param <- "PAH16_exloq"
+
+df_comb_3 %>%
+  filter(PARAM %in% param) %>% # View()
+  # filter(MYEAR >= 2015) %>%
+  ggplot(aes(MYEAR, VALUE, color = is.na(FLAG1))) +
+  geom_point() +
+  facet_wrap(vars(STATION_CODE)) + 
+  labs(title = param)
+
+```
+
+#### Checking HG
+
+```{r}
+
+# All stations
+param2 <- "HG"
+df_comb_3 %>%
+  filter(PARAM %in% param2,
+         MYEAR >= 2015) %>%
+  xtabs(~STATION_CODE + MYEAR, .)
+
+
+```
+
+#### Checking PAH16 
+
+```{r}
+
+# All stations
+param2 <- c(sum_parameters$PAH16, "PAH16_exloq")
+df_comb_3 %>%
+  filter(PARAM %in% param2,
+         MYEAR >= 2015) %>%
+  xtabs(~PARAM + MYEAR, .)
+
+# One Elkem station
+df_comb_3 %>%
+  filter(STATION_CODE %in% "St. 1",
+         PARAM %in% param2,
+         MYEAR >= 2015) %>%
+  xtabs(~PARAM + MYEAR, .)
+
+```
+
+
+### Make median data  
+```{r}
+
+df_comb_medians <- df_comb_3 %>%
+  filter(!is.na(STATION_CODE)) %>%
+  filter(!is.na(VALUE) & !is.na(MYEAR)) %>%
+  mutate(Basis = ifelse(BASIS == "W", "WW", as.character(NA))) %>%
+  # filter(PARAM %in% sum_parameters[["PAH16"]] |
+  #          PARAM %in% c("PAH16", "PAH16_woLOQ", "P_S", "KPAH") |
+  #          nchar(PARAM) == 2 ) %>%
+  group_by(PROJECT_NAME, 
+           STATION_CODE, STATION_NAME, 
+           LATIN_NAME, TISSUE_NAME, 
+           PARAM, UNIT, Basis, MYEAR) %>%  # calculate medians
+  summarise(N = n(),
+            Median = median(VALUE),
+            Over_LOQ = sum(is.na(FLAG1)),
+            Min = min(VALUE),
+            Max = max(VALUE),
+            .groups = "drop"
+  ) %>%
+  ungroup()
+
+
+```
+
+### Tables  
+
+
+#### Parameter by station  
+```{r}
+
+cat("Number of years per parameter/station \n================================================\n\n")
+df_comb_medians %>%
+  count(STATION_CODE, PARAM, MYEAR) %>%
+  xtabs(~PARAM + STATION_CODE, .)
+
+
+```
+
+
+### Testing graphs   
+
+```{r}
+
+# table(df_comb_medians$PARAM)
+
+param <- "PB"
+param <- "PAH16_exloq"
+st <- "St. 1"
+st <- "I965"
+df_comb_medians %>%
+  filter(PARAM %in% param & STATION_CODE %in% st) %>%
+  mutate(LOQ = ifelse(Over_LOQ > N/2, "Over LOQ", "Under LOQ")) %>% # View()
+  ggplot(aes(MYEAR, Median, shape = LOQ)) +
+  geom_point()
+df_median <- df_comb_medians %>%
+  filter(PARAM %in% param & STATION_CODE %in% st) %>%
+  mutate(LOQ = ifelse(Over_LOQ > N/2, "Over LOQ", "Under LOQ"),
+         x = MYEAR,
+         y = log(Median)) 
+ggplot(df_median, aes(x, y, shape = LOQ)) +
+  geom_point()
+
+# Test GAM
+mod <- mgcv::gam(y ~ s(x), data = df_median)
+plot_data <- data.frame(x = seq(min(df_median$x), max(df_median$x), length = 50))
+pred <- mgcv::predict.gam(mod, plot_data, se.fit = TRUE)
+plot_data$y <- pred$fit
+plot_data$y_q2.5 <- pred$fit + qt(0.025, mod$df.residual)*pred$se.fit
+plot_data$y_q97.5 <- pred$fit + qt(0.975, mod$df.residual)*pred$se.fit
+
+ggplot(df_median, aes(x, y)) +
+  geom_point(aes(shape = LOQ)) +
+  geom_line(data = plot_data)
+
+
+```
+
+
+
+
+
+
+## Add PAH metabotlites   
+
+### Read data from script 86 (from ICES!)  
+```{r}
+
+dat_pahmet <- readRDS("Data/86_data_pah_metabolites_from_ICES.rds")
+xtabs(~MYEAR, dat_pahmet)
+
+```
+
+```{r}
+
+#vWhat is needed for the app in Jupyterhub (App02_Industry_data)?
+
+obligatory_names <- c(
+"STATION_CODE",
+"STATION_NAME",
+"MYEAR",
+"LATIN_NAME",
+"TISSUE_NAME",
+"PARAM",
+"VALUE",
+"FLAG1",
+"UNIT",
+"BASIS")
+# usually "W"
+
+names(dat_pahmet)
+names_lacking <- setdiff(obligatory_names, names(dat_pahmet))
+names_lacking
+
+```
+
+```{r}
+
+if (FALSE){
+  table(dat_pahmet$STATN)
+  table(dat_pahmet$PARAM)
+  table(addNA(dat_pahmet$QFLAG))
+  # table(dat_pahmet$MYEAR, dat_pahmet$MUNIT)
+}
+
+dat_pahmet_15B <- dat_pahmet %>%
+  filter(STATN %in% "15B Ullerø area") %>%
+  mutate(
+    STATION_CODE = "15B",
+    STATION_NAME = "Ullerø",
+    LATIN_NAME = "Gadus morhua",
+    TISSUE_NAME = "Galle",
+    VALUE = Value,
+    FLAG1 = case_when(
+      is.na(QFLAG) ~ as.character(NA),
+      QFLAG %in% c("<","Q") ~ "<"),
+    UNIT = case_when(
+      MUNIT %in% "ug/kg" ~ "UG_P_KG",
+      MUNIT %in% "ng/g" ~ "UG_P_KG")
+  ) %>%
+  select(obligatory_names)
+
+ggplot(dat_pahmet_15B, aes(MYEAR, VALUE)) +
+  geom_smooth() +
+  geom_point(aes(color = is.na(FLAG1))) + 
+  scale_y_log10() +
+  facet_wrap(vars(PARAM))
+
+```
+
+### Add to data  
+```{r}
+
+df_comb_4 <- bind_rows(df_comb_3, dat_pahmet_15B)
+
+dim(df_comb_3)
+dim(df_comb_4)
+  
+```
+
+
+## Export data for Jupyterhub  
+
+```{r}
+
+# dir("994_Industry_data")
+
+if (FALSE){    # to avoid accidents  
+  
+  saveRDS(df_comb_4,        "994_Industry_data/data_chem_industry_ranfjord_elkem_ind_2022.rds")
+  # saveRDS(df_comb_medians ,"994_Industry_data/data_chem_industry_ranfjord_elkem_med_2022.rds")
+  
+}
+
+if (FALSE){
+  df_comb <- readRDS("994_Industry_data/data_chem_industry_ranfjord_elkem_ind_2022.rds")
+  df_comb_medians <- readRDS("994_Industry_data/data_chem_industry_ranfjord_elkem_med_2022.rds")
+}
+
+```
